@@ -34,7 +34,7 @@ RUN pip3 install --no-cache-dir \
     pillow \
     opencv-python \
     open3d \
-    pycolmap \
+    pycolmap-cuda12 \
     matplotlib \
     plotly \
     tqdm \

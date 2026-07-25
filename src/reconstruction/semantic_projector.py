@@ -60,12 +60,14 @@ class SemanticProjector:
     using multi-view majority voting, and exports a colored semantic PLY point cloud.
     """
 
-    def __init__(self, colmap_dir: str, gt_masks_dir: str, output_dir: str):
+    def __init__(self, colmap_dir: str, gt_masks_dir: str, output_dir: str, parser=None):
         self.colmap_dir = colmap_dir
         self.gt_masks_dir = gt_masks_dir
         self.output_dir = output_dir
 
-        self.parser = ColmapParser(colmap_dir)
+        # Any object with load() -> (camera, images, points3d) works,
+        # e.g. PycolmapReconstructor or ReconstructionAdapter.
+        self.parser = parser if parser is not None else ColmapParser(colmap_dir)
         self.mask_cache: Dict[str, np.ndarray] = {}
 
         self.point_classes: Dict[int, int] = {}       # p3d_id -> class_id
