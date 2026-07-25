@@ -34,24 +34,41 @@ TIE_BREAK_PRIORITY = {
 }
 
 
+STAY_CABLE_CLASS_ID = 2
+CABLE_ABSOLUTE_MAJORITY = 0.5  # strict: c / n must be > 0.5
+
+
+def _plurality_with_tiebreak(counts: Counter) -> int:
+    """Pick winner by plurality; break ties with TIE_BREAK_PRIORITY (excludes stay_cable)."""
+    if not counts:
+        return 0
+    max_freq = max(counts.values())
+    candidates = [cls_id for cls_id, freq in counts.items() if freq == max_freq]
+    if len(candidates) == 1:
+        return candidates[0]
+    candidates.sort(key=lambda c: TIE_BREAK_PRIORITY.get(c, 0), reverse=True)
+    return candidates[0]
+
+
 def vote_majority_class(labels: List[int]) -> int:
     """
-    Determines the majority semantic class label from a list of 2D observations.
-    In case of a voting tie, uses TIE_BREAK_PRIORITY.
+    Determines the semantic class from multi-view 2D mask observations.
+
+    stay_cable (2) is assigned only with absolute majority (>50%). Otherwise
+    cable votes are ignored and plurality + tie-break applies among remaining classes.
     """
     if not labels:
         return 0
 
     counts = Counter(labels)
-    max_freq = max(counts.values())
+    n = len(labels)
+    cable_count = counts.get(STAY_CABLE_CLASS_ID, 0)
 
-    candidates = [cls_id for cls_id, freq in counts.items() if freq == max_freq]
-    if len(candidates) == 1:
-        return candidates[0]
+    if cable_count / n > CABLE_ABSOLUTE_MAJORITY:
+        return STAY_CABLE_CLASS_ID
 
-    # Sort candidates by tie-break priority descending
-    candidates.sort(key=lambda c: TIE_BREAK_PRIORITY.get(c, 0), reverse=True)
-    return candidates[0]
+    counts_no_cable = Counter({k: v for k, v in counts.items() if k != STAY_CABLE_CLASS_ID})
+    return _plurality_with_tiebreak(counts_no_cable)
 
 
 class SemanticProjector:

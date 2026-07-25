@@ -18,14 +18,22 @@ class TestSemanticProjector(unittest.TestCase):
         self.projector = SemanticProjector(self.colmap_dir, self.gt_masks_dir, self.output_dir)
 
     def test_vote_majority_class(self):
-        # Clear majority
+        # Clear majority (non-cable)
         self.assertEqual(vote_majority_class([1, 1, 0]), 1)
         self.assertEqual(vote_majority_class([3, 3, 2]), 3)
 
-        # Tie breaking priority: stay_cable (2) > tower (3) > foundation (4) > deck (1) > background (0)
-        self.assertEqual(vote_majority_class([1, 2]), 2) # stay_cable over deck
-        self.assertEqual(vote_majority_class([1, 3]), 3) # tower over deck
-        self.assertEqual(vote_majority_class([0, 1]), 1) # deck over background
+        # stay_cable: absolute majority only
+        self.assertEqual(vote_majority_class([2, 2, 2, 0]), 2)
+        self.assertEqual(vote_majority_class([2, 2, 0]), 2)
+        self.assertNotEqual(vote_majority_class([2, 2, 0, 0]), 2)  # exactly 50% fails
+        self.assertEqual(vote_majority_class([2, 1]), 1)  # no absolute majority for cable
+
+        # Cable cannot win via tie-break alone
+        self.assertEqual(vote_majority_class([1, 2]), 1)
+
+        # Non-cable tie-break unchanged
+        self.assertEqual(vote_majority_class([1, 3]), 3)
+        self.assertEqual(vote_majority_class([0, 1]), 1)
 
         # Empty fallback
         self.assertEqual(vote_majority_class([]), 0)
