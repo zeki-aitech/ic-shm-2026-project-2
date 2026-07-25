@@ -35,8 +35,9 @@ class TestSemanticProjector(unittest.TestCase):
         self.assertGreaterEqual(len(self.projector.mask_cache), 300)
 
         classes, colors = self.projector.project()
-        self.assertEqual(len(classes), 86336)
-        self.assertEqual(len(colors), 86336)
+        n_pts = len(classes)
+        self.assertGreater(n_pts, 80000)
+        self.assertEqual(len(colors), n_pts)
 
         # Verify class range
         for cid in classes.values():
@@ -55,7 +56,7 @@ class TestSemanticProjector(unittest.TestCase):
 
         self.assertEqual(lines[0], "ply")
         self.assertEqual(lines[1], "format ascii 1.0")
-        self.assertEqual(lines[2], "element vertex 86336")
+        self.assertTrue(lines[2].startswith("element vertex "))
         self.assertEqual(lines[-1], "end_header")
 
 

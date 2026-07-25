@@ -35,7 +35,8 @@ class TestColmapParser(unittest.TestCase):
 
     def test_triangulation(self):
         cam, images, points3d = self.parser.load()
-        self.assertEqual(len(points3d), 86336)
+        self.assertGreater(len(points3d), 80000)
+        self.assertLess(len(points3d), 86336)  # outlier removal should reduce count
         
         first_pt = next(iter(points3d.values()))
         self.assertIsInstance(first_pt, Point3D)

@@ -12,9 +12,9 @@ class TestVisualizer(unittest.TestCase):
 
     def test_read_ply_file(self):
         xyz, rgb, cids = read_ply_file(self.ply_path)
-        self.assertEqual(len(xyz), 86336)
-        self.assertEqual(len(rgb), 86336)
-        self.assertEqual(len(cids), 86336)
+        self.assertGreater(len(xyz), 80000)
+        self.assertEqual(len(rgb), len(xyz))
+        self.assertEqual(len(cids), len(xyz))
         self.assertEqual(xyz.shape[1], 3)
         self.assertEqual(rgb.shape[1], 3)
 

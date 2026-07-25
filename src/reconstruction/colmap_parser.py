@@ -223,6 +223,34 @@ class ColmapParser:
 
         return self.points3d
 
+    def filter_outliers(self, iqr_multiplier: float = 3.0) -> int:
+        """
+        Removes statistical outlier 3D points using IQR-based distance filtering.
+        Points farther than Q3 + iqr_multiplier * IQR from the median center are removed.
+        Returns the number of points removed.
+        """
+        if not self.points3d:
+            return 0
+
+        all_xyz = np.array([pt.xyz for pt in self.points3d.values()])
+        median_center = np.median(all_xyz, axis=0)
+        dists = np.linalg.norm(all_xyz - median_center, axis=1)
+
+        q1 = np.percentile(dists, 25)
+        q3 = np.percentile(dists, 75)
+        iqr = q3 - q1
+        upper_fence = q3 + iqr_multiplier * iqr
+
+        ids_to_remove = []
+        for (p3d_id, pt), dist in zip(list(self.points3d.items()), dists):
+            if dist > upper_fence:
+                ids_to_remove.append(p3d_id)
+
+        for p3d_id in ids_to_remove:
+            del self.points3d[p3d_id]
+
+        return len(ids_to_remove)
+
     def load(self) -> Tuple[CameraIntrinsics, Dict[int, ImagePose], Dict[int, Point3D]]:
         t0 = time.time()
         print(f"🔄 Parsing COLMAP data from '{self.colmap_dir}'...")
@@ -233,7 +261,11 @@ class ColmapParser:
         print(f"  └─ Found {len(self.point_obs)} unique 3D Point IDs. Starting DLT 3D Triangulation...")
         
         self.triangulate_all_points()
+        n_before = len(self.points3d)
+
+        n_removed = self.filter_outliers(iqr_multiplier=3.0)
         t1 = time.time()
+        print(f"  └─ Outlier removal: {n_removed} points removed ({n_before} → {len(self.points3d)})")
         print(f"✅ COLMAP Parsing & Triangulation completed in {t1-t0:.2f}s! Total 3D points: {len(self.points3d)}")
         return self.camera, self.images, self.points3d
 
