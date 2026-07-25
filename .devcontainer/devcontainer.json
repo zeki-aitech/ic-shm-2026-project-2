@@ -1,0 +1,26 @@
+{
+  "name": "SFM 3D Reconstruction DevContainer (CUDA 12.1)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "runArgs": [
+    "--gpus", "all",
+    "--ipc=host"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "python.terminal.activateEnvironment": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+  "remoteUser": "root"
+}
