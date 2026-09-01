@@ -71,6 +71,7 @@ def process_all_jsons(dataset_dir, output_dir):
     print(f"✅ Completed! {len(json_files)} PNG mask files saved to: {output_dir}")
 
 if __name__ == "__main__":
-    DATASET_DIR = "/home/serene/zeki/sfm_demo/data/Contest Dataset"
-    OUTPUT_DIR = "/home/serene/zeki/sfm_demo/outputs/gt_masks"
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    DATASET_DIR = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
+    OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs", "gt_masks")
     process_all_jsons(DATASET_DIR, OUTPUT_DIR)

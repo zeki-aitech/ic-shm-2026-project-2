@@ -25,9 +25,10 @@ import pycolmap
 
 from src.reconstruction.pycolmap_reconstructor import load_contest_model
 
-DATASET_DIR = "/workspaces/sfm_demo/data/Contest Dataset"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATASET_DIR = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
 COLMAP_DIR = os.path.join(DATASET_DIR, "camera_parameters")
-WORK_DIR = "/workspaces/sfm_demo/outputs/gpu_pipeline"
+WORK_DIR = os.path.join(PROJECT_ROOT, "outputs", "gpu_pipeline")
 
 
 def stage_images(dataset_dir: str, image_dir: str) -> int:

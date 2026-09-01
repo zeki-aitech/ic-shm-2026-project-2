@@ -133,9 +133,10 @@ def process_dataset_overlap(images_dir, json_dir, output_dir, alpha=0.45, add_le
     print(f"✅ Successfully saved {success_count} overlapped images to: {output_dir}")
 
 if __name__ == "__main__":
-    BASE_DIR = "/workspaces/sfm_demo"
-    IMAGES_DIR = os.path.join(BASE_DIR, "data/Contest Dataset/images")
-    JSON_DIR = os.path.join(BASE_DIR, "data/Contest Dataset/json")
-    OUTPUT_DIR = os.path.join(BASE_DIR, "data/images_with_masks")
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    DATASET_DIR = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
+    IMAGES_DIR = os.path.join(DATASET_DIR, "images")
+    JSON_DIR = os.path.join(DATASET_DIR, "json")
+    OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs", "images_with_masks")
 
     process_dataset_overlap(IMAGES_DIR, JSON_DIR, OUTPUT_DIR)
