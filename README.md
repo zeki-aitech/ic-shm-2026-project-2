@@ -87,14 +87,18 @@ ic-shm-2026-project-2/
 ## 🚀 5. Quickstart Guide
 
 ### Environment Setup
-Use the provided DevContainer / Dockerfile with CUDA 12.1 support or install requirements locally:
+We use `uv` for modern, fast Python package management.
 ```bash
-pip install numpy scipy pillow opencv-python open3d pycolmap-cuda12 matplotlib plotly pandas jupyterlab tqdm
+# Install dependencies and sync virtual environment
+uv sync
+
+# (Optional) Install deeplearning group for segmentation
+uv sync --extra deeplearning
 ```
 
 ### Running Unit Tests
 ```bash
-python3 -m unittest discover tests
+uv run pytest
 ```
 
 ### Running the Point Cloud Filter Pipeline
