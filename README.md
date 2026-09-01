@@ -39,7 +39,7 @@ ic-shm-2026-project-2/
 │   └── 01_visualize_semantic_3d.ipynb
 ├── src/
 │   ├── reconstruction/           # 3D Reconstruction & Semantic Pipeline Core
-│   │   ├── colmap_parser.py           # SfM parser + manual DLT 3D triangulation
+│   │   ├── models.py                  # Core dataclasses (CameraIntrinsics, ImagePose, Point3D)
 │   │   ├── pycolmap_reconstructor.py  # LO-RANSAC triangulation via pycolmap (GPU-accelerated)
 │   │   ├── gpu_pipeline.py            # GPU SIFT feature extraction + sequential matching pipeline
 │   │   ├── semantic_projector.py      # 2D-to-3D back-projection with Multi-view Majority Voting
@@ -49,7 +49,7 @@ ic-shm-2026-project-2/
 │       ├── json_to_mask.py            # Convert Labelme JSON annotations to 8-bit PNG masks
 │       └── create_overlay_dataset.py  # Generate visual overlay dataset with class legends
 └── tests/                        # Automated unit tests
-    ├── test_colmap_parser.py
+    ├── test_models.py
     ├── test_point_cloud_filter.py
     ├── test_semantic_projector.py
     └── test_visualizer.py

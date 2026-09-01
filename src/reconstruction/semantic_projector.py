@@ -5,7 +5,8 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 from PIL import Image
 
-from src.reconstruction.colmap_parser import ColmapParser, Point3D
+from src.reconstruction.models import Point3D
+from src.reconstruction.pycolmap_reconstructor import PycolmapReconstructor
 
 
 CLASS_NAMES = {
@@ -84,7 +85,7 @@ class SemanticProjector:
 
         # Any object with load() -> (camera, images, points3d) works,
         # e.g. PycolmapReconstructor or ReconstructionAdapter.
-        self.parser = parser if parser is not None else ColmapParser(colmap_dir)
+        self.parser = parser if parser is not None else PycolmapReconstructor(colmap_dir)
         self.mask_cache: Dict[str, np.ndarray] = {}
 
         self.point_classes: Dict[int, int] = {}       # p3d_id -> class_id

@@ -22,7 +22,7 @@ from typing import Dict, Tuple
 import numpy as np
 import pycolmap
 
-from src.reconstruction.colmap_parser import CameraIntrinsics, ImagePose, Point3D
+from src.reconstruction.models import CameraIntrinsics, ImagePose, Point3D
 
 CONTEST_MODEL_FILES = ["cameras.txt", "images.txt", "rigs.txt", "frames.txt"]
 
