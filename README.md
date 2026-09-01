@@ -32,8 +32,9 @@ ic-shm-2026-project-2/
 ├── .devcontainer/                # Docker container configuration with CUDA 12.1, PyTorch, Pycolmap
 │   ├── Dockerfile
 │   └── devcontainer.json
-├── docs/                         # Technical specifications and contest survey
-│   └── CONTEST_SPEC_AND_SURVEY.md
+├── docs/                         # Technical specifications and contest documentation
+│   ├── CONTEST_SPEC_AND_SURVEY.md# Detailed problem statement and dataset survey
+│   └── EVALUATION_METRICS.md     # Mathematical evaluation framework and SHM metrics
 ├── notebooks/                    # Interactive 3D visualization notebooks
 │   └── 01_visualize_semantic_3d.ipynb
 ├── src/
