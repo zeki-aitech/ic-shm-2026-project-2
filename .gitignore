@@ -1,5 +1,26 @@
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Project data & outputs
 data/
 outputs/
 tmp/
+scratch/
 
-*.pyc
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/

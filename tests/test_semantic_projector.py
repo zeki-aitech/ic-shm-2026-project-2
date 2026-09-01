@@ -38,6 +38,10 @@ class TestSemanticProjector(unittest.TestCase):
         # Empty fallback
         self.assertEqual(vote_majority_class([]), 0)
 
+    @unittest.skipIf(
+        not os.path.exists("/workspaces/sfm_demo/outputs/gt_masks"),
+        "Dataset outputs directory not mounted on current environment"
+    )
     def test_full_projection_and_export(self):
         self.projector.preload_masks()
         self.assertGreaterEqual(len(self.projector.mask_cache), 300)
