@@ -74,14 +74,22 @@ Contest Dataset/
 └── json/                       # Labelme JSON polygon annotations for 'images'
 ```
 
-### 2. Camera & SfM Parameters
-- **Camera Model**: `SIMPLE_RADIAL` (Single shared camera calibration).
-- **Image Resolution**: $1320 \times 989$ pixels ($W \times H$).
-- **Focal Length**: $f \approx 925.7016$ px.
-- **Principal Point**: $c_x = 660.0, c_y = 494.5$ px.
-- **Radial Distortion**: $k_1$.
-- **Total Images**: 400 frames.
-- **Total SfM 3D Tracks**: 86,336 unique feature tracks.
+### 2. Camera & SfM Parameters (COLMAP Outputs)
+
+The provided SfM dataset (generated via COLMAP) provides 4 purely geometric core outputs. Note that COLMAP is semantically blind (it outputs a geometric world with $x, y, z$ coordinates but no component labels):
+
+1. **Camera Intrinsics (`cameras.txt`)**:
+   - Model: `SIMPLE_RADIAL` | Resolution: $1320 \times 989$ px.
+   - Focal Length: $f \approx 925.7$ px | Principal Point: $c_x = 660.0, c_y = 494.5$ px | Radial Distortion: $k_1$.
+   - *Purpose*: Enables precise mathematical 3D-to-2D projection.
+2. **Camera Extrinsics (`images.txt`)**:
+   - The 6-DOF poses (Rotation $R$, Translation $T$) of the UAV for all 400 frames in world space.
+3. **Sparse 3D Point Cloud**:
+   - Spatial coordinates $(x,y,z)$ and RGB colors for bridge points. This raw output is highly noisy around slender structures like stay cables.
+4. **2D-3D Feature Tracks (86,336 tracks)**:
+   - The critical mapping table that links a specific 3D point $X_i$ to its observed 2D pixel coordinates $(u, v)$ across multiple UAV frames.
+
+> **The Geometric-to-Semantic Bridge**: The 2D-3D feature tracks (Output #4) act as the link between Task A and Task B. The pipeline looks up a 3D point's observed 2D pixels, queries the AI-predicted 2D semantic masks (from Task A) at those pixels, and "copies" the label back to the 3D point (Semantic Fusion).
 
 ### 3. Semantic Taxonomy & Color Codes
 
