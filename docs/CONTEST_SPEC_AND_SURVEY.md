@@ -130,7 +130,15 @@ Drawing `stay_cable` on the top layer ensures thin cable lines are never overwri
 
 ---
 
-## IV. FUTURE ROADMAP & RESEARCH EXTENSIONS
+## IV. RESEARCH REFERENCES (Lin 2025, Hu 2020)
+
+The problem decomposition and geometric filtering logic are strongly grounded in prior research:
+1. **Lin et al. (2025)**: *A structure-oriented loss function for automated semantic segmentation of bridges*. This paper emphasizes structural boundaries and semantic loss during 2D segmentation, forming the basis for our Task A methodology and mIoU evaluation.
+2. **Hu et al. (2020)**: *Structure-aware 3D reconstruction for cable-stayed bridges: A learning-based method*. This paper details structure-aware reconstruction techniques, geometric constraints, and multi-view consistency, forming the core inspiration for Task B.
+
+---
+
+## V. FUTURE ROADMAP & RESEARCH EXTENSIONS
 
 1. **Automated Deep Learning 2D Segmentation**: Incorporate zero-shot models (SAM / HQ-SAM) or fine-tuned segmentation models (SegFormer, Mask2Former) to automatically generate high-quality masks for the unlabeled UAV frames.
 2. **Centralized Configuration**: Decouple file paths into a structured `configs/config.yaml` with unified environment management.

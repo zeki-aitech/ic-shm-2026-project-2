@@ -2,6 +2,10 @@
 
 This document outlines the comprehensive evaluation methodology for the **Structure-Aware 3D Semantic Point Cloud Reconstruction of Cable-Stayed Bridges**. The evaluation protocol integrates **3D Semantic Segmentation Metrics**, **3D Geometric Reconstruction Accuracy**, and **Domain-Specific Structural Health Monitoring (SHM) Constraints**.
 
+> **Research Alignment**: The selected metrics explicitly draw upon standards established in recent research:
+> - **Lin et al. (2025)**: Inspired our 2D/3D semantic metrics (mIoU, OA) and the explicit need to track slender elements like cables ($IoU_{\text{cable}}$).
+> - **Hu et al. (2020)**: Inspired the integration of geometric metrics (Reprojection Error, Chamfer Distance) alongside domain-specific structural constraints (Deck Planarity MAD, Cable Fan Deviation).
+
 ---
 
 ## 1. 3D Semantic Segmentation Metrics
