@@ -9,9 +9,12 @@ from src.reconstruction.point_cloud_filter import (
     drop_background,
     filter_cable_fan_planes,
     filter_cable_structural_envelope,
+    filter_cable_tower_planes,
     filter_deck_core_density,
+    project_cables_to_fan_planes,
     filter_deck_plane,
     filter_point_cloud,
+    filter_tower_core,
     fit_plane_pca,
     plane_residuals,
     statistical_outlier_removal_per_class,
@@ -223,6 +226,119 @@ class TestCableEnvelopeFilter(unittest.TestCase):
         _, _, fc, removed = filter_cable_structural_envelope(xyz, rgb, cids)
         self.assertGreaterEqual(removed, n_fakes)
         self.assertGreater((fc == 2).sum(), 50)
+
+
+class TestTowerCoreFilter(unittest.TestCase):
+    def test_removes_scattered_tower_noise(self):
+        rng = np.random.default_rng(3)
+        n = 200
+        deck = np.column_stack([
+            rng.uniform(0, 20, n), rng.normal(0, 0.05, n), np.zeros(n),
+        ]).astype(np.float32)
+
+        shafts = []
+        for tx in [5.0, 15.0]:
+            shafts.append(np.column_stack([
+                rng.normal(tx, 0.1, 60), rng.normal(0, 0.1, 60), rng.uniform(0, 10, 60),
+            ]))
+        shafts = np.vstack(shafts).astype(np.float32)
+        noise = np.array([
+            [0.0, 5.0, 3.0], [20.0, -6.0, 2.0], [10.0, 8.0, 5.0],
+            [-4.0, 0.0, 1.0], [24.0, 0.0, 4.0],
+        ], dtype=np.float32)
+
+        xyz = np.vstack([deck, shafts, noise])
+        rgb = np.full((len(xyz), 3), 255, dtype=np.uint8)
+        cids = np.concatenate([
+            np.full(len(deck), 1, dtype=np.int32),
+            np.full(len(shafts) + len(noise), 3, dtype=np.int32),
+        ])
+
+        fx, _, fc, removed = filter_tower_core(
+            xyz, rgb, cids, up_hint=np.array([0.0, 0.0, 1.0]),
+        )
+        self.assertGreaterEqual(removed, len(noise))
+        self.assertGreater((fc == 3).sum(), len(shafts) * 0.9)
+        self.assertEqual((fc == 1).sum(), len(deck))
+
+
+class TestCableTowerPlanesFilter(unittest.TestCase):
+    def test_keeps_sheet_cables_drops_off_sheet(self):
+        rng = np.random.default_rng(4)
+        n = 200
+        # Deck spanning y in [-0.5, 0.5] so its edges give the two planes
+        deck = np.column_stack([
+            rng.uniform(0, 20, n), rng.uniform(-0.5, 0.5, n), np.zeros(n),
+        ]).astype(np.float32)
+        tower = np.vstack([
+            np.column_stack([
+                rng.normal(tx, 0.1, 60), rng.uniform(-0.5, 0.5, 60), rng.uniform(0, 10, 60),
+            ]) for tx in [5.0, 15.0]
+        ]).astype(np.float32)
+
+        # Cables on left/right sheets near y = -0.5 / +0.5
+        sheet = np.vstack([
+            np.column_stack([
+                rng.uniform(0, 20, 80), rng.normal(sy, 0.05, 80), rng.uniform(0.5, 9, 80),
+            ]) for sy in [-0.5, 0.5]
+        ]).astype(np.float32)
+        off_sheet = np.column_stack([
+            rng.uniform(0, 20, 50), rng.uniform(3, 8, 50), rng.uniform(0.5, 9, 50),
+        ]).astype(np.float32)
+
+        xyz = np.vstack([deck, tower, sheet, off_sheet])
+        rgb = np.full((len(xyz), 3), 255, dtype=np.uint8)
+        cids = np.concatenate([
+            np.full(len(deck), 1, dtype=np.int32),
+            np.full(len(tower), 3, dtype=np.int32),
+            np.full(len(sheet) + len(off_sheet), 2, dtype=np.int32),
+        ])
+
+        fx, _, fc, removed = filter_cable_tower_planes(
+            xyz, rgb, cids, up_hint=np.array([0.0, 0.0, 1.0]),
+        )
+        self.assertGreaterEqual(removed, len(off_sheet))
+        self.assertGreater((fc == 2).sum(), len(sheet) * 0.7)
+        self.assertEqual((fc == 1).sum(), len(deck))
+        self.assertEqual((fc == 3).sum(), len(tower))
+
+    def test_projection_snaps_cables_onto_planes(self):
+        rng = np.random.default_rng(5)
+        n = 200
+        deck = np.column_stack([
+            rng.uniform(0, 20, n), rng.uniform(-0.5, 0.5, n), np.zeros(n),
+        ]).astype(np.float32)
+        tower = np.vstack([
+            np.column_stack([
+                rng.normal(tx, 0.1, 60), rng.uniform(-0.5, 0.5, 60), rng.uniform(0, 10, 60),
+            ]) for tx in [5.0, 15.0]
+        ]).astype(np.float32)
+        cable = np.column_stack([
+            rng.uniform(0, 20, 100), rng.normal(0.5, 0.1, 100), rng.uniform(0.5, 9, 100),
+        ]).astype(np.float32)
+
+        xyz = np.vstack([deck, tower, cable])
+        rgb = np.full((len(xyz), 3), 255, dtype=np.uint8)
+        cids = np.concatenate([
+            np.full(len(deck), 1, dtype=np.int32),
+            np.full(len(tower), 3, dtype=np.int32),
+            np.full(len(cable), 2, dtype=np.int32),
+        ])
+
+        up = np.array([0.0, 0.0, 1.0])
+        new_xyz, n_proj = project_cables_to_fan_planes(xyz, rgb, cids, up_hint=up)
+
+        self.assertEqual(n_proj, len(cable))
+        # Non-cable classes untouched
+        self.assertTrue(np.allclose(new_xyz[cids != 2], xyz[cids != 2]))
+        # In the bridge frame, every projected cable lies exactly on one plane
+        from src.reconstruction.point_cloud_filter import compute_fan_planes, to_bridge_coords
+        origin, u, v, w, d_left, d_right = compute_fan_planes(xyz, cids, up_hint=up)
+        _, _, proj_lat = to_bridge_coords(new_xyz[cids == 2], origin, u, v, w)
+        on_plane = np.minimum(np.abs(proj_lat - d_left), np.abs(proj_lat - d_right))
+        self.assertTrue(np.allclose(on_plane, 0, atol=1e-5))
+        # Height (z, since up = Z) preserved: movement is along lateral axis ⊥ up
+        self.assertTrue(np.allclose(new_xyz[cids == 2][:, 2], cable[:, 2], atol=1e-5))
 
 
 class TestCableFanFilter(unittest.TestCase):

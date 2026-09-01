@@ -38,6 +38,12 @@ LATERAL_MARGIN_FRAC = 0.40
 TOWER_TOP_MARGIN = 0.3
 DECK_CORE_K = 20
 DECK_CORE_MAD_MULTIPLIER = 5.0
+MIN_TOWER_FOR_CORE = 50
+TOWER_ALONG_CLUSTERS = 2
+TOWER_CORE_MAD_MULTIPLIER = 5.0
+TOWER_FACE_PERCENTILE = 10.0
+CABLE_PLANE_TAU_FRAC = 0.6
+CABLE_PLANE_MIN_TAU = 0.15
 
 
 @dataclass
@@ -338,6 +344,198 @@ def to_bridge_coords(
     return rel @ u, rel @ v, rel @ w
 
 
+def _oriented_bridge_frame(
+    xyz: np.ndarray,
+    class_ids: np.ndarray,
+    deck_xyz: np.ndarray,
+    up_hint: np.ndarray = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Bridge frame with vertical sign disambiguated.
+
+    With `up_hint` the sign is trusted. Otherwise the SVD deck normal is
+    flipped, if needed, so foundation sits below deck (fallback: towers
+    extend more above deck than below).
+    """
+    origin, u, v, w = build_bridge_frame(deck_xyz, up_hint=up_hint)
+    if up_hint is not None:
+        return origin, u, v, w
+
+    deck_h_med = float(np.median((deck_xyz - origin) @ v))
+    foundation_mask = class_ids == FOUNDATION_CLASS_ID
+    tower_mask = class_ids == TOWER_CLASS_ID
+    flip = False
+    if foundation_mask.sum() >= 10:
+        flip = float(np.median((xyz[foundation_mask] - origin) @ v)) > deck_h_med
+    elif tower_mask.any():
+        t_h = (xyz[tower_mask] - origin) @ v
+        above = float(np.percentile(t_h, 99)) - deck_h_med
+        below = deck_h_med - float(np.percentile(t_h, 1))
+        flip = below > above
+    if flip:
+        v = -v
+        w = -w  # keep the frame right-handed (u unchanged)
+    return origin, u, v, w
+
+
+def filter_tower_core(
+    xyz: np.ndarray,
+    rgb: np.ndarray,
+    class_ids: np.ndarray,
+    n_clusters: int = TOWER_ALONG_CLUSTERS,
+    mad_multiplier: float = TOWER_CORE_MAD_MULTIPLIER,
+    up_hint: np.ndarray = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """
+    Keep tower points inside a narrow (along, lateral) tube per tower shaft.
+
+    Towers of a cable-stayed bridge are vertical columns: cluster tower points
+    along the bridge axis (one cluster per tower), then keep points within a
+    MAD-based tube around each cluster's along/lateral center. Height is not
+    constrained. Other classes are unchanged.
+    """
+    deck_mask = class_ids == DECK_CLASS_ID
+    tower_mask = class_ids == TOWER_CLASS_ID
+    n_tower = int(tower_mask.sum())
+    if deck_mask.sum() < MIN_DECK_FOR_ENVELOPE or n_tower < MIN_TOWER_FOR_CORE:
+        return xyz, rgb, class_ids, 0
+
+    tower_xyz = xyz[tower_mask]
+    tower_indices = np.where(tower_mask)[0]
+
+    origin, u, v, w = _oriented_bridge_frame(xyz, class_ids, xyz[deck_mask], up_hint)
+    t_along, _, t_lat = to_bridge_coords(tower_xyz, origin, u, v, w)
+
+    labels = _kmeans_xy(np.column_stack([t_along, np.zeros_like(t_along)]), k=n_clusters)
+    keep_tower = np.zeros(n_tower, dtype=bool)
+    for j in range(n_clusters):
+        cmask = labels == j
+        if cmask.sum() < 4:
+            keep_tower[cmask] = True
+            continue
+        along_med = float(np.median(t_along[cmask]))
+        lat_med = float(np.median(t_lat[cmask]))
+        along_mad = max(float(np.median(np.abs(t_along[cmask] - along_med))), 0.05)
+        lat_mad = max(float(np.median(np.abs(t_lat[cmask] - lat_med))), 0.05)
+        keep_tower |= (
+            cmask
+            & (np.abs(t_along - along_med) <= mad_multiplier * along_mad)
+            & (np.abs(t_lat - lat_med) <= mad_multiplier * lat_mad)
+        )
+
+    keep_mask = np.ones(len(class_ids), dtype=bool)
+    keep_mask[tower_indices[~keep_tower]] = False
+    removed = int((~keep_tower).sum())
+    return xyz[keep_mask], rgb[keep_mask], class_ids[keep_mask], removed
+
+
+def filter_cable_tower_planes(
+    xyz: np.ndarray,
+    rgb: np.ndarray,
+    class_ids: np.ndarray,
+    tau_frac: float = CABLE_PLANE_TAU_FRAC,
+    min_tau: float = CABLE_PLANE_MIN_TAU,
+    face_percentile: float = TOWER_FACE_PERCENTILE,
+    up_hint: np.ndarray = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """
+    Keep stay_cable points near the left/right fan planes anchored to the towers.
+
+    Both fan planes are vertical sheets spanned by the longitudinal (u) and
+    vertical (v) axes; their normal is the lateral axis w. Lateral offsets come
+    from the tower faces (percentiles of tower lateral coords), falling back to
+    deck edges when towers are unavailable. A cable point is assigned to the
+    nearest plane and dropped if its distance exceeds
+    tau = max(tau_frac * plane_separation, min_tau).
+    """
+    deck_mask = class_ids == DECK_CLASS_ID
+    cable_mask = class_ids == STAY_CABLE_CLASS_ID
+
+    n_cable = int(cable_mask.sum())
+    if deck_mask.sum() < MIN_DECK_FOR_ENVELOPE or n_cable < MIN_CABLE_FOR_ENVELOPE:
+        return xyz, rgb, class_ids, 0
+
+    cable_xyz = xyz[cable_mask]
+    cable_indices = np.where(cable_mask)[0]
+
+    origin, u, v, w, d_left, d_right = compute_fan_planes(
+        xyz, class_ids, up_hint=up_hint, face_percentile=face_percentile,
+    )
+    separation = max(d_right - d_left, 1e-6)
+    tau = max(tau_frac * separation, min_tau)
+
+    _, _, c_lat = to_bridge_coords(cable_xyz, origin, u, v, w)
+    dist = np.minimum(np.abs(c_lat - d_left), np.abs(c_lat - d_right))
+    keep_cable = dist <= tau
+
+    keep_mask = np.ones(len(class_ids), dtype=bool)
+    keep_mask[cable_indices[~keep_cable]] = False
+    removed = int((~keep_cable).sum())
+    return xyz[keep_mask], rgb[keep_mask], class_ids[keep_mask], removed
+
+
+def compute_fan_planes(
+    xyz: np.ndarray,
+    class_ids: np.ndarray,
+    up_hint: np.ndarray = None,
+    face_percentile: float = TOWER_FACE_PERCENTILE,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
+    """
+    Left/right fan planes anchored to the towers (fallback: deck edges).
+
+    Returns (origin, u, v, w, d_left, d_right): each plane satisfies
+    (x - origin) . w = d, spanned by u (longitudinal) and v (vertical).
+    """
+    deck_xyz = xyz[class_ids == DECK_CLASS_ID]
+    tower_mask = class_ids == TOWER_CLASS_ID
+
+    origin, u, v, w = _oriented_bridge_frame(xyz, class_ids, deck_xyz, up_hint)
+
+    if tower_mask.sum() >= MIN_TOWER_FOR_CORE:
+        _, _, ref_lat = to_bridge_coords(xyz[tower_mask], origin, u, v, w)
+    else:
+        _, _, ref_lat = to_bridge_coords(deck_xyz, origin, u, v, w)
+
+    d_left = float(np.percentile(ref_lat, face_percentile))
+    d_right = float(np.percentile(ref_lat, 100.0 - face_percentile))
+    return origin, u, v, w, d_left, d_right
+
+
+def project_cables_to_fan_planes(
+    xyz: np.ndarray,
+    rgb: np.ndarray,
+    class_ids: np.ndarray,
+    face_percentile: float = TOWER_FACE_PERCENTILE,
+    up_hint: np.ndarray = None,
+) -> Tuple[np.ndarray, int]:
+    """
+    Snap stay_cable points perpendicular onto the nearest left/right fan plane.
+
+    Each cable point moves along the lateral axis w until it lies exactly on
+    its nearest plane; all other coordinates and classes are untouched.
+    Returns (new_xyz, n_projected). NOTE: projected coordinates are no longer
+    raw triangulation results — keep this as a separate artifact.
+    """
+    deck_mask = class_ids == DECK_CLASS_ID
+    cable_mask = class_ids == STAY_CABLE_CLASS_ID
+    if deck_mask.sum() < MIN_DECK_FOR_ENVELOPE or not cable_mask.any():
+        return xyz, 0
+
+    origin, u, v, w, d_left, d_right = compute_fan_planes(
+        xyz, class_ids, up_hint=up_hint, face_percentile=face_percentile,
+    )
+
+    cable_xyz = xyz[cable_mask]
+    _, _, c_lat = to_bridge_coords(cable_xyz, origin, u, v, w)
+    nearest_d = np.where(
+        np.abs(c_lat - d_left) <= np.abs(c_lat - d_right), d_left, d_right,
+    )
+    # Move along w so the lateral coordinate becomes exactly nearest_d
+    new_xyz = xyz.copy()
+    new_xyz[cable_mask] = cable_xyz - np.outer(c_lat - nearest_d, w)
+    return new_xyz, int(cable_mask.sum())
+
+
 def filter_deck_core_density(
     xyz: np.ndarray,
     rgb: np.ndarray,
@@ -364,23 +562,7 @@ def filter_deck_core_density(
     deck_xyz = xyz[deck_mask]
     deck_indices = np.where(deck_mask)[0]
 
-    origin, u, v, w = build_bridge_frame(deck_xyz, up_hint=up_hint)
-    if up_hint is None:
-        # Prefer foundation / tower to orient vertical when no camera up is given.
-        foundation_mask = class_ids == FOUNDATION_CLASS_ID
-        tower_mask = class_ids == TOWER_CLASS_ID
-        deck_h_med = float(np.median((deck_xyz - origin) @ v))
-        flip = False
-        if foundation_mask.sum() >= 10:
-            flip = float(np.median((xyz[foundation_mask] - origin) @ v)) > deck_h_med
-        elif tower_mask.any():
-            t_h = (xyz[tower_mask] - origin) @ v
-            above = float(np.percentile(t_h, 99)) - deck_h_med
-            below = deck_h_med - float(np.percentile(t_h, 1))
-            flip = below > above
-        if flip:
-            v = -v
-            w = -w
+    origin, u, v, w = _oriented_bridge_frame(xyz, class_ids, deck_xyz, up_hint)
 
     along, _, lat = to_bridge_coords(deck_xyz, origin, u, v, w)
     xy = np.column_stack([along, lat])
@@ -424,7 +606,6 @@ def filter_cable_structural_envelope(
     deck_mask = class_ids == DECK_CLASS_ID
     tower_mask = class_ids == TOWER_CLASS_ID
     cable_mask = class_ids == STAY_CABLE_CLASS_ID
-    foundation_mask = class_ids == FOUNDATION_CLASS_ID
 
     n_deck = int(deck_mask.sum())
     n_cable = int(cable_mask.sum())
@@ -436,23 +617,7 @@ def filter_cable_structural_envelope(
     cable_xyz = xyz[cable_mask]
     cable_indices = np.where(cable_mask)[0]
 
-    origin, u, v, w = build_bridge_frame(deck_xyz, up_hint=up_hint)
-
-    if up_hint is None:
-        # SVD normal has arbitrary sign — orient v so "up" is physically up.
-        deck_h_med = float(np.median((deck_xyz - origin) @ v))
-        flip = False
-        if foundation_mask.sum() >= 10:
-            found_h_med = float(np.median((xyz[foundation_mask] - origin) @ v))
-            flip = found_h_med > deck_h_med
-        elif tower_mask.any():
-            t_h = (tower_xyz - origin) @ v
-            above = float(np.percentile(t_h, 99)) - deck_h_med
-            below = deck_h_med - float(np.percentile(t_h, 1))
-            flip = below > above
-        if flip:
-            v = -v
-            w = -w  # keep the frame right-handed (u unchanged)
+    origin, u, v, w = _oriented_bridge_frame(xyz, class_ids, deck_xyz, up_hint)
 
     d_along, d_height, d_lat = to_bridge_coords(deck_xyz, origin, u, v, w)
     t_along, t_height, t_lat = to_bridge_coords(tower_xyz, origin, u, v, w)
@@ -498,7 +663,9 @@ def filter_point_cloud(
     apply_statistical: bool = True,
     apply_deck_plane: bool = True,
     apply_deck_core: bool = True,
+    apply_tower_core: bool = True,
     apply_cable_envelope: bool = True,
+    apply_cable_planes: bool = True,
     apply_cable_fan: bool = False,
     sor_params: Dict[int, Tuple[int, float]] = None,
     deck_mad_multiplier: float = 3.0,
@@ -514,8 +681,10 @@ def filter_point_cloud(
       2. Per-class statistical outlier removal
       3. Deck plane residual filter
       4. Deck core density filter (along/lateral)
-      5. Stay-cable structural envelope filter
-      6. Stay-cable fan plane filter (optional, off by default)
+      5. Tower core tube filter (per-shaft along/lateral)
+      6. Stay-cable structural envelope filter
+      7. Stay-cable left/right fan-plane filter (tower-anchored)
+      8. Stay-cable fan plane filter via RANSAC (optional, off by default)
     """
     stats = FilterStats(initial=len(class_ids))
 
@@ -557,6 +726,14 @@ def filter_point_cloud(
     else:
         stats.removed_by_stage.setdefault("deck_core", 0)
 
+    if apply_tower_core and len(class_ids) > 0:
+        xyz, rgb, class_ids, tower_removed = filter_tower_core(
+            xyz, rgb, class_ids, up_hint=up_hint,
+        )
+        stats.removed_by_stage["tower_core"] = tower_removed
+    else:
+        stats.removed_by_stage.setdefault("tower_core", 0)
+
     if apply_cable_envelope and len(class_ids) > 0:
         xyz, rgb, class_ids, env_removed = filter_cable_structural_envelope(
             xyz, rgb, class_ids, up_hint=up_hint,
@@ -564,6 +741,14 @@ def filter_point_cloud(
         stats.removed_by_stage["cable_envelope"] = env_removed
     else:
         stats.removed_by_stage.setdefault("cable_envelope", 0)
+
+    if apply_cable_planes and len(class_ids) > 0:
+        xyz, rgb, class_ids, planes_removed = filter_cable_tower_planes(
+            xyz, rgb, class_ids, up_hint=up_hint,
+        )
+        stats.removed_by_stage["cable_planes"] = planes_removed
+    else:
+        stats.removed_by_stage.setdefault("cable_planes", 0)
 
     if apply_cable_fan and len(class_ids) > 0:
         xyz, rgb, class_ids, cable_removed = filter_cable_fan_planes(
@@ -628,8 +813,12 @@ def print_filter_report(
         print(f"  Removed (deck plane): {stats.removed_by_stage['deck_plane']:,}")
     if "deck_core" in stats.removed_by_stage:
         print(f"  Removed (deck core density): {stats.removed_by_stage['deck_core']:,}")
+    if "tower_core" in stats.removed_by_stage:
+        print(f"  Removed (tower core tube): {stats.removed_by_stage['tower_core']:,}")
     if "cable_envelope" in stats.removed_by_stage:
         print(f"  Removed (cable envelope): {stats.removed_by_stage['cable_envelope']:,}")
+    if "cable_planes" in stats.removed_by_stage:
+        print(f"  Removed (cable fan planes): {stats.removed_by_stage['cable_planes']:,}")
     if "cable_fan" in stats.removed_by_stage:
         print(f"  Removed (cable fan): {stats.removed_by_stage['cable_fan']:,}")
     print(f"Final points: {stats.final:,}")
@@ -650,7 +839,9 @@ def filter_ply_file(
     apply_statistical: bool = True,
     apply_deck_plane: bool = True,
     apply_deck_core: bool = True,
+    apply_tower_core: bool = True,
     apply_cable_envelope: bool = True,
+    apply_cable_planes: bool = True,
     apply_cable_fan: bool = False,
     up_hint: np.ndarray = None,
 ) -> FilterStats:
@@ -664,7 +855,9 @@ def filter_ply_file(
         apply_statistical=apply_statistical,
         apply_deck_plane=apply_deck_plane,
         apply_deck_core=apply_deck_core,
+        apply_tower_core=apply_tower_core,
         apply_cable_envelope=apply_cable_envelope,
+        apply_cable_planes=apply_cable_planes,
         apply_cable_fan=apply_cable_fan,
         up_hint=up_hint,
     )
@@ -700,8 +893,16 @@ def main():
         help="Skip deck along/lateral density core filter",
     )
     parser.add_argument(
+        "--no-tower-core", action="store_true",
+        help="Skip tower core tube filter",
+    )
+    parser.add_argument(
         "--no-cable-envelope", action="store_true",
         help="Skip stay_cable structural envelope filter",
+    )
+    parser.add_argument(
+        "--no-cable-planes", action="store_true",
+        help="Skip stay_cable tower-anchored fan-plane filter",
     )
     parser.add_argument(
         "--cable-fan", action="store_true",
@@ -731,7 +932,9 @@ def main():
         apply_statistical=not args.no_statistical,
         apply_deck_plane=not args.no_deck_plane,
         apply_deck_core=not args.no_deck_core,
+        apply_tower_core=not args.no_tower_core,
         apply_cable_envelope=not args.no_cable_envelope,
+        apply_cable_planes=not args.no_cable_planes,
         apply_cable_fan=args.cable_fan,
         up_hint=up_hint,
     )
