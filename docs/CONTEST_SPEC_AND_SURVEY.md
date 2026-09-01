@@ -6,16 +6,47 @@
 
 ---
 
-## I. PROBLEM STATEMENT & CONTEST OBJECTIVES
+## I. PROBLEM STATEMENT & OBJECTIVES
 
-### 1. Background & Practical Applications
-Cable-stayed bridges are critical civil infrastructure with large spans and complex spatial topologies. Routine on-site manual inspection is labor-intensive, hazardous, and challenging when accessing high pylon towers or slender cable stays.
+### 1. Primary Objective
+The core objective of **IC-SHM 2026 Project 2** is to build a high-fidelity **As-is 3D Semantic Digital Twin** of a real-world cable-stayed bridge by fusing multi-view drone photogrammetry, Structure-from-Motion (SfM) camera poses, and 2D semantic image segmentations.
 
-Using unmanned aerial vehicles (UAVs) equipped with digital cameras combined with computer vision (Structure-from-Motion / Multi-View Stereo) enables the automatic generation of as-is 3D Digital Twins. The fundamental research question is: **How can we reconstruct 3D point clouds that not only provide geometric coordinates $(x, y, z)$ but also accurate, structure-aware semantic classifications for every bridge component?**
+The output is a clean, labeled 3D point cloud (`.ply`) where every spatial coordinate $(x, y, z)$ is assigned to its exact structural bridge component (`deck`, `stay_cable`, `tower`, `foundation`, or `background`) with rigorous geometric fidelity.
 
 ---
 
-### 2. Core Technical Challenges
+### 2. Two-Task Problem Decomposition
+
+The overall challenge naturally decomposes into **two complementary technical tasks**:
+
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                      TASK A: 2D SEMANTIC SEGMENTATION                       │
+ │  • Train deep learning models (e.g. SegFormer, Mask2Former, SAM, UNet)      │
+ │  • Input: Labeled UAV images (300 frames) with Labelme polygon JSON masks   │
+ │  • Output: Predict 2D masks for remaining unlabeled frames (~100 images)    │
+ │  • Metric: 2D mIoU, Dice coefficient, Boundary F1                           │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼ Multi-View Back-Projection
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │            TASK B: 3D RECONSTRUCTION, SEMANTIC FUSION & FILTERING           │
+ │  • 3D Triangulation from SfM camera poses and 2D feature tracks             │
+ │  • Multi-View Majority Voting for robust 2D-to-3D label propagation         │
+ │  • Structure-Aware 3D Filtering: deck plane, tower tube, cable fan planes   │
+ │  • Output: High-density, cleaned semantic ASCII .ply point cloud            │
+ │  • Metric: 3D mIoU, Reprojection Error < 1.0 px, Planarity MAD < 0.05 m     │
+ └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Task | Core Objective | Inputs | Key Deliverables & Target Metrics |
+| :---: | :--- | :--- | :--- |
+| **Task A: 2D Semantic Segmentation** | Learn 2D structural component boundaries to segment drone images and automatically annotate unlabeled frames. | `images/` (labeled) + `json/` (Labelme polygons), `unlabeled_Images/` | Per-frame 8-bit PNG semantic masks; 2D $mIoU > 85.0\%$, $IoU_{\text{cable}} > 75.0\%$. |
+| **Task B: 3D Geometric Reconstruction & Fusion** | Triangulate sparse/dense 3D points, back-project 2D segmentations, and filter floating noise using structural bridge priors. | `camera_parameters/` (`cameras.txt`, `images.txt`), 2D masks from Task A | Clean 3D semantic `.ply` cloud; 3D $mIoU > 85.0\%$, Reprojection Error $< 1.0\text{ px}$, Cable Fan Deviation $< 0.10\text{ m}$. |
+
+---
+
+### 3. Core Technical Challenges
 1. **Geometric Disparity Among Structural Components**:
    - **Bridge Deck (`deck`)**: Large planar surface spanning horizontally.
    - **Towers / Pylons (`tower`)**: Tall vertical columns.
