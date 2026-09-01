@@ -36,8 +36,9 @@ ic-shm-2026-project-2/
 │   ├── CONTEST_SPEC_AND_SURVEY.md# Detailed problem statement and dataset survey
 │   └── EVALUATION_METRICS.md     # Mathematical evaluation framework and SHM metrics
 ├── notebooks/                    # Interactive 3D visualization notebooks
-│   ├── 01_visualize_semantic_3d.ipynb
-│   └── 02_visualize_colmap_mapping_2d_3d.ipynb
+│   ├── 00_understand_colmap_outputs.ipynb # Complete tutorial & visualizer of raw COLMAP outputs
+│   ├── 01_visualize_semantic_3d.ipynb     # Interactive semantic 3D point cloud visualizer
+│   └── 02_visualize_colmap_mapping_2d_3d.ipynb # 2D-3D mapping & voting visualizer
 ├── src/
 │   ├── reconstruction/           # 3D Reconstruction & Semantic Pipeline Core
 │   │   ├── models.py                  # Core dataclasses (CameraIntrinsics, ImagePose, Point3D)
