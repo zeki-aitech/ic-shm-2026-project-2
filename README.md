@@ -34,7 +34,8 @@ ic-shm-2026-project-2/
 │   └── devcontainer.json
 ├── docs/                         # Technical specifications and contest documentation
 │   ├── CONTEST_SPEC_AND_SURVEY.md# Detailed problem statement and dataset survey
-│   └── EVALUATION_METRICS.md     # Mathematical evaluation framework and SHM metrics
+│   ├── EVALUATION_METRICS.md     # Mathematical evaluation framework and SHM metrics
+│   └── THEORY_COLMAP_AND_SIFT.md # Complete handbook on SIFT, Epipolar Geometry & Triangulation
 ├── notebooks/                    # Interactive 3D visualization notebooks
 │   ├── 00_understand_colmap_outputs.ipynb # Complete tutorial & visualizer of raw COLMAP outputs
 │   ├── 01_visualize_semantic_3d.ipynb     # Interactive semantic 3D point cloud visualizer
