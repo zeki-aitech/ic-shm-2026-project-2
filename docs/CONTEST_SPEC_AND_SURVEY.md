@@ -1,105 +1,106 @@
-# IC-SHM 2026 (Project 2) — Đặc Tả Cuộc Thi & Báo Cáo Khảo Sát Kỹ Thuật
+# IC-SHM 2026 (Project 2) — Technical Specifications & Problem Survey
 
-**Dự án**: Structure-Aware 3D Semantic Point Cloud Reconstruction for Cable-Stayed Bridges  
-**Thời gian khảo sát**: Tháng 09/2026  
-**Mục tiêu**: Tái tạo đám mây điểm 3D nhận diện kết cấu và phân loại ngữ nghĩa cho cầu dây văng từ dữ liệu ảnh UAV và tham số SfM.
-
----
-
-## I. TỔNG QUAN BÀI TOÁN & YÊU CẦU ĐỀ BÀI
-
-### 1. Bối cảnh & Ứng dụng thực tiễn
-Cầu dây văng (Cable-Stayed Bridge) là công trình giao thông trọng điểm có quy mô nhịp lớn và cấu trúc không gian phức tạp. Việc kiểm tra định kỳ hiện trường thủ công thường tốn kém chi phí, rủi ro cao và khó tiếp cận các vị trí tháp cao hay bó cáp văng.
-
-Việc ứng dụng thiết bị bay không người lái (UAV) kết hợp thị giác máy tính (Computer Vision) và tái tạo 3D (Structure-from-Motion / Multi-View Stereo) cho phép xây dựng mô hình số 3D đám mây điểm hiện trạng (As-is Digital Twin). Bài toán đặt ra là: **Làm thế nào để đám mây điểm 3D không chỉ chứa tọa độ hình học $(x, y, z)$ mà còn mang thông tin ngữ nghĩa (Semantic labels) phân tách chính xác từng cấu kiện cầu?**
+**Project**: Structure-Aware 3D Semantic Point Cloud Reconstruction for Cable-Stayed Bridges  
+**Survey Date**: September 2026  
+**Goal**: Reconstruct structure-aware semantic 3D point clouds for cable-stayed bridges from multi-view UAV photogrammetry and SfM camera parameters.
 
 ---
 
-### 2. Các thách thức kỹ thuật cốt lõi
-1. **Sự không cân bằng và chênh lệch hình học giữa các cấu kiện**:
-   - **Bản mặt cầu / Dầm (`deck`)**: Bề mặt diện tích lớn dạng phẳng ngang.
-   - **Tháp cầu (`tower`)**: Cột trụ đứng thẳng vươn cao.
-   - **Móng cầu (`foundation`)**: Nằm ở phần đáy tiếp giáp mặt đất/nước.
-   - **Dây cáp văng (`stay_cable`)**: Cực kỳ mảnh và chiếm tỷ lệ pixel rất nhỏ trong ảnh UAV. Khi tam giác hóa 3D từ các góc nhìn khác nhau, điểm đặc trưng dễ bị nhiễu do điểm ảnh bắt nhầm nền trời hoặc mặt nước phía sau.
-2. **Nhiễu tam giác hóa (Triangulation Noise & Drift)**:
-   - Dữ liệu SfM ban đầu không có file `points3D.txt` (chỉ có track 2D). Việc tam giác hóa với baseline ngắn từ UAV dễ sinh ra các điểm trôi dạt (outliers) nằm rải rác ngoài không gian cầu.
-3. **Dữ liệu nhãn bán giám sát (Semi-supervised)**:
-   - Chỉ một phần ảnh UAV được gán nhãn đa giác (Labelme JSON), đòi hỏi thuật toán chiếu ngược và biểu quyết đa góc nhìn (Multi-view Voting) phải có cơ chế lọc và gán nhãn thông minh.
+## I. PROBLEM STATEMENT & CONTEST OBJECTIVES
+
+### 1. Background & Practical Applications
+Cable-stayed bridges are critical civil infrastructure with large spans and complex spatial topologies. Routine on-site manual inspection is labor-intensive, hazardous, and challenging when accessing high pylon towers or slender cable stays.
+
+Using unmanned aerial vehicles (UAVs) equipped with digital cameras combined with computer vision (Structure-from-Motion / Multi-View Stereo) enables the automatic generation of as-is 3D Digital Twins. The fundamental research question is: **How can we reconstruct 3D point clouds that not only provide geometric coordinates $(x, y, z)$ but also accurate, structure-aware semantic classifications for every bridge component?**
 
 ---
 
-## II. ĐẶC TẢ DỮ LIỆU CUỘC THI (CONTEST DATASET)
+### 2. Core Technical Challenges
+1. **Geometric Disparity Among Structural Components**:
+   - **Bridge Deck (`deck`)**: Large planar surface spanning horizontally.
+   - **Towers / Pylons (`tower`)**: Tall vertical columns.
+   - **Foundations (`foundation`)**: Substructures located at the lower boundary.
+   - **Stay Cables (`stay_cable`)**: Slender, thin linear features occupying few pixels. During 3D triangulation and back-projection, feature points on cables often suffer from background bleeding (sky/water pixels misclassified as cables, or thin cables occluded by deck/tower).
+2. **Triangulation Noise & Drift**:
+   - The initial SfM dataset provides 2D feature tracks without precomputed 3D coordinates (`points3D.txt`). Narrow baseline triangulation from UAV flight lines causes depth drift and floating outliers.
+3. **Semi-Supervised Label Propagation**:
+   - Only a subset of UAV images contain manual 2D polygon annotations (Labelme JSON), while the remaining images are unlabeled. Multi-view voting and geometric constraints are necessary to clean and propagate labels into 3D.
 
-### 1. Cấu trúc thư mục dữ liệu
+---
+
+## II. CONTEST DATASET SPECIFICATION
+
+### 1. Dataset Directory Layout
 ```text
 Contest Dataset/
-├── camera_parameters/          # Tham số SfM / Tư thế camera
-│   ├── cameras.txt             # Thông số nội suy camera (Intrinsics)
-│   ├── images.txt              # Tư thế từng ảnh (Extrinsics) & vết quan sát 2D
-│   ├── rigs.txt                # Khung giàn camera (nếu có)
-│   └── frames.txt              # Khung thời gian ảnh
-├── images/                     # ~300+ ảnh UAV đã có nhãn tương ứng
-├── unlabeled_Images/           # ~100 ảnh UAV chưa có nhãn
-└── json/                       # File nhãn đa giác Labelme (.json) cho tập ảnh 'images'
+├── camera_parameters/          # SfM parameters & camera poses
+│   ├── cameras.txt             # Camera intrinsic parameters
+│   ├── images.txt              # Extrinsic poses & 2D feature track observations
+│   ├── rigs.txt                # Camera rig configurations
+│   └── frames.txt              # Frame timestamps
+├── images/                     # ~300+ labeled UAV images
+├── unlabeled_Images/           # ~100 unlabeled UAV images
+└── json/                       # Labelme JSON polygon annotations for 'images'
 ```
 
-### 2. Tham số Camera & SfM
-- **Mô hình**: `SIMPLE_RADIAL` (Camera đơn chia sẻ cho toàn bộ ảnh).
-- **Kích thước ảnh**: $1320 \times 989$ pixels.
-- **Tiêu cự**: $f \approx 925.7016$ px.
-- **Tọa độ tâm ảnh (Principal Point)**: $c_x = 660.0, c_y = 494.5$ px.
-- **Hệ số méo xuyên tâm**: $k_1$.
-- **Tổng số ảnh**: 400 ảnh.
-- **Tổng số track đặc trưng**: 86,336 tracks.
+### 2. Camera & SfM Parameters
+- **Camera Model**: `SIMPLE_RADIAL` (Single shared camera calibration).
+- **Image Resolution**: $1320 \times 989$ pixels ($W \times H$).
+- **Focal Length**: $f \approx 925.7016$ px.
+- **Principal Point**: $c_x = 660.0, c_y = 494.5$ px.
+- **Radial Distortion**: $k_1$.
+- **Total Images**: 400 frames.
+- **Total SfM 3D Tracks**: 86,336 unique feature tracks.
 
-### 3. Bảng phân lớp Ngữ nghĩa (Semantic Classes)
+### 3. Semantic Taxonomy & Color Codes
 
-| Class ID | Tên cấu kiện | Màu RGB | Màu HEX | Đặc điểm nhận dạng |
+| Class ID | Component Name | RGB Color | Hex Color | Geometric Role |
 | :---: | :--- | :--- | :--- | :--- |
-| **0** | `background` | `(128, 128, 128)` | `#808080` | Nền trời, mây, mặt nước sông, cảnh quan |
-| **1** | `deck` | `(255, 0, 0)` | `#FF0000` | Bản mặt cầu / Dầm cầu chính |
-| **2** | `stay_cable` | `(0, 255, 255)` | `#00FFFF` | Hệ thống bó dây cáp văng |
-| **3** | `tower` | `(0, 255, 0)` | `#00FF00` | Trụ tháp cầu |
-| **4** | `foundation` | `(255, 255, 0)` | `#FFFF00` | Mố, móng trụ cầu |
+| **0** | `background` | `(128, 128, 128)` | `#808080` | Sky, clouds, water, terrain, non-structural context |
+| **1** | `deck` | `(255, 0, 0)` | `#FF0000` | Roadway girder / main bridge deck |
+| **2** | `stay_cable` | `(0, 255, 255)` | `#00FFFF` | Cable stay bundles connecting deck to towers |
+| **3** | `tower` | `(0, 255, 0)` | `#00FF00` | Main towers / vertical pylons |
+| **4** | `foundation` | `(255, 255, 0)` | `#FFFF00` | Piers, abutments, footings |
 
 ---
 
-## III. KIẾN TRÚC VÀ CÁC GIẢI THUẬT NÂNG CAO TRONG DỰ ÁN
+## III. ARCHITECTURE & ADVANCED ALGORITHMS
 
-### 1. Tiền xử lý Nhãn 2D (`json_to_mask.py`)
-Quy tắc vẽ đè (Draw Order) được thiết kế đặc biệt:
+### 1. 2D Mask Generation & Drawing Order (`json_to_mask.py`)
+Polygon masks from Labelme JSON are rendered in strict ascending priority:
 $$\text{deck (1)} \longrightarrow \text{tower (3)} \longrightarrow \text{foundation (4)} \longrightarrow \mathbf{\text{stay\_cable (2)}}$$
-Việc vẽ `stay_cable` sau cùng đảm bảo các dải cáp mảnh không bị các vùng đa giác dầm hay tháp lớn đè mất nhãn.
+Drawing `stay_cable` on the top layer ensures thin cable lines are never overwritten by broader deck or pylon masks.
 
-### 2. Chiếu ngược 2D sang 3D & Multi-view Voting (`semantic_projector.py`)
-- Đối với mỗi điểm 3D $X_i$, tập hợp tất cả các quan sát 2D tương ứng qua các ảnh $I_k$.
-- Lấy nhãn 2D $L_{ik} = \text{Mask}_k(u_{ik}, v_{ik})$.
-- **Quy tắc bỏ phiếu đặc biệt**:
-  - Dây cáp (`stay_cable`) chỉ được công nhận nếu số phiếu đạt **đa số tuyệt đối** ($> 50\%$).
-  - Nếu không đạt, loại bỏ phiếu cáp và tiến hành chọn lớp đa số trong các lớp còn lại kết hợp với bảng trọng số `TIE_BREAK_PRIORITY` (ưu tiên `tower` > `foundation` > `deck` > `background`).
+### 2. 2D-to-3D Back-Projection & Multi-View Voting (`semantic_projector.py`)
+- For every triangulated 3D point $X_i$, retrieve all 2D observations $(u_{ik}, v_{ik})$ across observing cameras $I_k$.
+- Sample 2D class label $L_{ik} = \text{Mask}_k(u_{ik}, v_{ik})$.
+- **Voting Decision Rules**:
+  - `stay_cable` requires **strict absolute majority** ($> 50\%$).
+  - If cable count fails to reach $>50\%$, cable votes are dropped and plurality voting applies to remaining classes.
+  - Ties are broken via `TIE_BREAK_PRIORITY` (`tower` > `foundation` > `deck` > `background`).
 
-### 3. Pipeline Lọc Hình học Kết cấu 3D (`point_cloud_filter.py`)
+### 3. Structure-Aware 3D Geometric Filtering Pipeline (`point_cloud_filter.py`)
 
-1. **Chuẩn hóa Hệ tọa độ Cầu (Bridge Frame)**:
-   - Ước lượng vector trọng lực $v$ (trục đứng) từ tư thế góc quay camera UAV (do drone bay có roll $\approx 0$).
-   - Trục dọc $u$ (longitudinal) và trục ngang $w$ (lateral) được xây dựng trực giao với $v$.
-2. **Lọc mặt phẳng Dầm (`filter_deck_plane`)**:
-   - Khớp mặt phẳng PCA 2-pass trên tập điểm dầm và cắt bỏ phần dư MAD (Median Absolute Deviation).
-3. **Lọc mật độ lõi Dầm (`filter_deck_core_density`)**:
-   - Sử dụng k-NN density trên mặt phẳng $(u, w)$ để loại bỏ các điểm dầm phân tán ngoài hành lang cầu.
-4. **Lọc ống trụ thân Tháp (`filter_tower_core`)**:
-   - Gom cụm K-Means các thân tháp theo trục dọc, sau đó lọc dạng ống trụ (tube) quanh tâm từng thân tháp.
-5. **Lọc khung bao Cáp văng (`filter_cable_structural_envelope`)**:
-   - Giới hạn cáp nằm trong khoảng cao độ: trên mặt dầm và dưới đỉnh tháp; nằm trong chiều dài nhịp cầu.
-6. **Lọc mặt phẳng Quạt cáp (`filter_cable_tower_planes`)**:
-   - Xác định 2 mặt phẳng quạt cáp trái/phải dựa trên tọa độ mặt tháp / mép dầm. Loại bỏ cáp có độ lệch ngang vượt ngưỡng dung sai $\tau$.
-7. **Chiếu hình học cáp về mặt phẳng quạt (`project_cables_to_fan_planes`)**:
-   - Chiếu vuông góc điểm cáp về đúng 2 mặt phẳng quạt cáp gần nhất, giữ nguyên cao độ $z$ phục vụ dựng hình CAD/BIM chuẩn xác.
+1. **Bridge-Local Coordinate Frame**:
+   - Estimates world gravity / vertical axis $v$ from UAV camera roll statistics (near-zero roll).
+   - Computes longitudinal axis $u$ along the deck span and lateral axis $w$ perpendicular to span ($w = u \times v$).
+2. **Deck Plane Fitting (`filter_deck_plane`)**:
+   - 2-pass PCA plane fitting on deck points with Median Absolute Deviation (MAD) residual thresholding.
+3. **Deck Core Density (`filter_deck_core_density`)**:
+   - k-NN density estimation in the bridge $(u, w)$ plane to prune coplanar outliers beyond the roadway boundary.
+4. **Tower Shaft Core Tube (`filter_tower_core`)**:
+   - Clusters tower shafts along the longitudinal axis via 1D K-Means, then bounds points within a narrow $(u, w)$ tube per shaft.
+5. **Stay-Cable Structural Envelope (`filter_cable_structural_envelope`)**:
+   - Enforces physical bounding volumes: height restricted to $[h_{\text{deck}}, h_{\text{tower\_top}}]$ and span restricted to bridge corridor.
+6. **Tower-Anchored Fan Planes (`filter_cable_tower_planes`)**:
+   - Identifies lateral offsets $d_{\text{left}}, d_{\text{right}}$ of the two cable fan sheets from tower face percentiles. Removes cables exceeding lateral deviation tolerance $\tau$.
+7. **Geometric Cable Snapping (`project_cables_to_fan_planes`)**:
+   - Projects cable points perpendicularly onto the nearest fan plane along axis $w$, preserving true elevation $z$ and producing planar sheets for CAD/BIM modeling.
 
 ---
 
-## IV. ĐỊNH HƯỚNG MỞ RỘNG TIẾP THEO
+## IV. FUTURE ROADMAP & RESEARCH EXTENSIONS
 
-1. **Phân vùng ảnh tự động bằng Deep Learning**: Tích hợp các mô hình Segment Anything (SAM / HQ-SAM) hoặc SegFormer/Mask2Former để tự động gán nhãn cho tập ảnh chưa có nhãn (`unlabeled_Images`).
-2. **Cấu hình đường dẫn dữ liệu tập trung**: Sử dụng file cấu hình YAML (`configs/config.yaml`) hoặc `argparse` để chạy độc lập trên mọi môi trường.
-3. **Phân tích kết cấu / Đo độ võng và dao động**: Kết hợp đám mây điểm 3D ngữ nghĩa với bài toán trích xuất dao động cáp từ video UAV (Project 1).
+1. **Automated Deep Learning 2D Segmentation**: Incorporate zero-shot models (SAM / HQ-SAM) or fine-tuned segmentation models (SegFormer, Mask2Former) to automatically generate high-quality masks for the unlabeled UAV frames.
+2. **Centralized Configuration**: Decouple file paths into a structured `configs/config.yaml` with unified environment management.
+3. **Dynamic Vibration & Displacement Integration**: Fuse reconstructed 3D semantic models with UAV video vision displacement measurements (Project 1) for full-lifecycle structural health monitoring.

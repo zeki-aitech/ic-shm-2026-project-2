@@ -4,50 +4,50 @@
 [![CUDA 12.1](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![pycolmap](https://img.shields.io/badge/pycolmap-CUDA12-orange.svg)](https://github.com/colmap/pycolmap)
 
-## 📌 1. Tổng quan Dự án (Project Overview)
-Dự án tập trung giải quyết bài toán **Tái tạo Đám mây điểm 3D Ngữ nghĩa (3D Semantic Point Cloud Reconstruction)** cho **Cầu dây văng (Cable-Stayed Bridge)** từ ảnh chụp UAV và tham số Structure-from-Motion (SfM - COLMAP) trong khuôn khổ cuộc thi **IC-SHM 2026**.
+## 📌 1. Project Overview
+This project addresses the problem of **Structure-Aware 3D Semantic Point Cloud Reconstruction** for **Cable-Stayed Bridges** from multi-view UAV images and Structure-from-Motion (SfM - COLMAP) camera parameters, developed for the **IC-SHM 2026 Competition** (Structural Health Monitoring).
 
-Mục tiêu chính là chuyển đổi ảnh chụp đa góc nhìn (Multi-view UAV images) kết hợp nhãn phân vùng 2D (Labelme JSON / Ground-Truth PNG Masks) thành mô hình đám mây điểm 3D (`.ply`) chuẩn xác, áp dụng các bộ lọc hình học kết cấu chuyên biệt để khử nhiễu và định hình cấu kiện cầu.
-
----
-
-## 🏗️ 2. Hệ thống Phân loại Ngữ nghĩa (Semantic Class Taxonomy)
-
-Mô hình phân loại gồm 5 lớp thành phần kết cấu:
-
-| Class ID | Tên nhãn (`label`) | Mã màu RGB | Mô tả hình học & Ý nghĩa |
-| :---: | :--- | :--- | :--- |
-| **0** | `background` | Xám `(128, 128, 128)` | Nền trời, mây, mặt nước, đất đá cảnh quan |
-| **1** | `deck` | Đỏ `(255, 0, 0)` | Bản mặt cầu / Dầm cầu chính (dạng mặt phẳng nằm ngang) |
-| **2** | `stay_cable` | Cyan `(0, 255, 255)` | Hệ thống bó dây cáp văng (nằm trên 2 dải mặt phẳng quạt cáp) |
-| **3** | `tower` | Xanh lá `(0, 255, 0)` | Trụ tháp cầu (dạng cột trụ đứng vươn cao) |
-| **4** | `foundation` | Vàng `(255, 255, 0)` | Bệ trụ, móng cầu (nằm dưới cùng chân cầu) |
+The primary objective is to reconstruct a high-fidelity 3D semantic point cloud (`.ply`) from multi-view drone imagery and 2D polygonal annotations (Labelme JSON / Ground-Truth PNG Masks), applying domain-specific structural and geometric filtering pipelines to remove outliers and accurately preserve slender structural bridge components.
 
 ---
 
-## 📂 3. Cấu trúc Thư mục (Directory Structure)
+## 🏗️ 2. Semantic Class Taxonomy
+
+The semantic segmentation taxonomy consists of 5 structural classes:
+
+| Class ID | Class Name (`label`) | RGB Color | Hex Color | Description & Geometric Characteristics |
+| :---: | :--- | :--- | :--- | :--- |
+| **0** | `background` | `(128, 128, 128)` | `#808080` | Sky, river, terrain, surroundings |
+| **1** | `deck` | `(255, 0, 0)` | `#FF0000` | Bridge deck / roadway girder (planar horizontal surface) |
+| **2** | `stay_cable` | `(0, 255, 255)` | `#00FFFF` | Cable stay bundles (arranged along two vertical fan planes) |
+| **3** | `tower` | `(0, 255, 0)` | `#00FF00` | Pylons / Tower shafts (vertical column structures) |
+| **4** | `foundation` | `(255, 255, 0)` | `#FFFF00` | Bridge piers / substructure footings |
+
+---
+
+## 📂 3. Directory Structure
 
 ```text
 ic-shm-2026-project-2/
-├── .devcontainer/                # Môi trường container CUDA 12.1, PyTorch, Pycolmap
+├── .devcontainer/                # Docker container configuration with CUDA 12.1, PyTorch, Pycolmap
 │   ├── Dockerfile
 │   └── devcontainer.json
-├── docs/                         # Tài liệu chi tiết về đề bài & khảo sát kỹ thuật
+├── docs/                         # Technical specifications and contest survey
 │   └── CONTEST_SPEC_AND_SURVEY.md
-├── notebooks/                    # Notebook trực quan hóa 3D tương tác
+├── notebooks/                    # Interactive 3D visualization notebooks
 │   └── 01_visualize_semantic_3d.ipynb
 ├── src/
-│   ├── reconstruction/           # Lõi tái tạo 3D & Xử lý ngữ nghĩa
-│   │   ├── colmap_parser.py           # Parser SfM + DLT Triangulation thủ công
-│   │   ├── pycolmap_reconstructor.py  # Triangulation LO-RANSAC qua pycolmap GPU
-│   │   ├── gpu_pipeline.py            # Pipeline trích xuất SIFT + Re-matching trên GPU
-│   │   ├── semantic_projector.py      # Chiếu ngược 2D->3D với Multi-view Majority Voting
-│   │   ├── point_cloud_filter.py      # Bộ lọc hình học kết cấu 3D đa giai đoạn
-│   │   └── visualizer.py              # Đọc file PLY và render 3D Plotly tương tác
-│   └── utils/                    # Tiền xử lý dữ liệu 2D
-│       ├── json_to_mask.py            # Chuyển đổi Labelme JSON thành PNG Mask 8-bit
-│       └── create_overlay_dataset.py  # Vẽ đè nhãn và legend lên ảnh gốc
-└── tests/                        # Bộ kiểm thử đơn vị tự động (Unit Tests)
+│   ├── reconstruction/           # 3D Reconstruction & Semantic Pipeline Core
+│   │   ├── colmap_parser.py           # SfM parser + manual DLT 3D triangulation
+│   │   ├── pycolmap_reconstructor.py  # LO-RANSAC triangulation via pycolmap (GPU-accelerated)
+│   │   ├── gpu_pipeline.py            # GPU SIFT feature extraction + sequential matching pipeline
+│   │   ├── semantic_projector.py      # 2D-to-3D back-projection with Multi-view Majority Voting
+│   │   ├── point_cloud_filter.py      # Multi-stage structure-aware geometric point cloud filter
+│   │   └── visualizer.py              # PLY reader & interactive Plotly 3D visualizer
+│   └── utils/                    # 2D Data Preprocessing
+│       ├── json_to_mask.py            # Convert Labelme JSON annotations to 8-bit PNG masks
+│       └── create_overlay_dataset.py  # Generate visual overlay dataset with class legends
+└── tests/                        # Automated unit tests
     ├── test_colmap_parser.py
     ├── test_point_cloud_filter.py
     ├── test_semantic_projector.py
@@ -56,46 +56,45 @@ ic-shm-2026-project-2/
 
 ---
 
-## ⚙️ 4. Pipeline Xử lý Kỹ thuật (Technical Pipeline)
+## ⚙️ 4. Technical Pipeline Architecture
 
-1. **Tiền xử lý Nhãn 2D (`json_to_mask.py`)**:
-   - Chuyển đổi nhãn polygon từ Labelme JSON sang ảnh mask 8-bit.
-   - Thứ tự vẽ ưu tiên: $\text{deck (1)} \to \text{tower (3)} \to \text{foundation (4)} \to \mathbf{\text{stay\_cable (2)}}$ để tránh làm mất các sợi cáp mảnh.
+1. **2D Mask Preprocessing (`json_to_mask.py`)**:
+   - Converts Labelme polygon annotations into 8-bit indexed masks.
+   - Drawing order priority: $\text{deck (1)} \to \text{tower (3)} \to \text{foundation (4)} \to \mathbf{\text{stay\_cable (2)}}$ to prevent thin cables from being occluded by surrounding regions.
 
-2. **Tam giác hóa 3D & Tối ưu GPU (`pycolmap_reconstructor.py` / `gpu_pipeline.py`)**:
-   - Sử dụng `pycolmap-cuda12` trích xuất SIFT và sequential matching trên GPU với camera pose cố định, tạo ra đám mây điểm dày đặc ($>80.000$ điểm).
+2. **3D Triangulation & GPU Acceleration (`pycolmap_reconstructor.py` / `gpu_pipeline.py`)**:
+   - Uses `pycolmap-cuda12` for GPU SIFT extraction and sequential matching with fixed camera intrinsics, triangulating a dense sparse point cloud ($>80,000$ points).
 
-3. **Chiếu ngược Ngữ nghĩa Đa góc nhìn (`semantic_projector.py`)**:
-   - Cơ chế **Multi-view Majority Voting**: Gán nhãn cho từng điểm 3D dựa trên tất cả các frame ảnh quan sát thấy điểm đó.
-   - Dây cáp (`stay_cable`) chỉ được gán khi đạt đa số tuyệt đối ($>50\%$), kết hợp bảng ưu tiên `TIE_BREAK_PRIORITY` cho các cấu kiện mảnh.
+3. **Multi-View 2D-to-3D Semantic Back-Projection (`semantic_projector.py`)**:
+   - **Multi-view Majority Voting**: Votes on class label per 3D point across all observing camera frames.
+   - Slender structures handling: `stay_cable` requires strict absolute majority ($>50\%$), and non-cable ties are resolved via `TIE_BREAK_PRIORITY` (`tower` > `foundation` > `deck` > `background`).
 
-4. **Bộ lọc Hình học Kết cấu Cầu (`point_cloud_filter.py`)**:
-   - **Giai đoạn 1**: Loại bỏ Background (Class 0).
-   - **Giai đoạn 2**: Statistical Outlier Removal (SOR) độc lập cho từng class.
-   - **Giai đoạn 3**: Deck Plane Filter (Khớp mặt phẳng dầm cầu qua 2-pass PCA + MAD residual cut).
-   - **Giai đoạn 4**: Deck Core Density Filter (k-NN density trên mặt phẳng dọc/ngang để khử điểm dầm rải rác ngoài biên).
-   - **Giai đoạn 5**: Tower Core Tube Filter (Lọc dạng ống trụ quanh từng thân tháp cầu).
-   - **Giai đoạn 6**: Stay-cable Structural Envelope Filter (Khung bao toạ độ dọc, ngang, đứng theo hệ trục trọng lực của camera UAV).
-   - **Giai đoạn 7**: Stay-cable Left/Right Fan Planes Filter (Lọc cáp theo 2 dải mặt phẳng neo vào tháp).
-   - **Giai đoạn 8 (Tùy chọn)**: `project_cables_to_fan_planes` (Chiếu vuông góc các điểm cáp về đúng 2 mặt phẳng quạt dây văng).
+4. **Structure-Aware Geometric Filtering Pipeline (`point_cloud_filter.py`)**:
+   - **Stage 1 (Background Drop)**: Removes class 0 (`background`).
+   - **Stage 2 (Class-Specific SOR)**: Applies Statistical Outlier Removal independently per structural component with tuned thresholds.
+   - **Stage 3 (Deck Plane Residuals)**: Fits a 2-pass PCA plane to deck points with MAD residual rejection.
+   - **Stage 4 (Deck Core Density)**: k-NN density filtering in the $(u, w)$ plane to remove sparse coplanar roadway outliers.
+   - **Stage 5 (Tower Core Tube)**: Clusters tower shafts along the longitudinal axis and keeps points within a narrow $(u, w)$ tube per shaft.
+   - **Stage 6 (Stay-Cable Structural Envelope)**: Enforces height bounds (above deck, below tower apex) and longitudinal spans.
+   - **Stage 7 (Stay-Cable Left/Right Fan Planes)**: Filters cables based on distance to the two tower-anchored vertical fan sheets.
+   - **Stage 8 (Optional Cable Snapping)**: `project_cables_to_fan_planes` snaps cable points perpendicularly onto the nearest fan plane for CAD/BIM alignment.
 
 ---
 
-## 🚀 5. Hướng dẫn Chạy (Quickstart)
+## 🚀 5. Quickstart Guide
 
-### Cài đặt Môi trường
-Dự án được cấu hình sẵn môi trường DevContainer / Dockerfile với CUDA 12.1:
+### Environment Setup
+Use the provided DevContainer / Dockerfile with CUDA 12.1 support or install requirements locally:
 ```bash
-# Cài đặt các thư viện phụ thuộc
 pip install numpy scipy pillow opencv-python open3d pycolmap-cuda12 matplotlib plotly pandas jupyterlab tqdm
 ```
 
-### Chạy Bộ kiểm thử (Unit Tests)
+### Running Unit Tests
 ```bash
 python3 -m unittest discover tests
 ```
 
-### Chạy Pipeline Lọc Đám mây điểm
+### Running the Point Cloud Filter Pipeline
 ```bash
 python3 -m src.reconstruction.point_cloud_filter \
     --input outputs/point_clouds/semantic_bridge_gpu.ply \
@@ -103,5 +102,5 @@ python3 -m src.reconstruction.point_cloud_filter \
     --colmap-model outputs/gpu_pipeline/triangulated
 ```
 
-### Trực quan hóa tương tác 3D
-Mở notebook [`notebooks/01_visualize_semantic_3d.ipynb`](notebooks/01_visualize_semantic_3d.ipynb) để khám phá trực quan đám mây điểm 3D tương tác.
+### Interactive 3D Visualization
+Launch JupyterLab and run [`notebooks/01_visualize_semantic_3d.ipynb`](notebooks/01_visualize_semantic_3d.ipynb) to inspect and interact with the 3D colored point cloud.
