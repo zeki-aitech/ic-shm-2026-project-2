@@ -91,7 +91,27 @@ The provided SfM dataset (generated via COLMAP) provides 4 purely geometric core
 
 > **The Geometric-to-Semantic Bridge**: The 2D-3D feature tracks (Output #4) act as the link between Task A and Task B. The pipeline looks up a 3D point's observed 2D pixels, queries the AI-predicted 2D semantic masks (from Task A) at those pixels, and "copies" the label back to the 3D point (Semantic Fusion).
 
-### 3. Semantic Taxonomy & Color Codes
+### 3. Role of the COLMAP / pycolmap Pipeline in This Codebase
+
+The `pycolmap` module in our codebase serves three distinct functional roles depending on the pipeline configuration:
+
+1. **Mandatory 3D Point Triangulation (LO-RANSAC)**:
+   - **Why It Is Required**: The contest dataset delivers camera intrinsics (`cameras.txt`) and 2D feature observations (`images.txt`), but **does not contain precomputed 3D coordinates (`points3D.txt`)**.
+   - **Action**: `pycolmap_reconstructor.py` solves multi-view optical ray intersections using **LO-RANSAC Triangulation** to compute $(X, Y, Z)$ coordinates and reprojection errors for all 86,336 feature tracks.
+2. **Camera Pose Refinement & Calibration (Bundle Adjustment)**:
+   - **Why It Is Useful**: As stated in the contest `README.md`, the provided camera parameters are reference SfM estimates rather than ground truth.
+   - **Action**: The pipeline can run **Global / Local Bundle Adjustment (BA)** to jointly refine focal length $f$, distortion $k_1$, and 6-DOF camera poses ($R, T$) to minimize residual reprojection drift below $1.0\text{ px}$.
+3. **Dense Surface Reconstruction (MVS / PatchMatch Stereo)**:
+   - **Why It Is Useful**: To scale from a sparse cloud (86,336 points) to a dense photorealistic Digital Twin with millions of surface points across the roadway and cables.
+   - **Action**: Invokes COLMAP's `patch_match_stereo` and `stereo_fusion` modules.
+
+| Operational Mode | Pipeline Tasks Executed | Typical Runtime | Target Use Case |
+| :--- | :--- | :---: | :--- |
+| **Mode 1: Fast Triangulation (Default)** | Reuse contest poses $\to$ Triangulate $(X, Y, Z)$ via LO-RANSAC | **~3–5 seconds** | Rapid prototyping, fast verification of semantic fusion |
+| **Mode 2: Pose Refinement** | Bundle Adjustment on contest poses $\to$ Triangulate | **~1–2 minutes** | Improved geometric accuracy ($< 1.0\text{ px}$ error) |
+| **Mode 3: Full SfM from Scratch** | SIFT extraction $\to$ Sequential/Exhaustive matching $\to$ Global SfM | **~10–15 minutes** | Complete custom calibration & experimental re-estimation |
+
+### 4. Semantic Taxonomy & Color Codes
 
 | Class ID | Component Name | RGB Color | Hex Color | Geometric Role |
 | :---: | :--- | :--- | :--- | :--- |
