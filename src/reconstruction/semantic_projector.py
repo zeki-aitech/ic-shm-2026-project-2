@@ -213,9 +213,11 @@ class SemanticProjector:
 
 
 if __name__ == "__main__":
-    COLMAP_DIR = "/workspaces/sfm_demo/data/Contest Dataset/camera_parameters"
-    GT_MASKS_DIR = "/workspaces/sfm_demo/outputs/gt_masks"
-    OUTPUT_DIR = "/workspaces/sfm_demo/outputs/point_clouds"
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    DATASET_DIR = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
+    COLMAP_DIR = os.path.join(DATASET_DIR, "camera_parameters")
+    GT_MASKS_DIR = os.path.join(PROJECT_ROOT, "outputs", "gt_masks")
+    OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs", "point_clouds")
 
     projector = SemanticProjector(COLMAP_DIR, GT_MASKS_DIR, OUTPUT_DIR)
     projector.run()
