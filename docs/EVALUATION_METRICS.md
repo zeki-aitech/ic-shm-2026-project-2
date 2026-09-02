@@ -14,11 +14,11 @@ This document outlines the comprehensive evaluation methodology for the **Struct
  ┌─────────────────────────────────────────────────────────────────────────────┐
  │                     IC-SHM 2026 EVALUATION TAXONOMY (3 PILLARS)             │
  ├─────────────────────────────────────────────────────────────────────────────┤
- │ PILLAR 1: 3D Semantic Classification Metrics (IoU, mIoU, OA, F1)            │
+ │ PILLAR 1: 3D Semantic Classification Metrics (mIoU_struct, mIoU_all, OA, F1)│
  │   ➔ Evaluates categorical labeling accuracy across the 4 bridge components  │
  ├─────────────────────────────────────────────────────────────────────────────┤
- │ PILLAR 2: Photogrammetric & Geometric Precision (Reprojection Error, CD)    │
- │   ➔ Evaluates 3D spatial fidelity and camera alignment precision            │
+ │ PILLAR 2: Photogrammetric & Geometric Precision (Reprojection Error, Sim(3))│
+ │   ➔ Evaluates 3D spatial fidelity, scale alignment, and camera accuracy     │
  ├─────────────────────────────────────────────────────────────────────────────┤
  │ PILLAR 3: Domain-Specific Structural Health Monitoring (SHM) Priors         │
  │   ➔ Evaluates adherence to civil engineering physics (Deck MAD, Cable Fan)  │
@@ -32,11 +32,17 @@ This document outlines the comprehensive evaluation methodology for the **Struct
 Evaluates how accurately each 3D point $(X, Y, Z)$ is categorized into its corresponding structural class:
 `0: background`, `1: deck`, `2: stay_cable`, `3: tower`, `4: foundation`.
 
-### 1.1 Mean Intersection over Union (mIoU) — *Primary Metric*
-$$IoU_c = \frac{TP_c}{TP_c + FP_c + FN_c}, \quad mIoU = \frac{1}{C_{\text{struct}}} \sum_{c=1}^{4} IoU_c$$
+### 1.1 Mean Intersection over Union ($mIoU$) — *Primary Metric*
+$$IoU_c = \frac{TP_c}{TP_c + FP_c + FN_c}$$
 
-- **Why It Is Needed**: Standard accuracy ($OA$) is misleading on imbalanced data because massive surfaces (like the bridge deck) dominate the point count. $mIoU$ penalizes false positives and false negatives equally across all classes, ensuring small or rare classes are evaluated fairly.
-- **Target**: $mIoU > \mathbf{85.0\%}$.
+To maintain rigorous mathematical clarity, we explicitly distinguish between two formulations:
+1. **Structural $mIoU$ ($mIoU_{\text{struct}}$ — Primary Evaluation Benchmark)**:
+   $$mIoU_{\text{struct}} = \frac{1}{4} \sum_{c=1}^{4} IoU_c = \frac{IoU_{\text{deck}} + IoU_{\text{stay\_cable}} + IoU_{\text{tower}} + IoU_{\text{foundation}}}{4}$$
+   *Explicit Rationale*: The `background` class (Class 0) contains expansive sky and river regions. Including background in $mIoU$ artificially inflates or dilutes performance on structural components. Therefore, **$mIoU_{\text{struct}}$ is computed strictly over the 4 physical bridge classes ($C_{\text{struct}} = 4$)**.
+2. **Global $mIoU$ ($mIoU_{\text{all}}$ — All 5 Classes)**:
+   $$mIoU_{\text{all}} = \frac{1}{5} \sum_{c=0}^{4} IoU_c$$
+
+- **Target**: $mIoU_{\text{struct}} > \mathbf{85.0\%}$.
 
 ---
 
@@ -49,37 +55,47 @@ $$IoU_{\text{cable}} = \frac{TP_{\text{cable}}}{TP_{\text{cable}} + FP_{\text{ca
 ---
 
 ### 1.3 Overall Accuracy (OA) & Class Accuracy (mAcc)
-$$OA = \frac{\sum_{c} TP_c}{N_{\text{total}}}, \quad mAcc = \frac{1}{C} \sum_{c} \frac{TP_c}{TP_c + FN_c}$$
-
-- **Why It Is Needed**: Provides a global macro-level summary of total correct classifications across the entire reconstructed point cloud.
-- **Target**: $OA > \mathbf{92.0\%}$.
+$$OA = \frac{\sum_{c=0}^4 TP_c}{N_{\text{total}}}, \quad mAcc = \frac{1}{4} \sum_{c=1}^4 \frac{TP_c}{TP_c + FN_c}$$
 
 ---
 
 ### 1.4 Per-Class Precision, Recall, and $F_1$-Score
 $$Precision_c = \frac{TP_c}{TP_c + FP_c}, \quad Recall_c = \frac{TP_c}{TP_c + FN_c}, \quad F_1^{(c)} = \frac{2 \cdot Precision_c \cdot Recall_c}{Precision_c + Recall_c}$$
 
-- **Why It Is Needed**: Helps diagnose whether a component is being over-predicted (low precision / high false alarms) or missed (low recall / under-segmentation).
+---
+
+## 2. Pillar 2: 3D Geometric Reconstruction Accuracy & Scale Recovery
+
+### 2.1 Scale Ambiguity Resolution (Metric Scale Recovery via $\text{Sim}(3)$)
+
+> ⚠️ **Methodological Note on Scale Ambiguity**: Monocular SfM (COLMAP) reconstructs scenes up to an arbitrary global scale factor $s \in \mathbb{R}^+$. To ensure physical distance metrics (measured in meters) are mathematically rigorous:
+> 1. **Metric Scaling Factor $s$**: Computed by matching a known physical bridge dimension (e.g., standard deck width $W_{\text{deck}} = 12.0\text{ m}$ or tower height $H_{\text{tower}}$) against the reconstructed model:
+>    $$s = \frac{L_{\text{true}}}{L_{\text{SfM}}}$$
+> 2. **Sim(3) Umeyama Alignment**: When reference CAD/BIM or LiDAR coordinates $\mathbf{G}$ are available, the predicted cloud $\mathbf{P}$ is aligned via a 7-DOF transformation $[\mathbf{R}, \mathbf{t}, s]$:
+>    $$\min_{s, \mathbf{R}, \mathbf{t}} \sum_{i} \|\mathbf{g}_i - (s \mathbf{R} \mathbf{p}_i + \mathbf{t})\|_2^2$$
+
+All spatial metrics below are evaluated **after $\text{Sim}(3)$ metric scale alignment**.
 
 ---
 
-## 2. Pillar 2: 3D Geometric Reconstruction Accuracy
-
-Evaluates spatial fidelity, geometric precision, and noise suppression in the reconstructed 3D point cloud coordinates $(X, Y, Z)$.
-
-### 2.1 Mean Reprojection Error ($e_{\text{reproj}}$)
+### 2.2 Mean Reprojection Error ($e_{\text{reproj}}$)
 $$e_{\text{reproj}} = \frac{1}{N} \sum_{i=1}^N \| p_{2D}^{(i)} - \pi(K, R_k, T_k, X_{3D}^{(i)}) \|_2$$
 
-- **Why It Is Needed**: Measures optical consistency between 3D points and 2D sensor observations across all observing UAV cameras. A high reprojection error indicates camera pose drift or incorrect feature matching.
+- **Why It Is Needed**: Measures optical ray convergence consistency independent of metric scale.
 - **Target**: $e_{\text{reproj}} < \mathbf{1.0\text{ pixel}}$ (Ideal: $0.4 - 0.7\text{ px}$).
 
 ---
 
-### 2.2 Chamfer Distance (CD) & F-Score @ 5cm
-$$d_{CD}(P, G) = \frac{1}{|P|} \sum_{x \in P} \min_{y \in G} \|x - y\|_2^2 + \frac{1}{|G|} \sum_{y \in G} \min_{x \in P} \|x - y\|_2^2$$
+### 2.3 Spatial Point Density & Surface Coverage (Replacing Arbitrary Point Counts)
 
-- **Why It Is Needed**: Measures Euclidean deviation between the reconstructed point cloud and ground-truth as-designed CAD/BIM or LiDAR scans.
-- **Target**: $d_{CD} < \mathbf{0.02\text{ m}^2}$, $F(5\text{cm}) > \mathbf{90.0\%}$.
+Rather than evaluating an arbitrary absolute point count ($> 75,000\text{ pts}$), which is sensitive to image resolution and SIFT thresholds, we define scale-invariant completeness metrics:
+
+1. **Spatial Surface Density ($\rho_{\text{surface}}$)**:
+   $$\rho_{\text{surface}} = \frac{N_{\text{structural}}}{\text{Estimated Surface Area } A_{\text{bridge}}} \quad (\text{Target: } \rho_{\text{surface}} \ge \mathbf{50\text{ pts/m}^2})$$
+2. **Camera Registration Ratio ($R_{\text{reg}}$)**:
+   $$R_{\text{reg}} = \frac{N_{\text{registered\_frames}}}{N_{\text{total\_frames}}} = \frac{400}{400} = \mathbf{100.0\%}$$
+3. **Surface Coverage Completeness ($F\text{-score} @ 5\text{cm}$)**:
+   Percentage of the bridge envelope covered by reconstructed points within $5\text{ cm}$ of the structural shell. (Target: $F(5\text{cm}) > \mathbf{90.0\%}$).
 
 ---
 
@@ -90,7 +106,7 @@ Evaluates physical, mechanical, and architectural adherence to cable-stayed brid
 ### 3.1 Deck Planarity Residual MAD ($\text{MAD}_{\text{deck}}$)
 $$\text{MAD}_{\text{deck}} = \text{median}\Big( \big| \mathbf{n}_{\text{deck}} \cdot \mathbf{x}_i + d_{\text{deck}} \big| \Big)$$
 
-- **Why It Is Needed**: Civil bridge decks are engineered as continuous planar surfaces. SfM depth drift often warps flat roadways into curved or noisy surfaces. The 2-pass PCA plane residual MAD quantifies roadway surface roughness and noise.
+- **Why It Is Needed**: Civil bridge decks are continuous planar surfaces. SfM depth drift often warps flat roadways into curved or noisy surfaces. The 2-pass PCA plane residual MAD quantifies roadway surface roughness and noise.
 - **Target**: $\text{MAD}_{\text{deck}} < \mathbf{0.05\text{ m}}$ ($5\text{ cm}$).
 
 ---
@@ -103,40 +119,28 @@ $$\overline{\text{Deviation}}_{\text{cable}} = \frac{1}{|P_{\text{cable}}|} \sum
 
 ---
 
-### 3.3 Off-Fan Cable Outlier Ratio ($\text{Outlier Ratio}_{\text{cable}}$)
-$$\text{Outlier Ratio} = \frac{\sum_{x \in P_{\text{cable}}} \mathbb{I}\big[\text{dist}(x, \text{Fan Planes}) > \tau\big]}{|P_{\text{cable}}|} \times 100\% \quad (\tau = 0.10\text{ m})$$
+### 3.3 Off-Fan Cable Outlier Ratio & $\tau$ Tolerance Setting
 
-- **Why It Is Needed**: Quantifies the percentage of floating "ghost" cable artifacts caused by 2D background leakage.
-- **Target**: $\text{Outlier Ratio} < \mathbf{2.0\%}$.
+$$\text{Outlier Ratio}(\tau) = \frac{\sum_{x \in P_{\text{cable}}} \mathbb{I}\big[\text{dist}(x, \text{Fan Planes}) > \tau\big]}{|P_{\text{cable}}|} \times 100\%$$
 
----
-
-### 3.4 Tower Shaft Core Dispersion ($\sigma_{\text{tower}}$)
-- **Why It Is Needed**: Bridge towers are rigid vertical pylon structures. This metric verifies that tower points remain tightly clustered inside the structural $(u, w)$ cylinder along elevation axis $v$.
-- **Target**: High core density with zero coplanar floating artifacts.
+> ⚙️ **Parameter Setting for $\tau$**:
+> - The threshold $\tau$ must account for physical cable bundle diameter ($D_{\text{cable}} \approx 10 - 20\text{ cm}$) plus triangulation tolerance:
+>   $$\tau = \frac{D_{\text{cable}}}{2} + \epsilon_{\text{tol}} \approx 0.10\text{ m} \text{ to } 0.15\text{ m}$$
+> - In our benchmark reports, we provide **Sensitivity Curves** across $\tau \in [0.05\text{ m}, 0.20\text{ m}]$ to demonstrate robustness across cable diameters.
+> - **Target**: $\text{Outlier Ratio}(\tau = 0.10\text{m}) < \mathbf{2.0\%}$.
 
 ---
 
-## 4. Multi-View Hold-Out Cross-Validation Protocol
+## 4. Master Benchmark Summary Scorecard
 
-To evaluate 3D semantic accuracy in the absence of full 3D ground truth:
-1. **Hold-out Partition**: Partition the 300 labeled frames into **240 training views (80%)** and **60 hold-out test views (20%)**.
-2. **3D Reconstruction**: Run Task A + Task B using only the 240 training views to reconstruct the colored 3D point cloud.
-3. **Z-Buffer Re-projection**: Project classified 3D points onto the 60 hold-out camera poses:
-   $$\mathbf{p}_{2D} = \pi(\mathbf{K}, \mathbf{R}_{\text{test}}, \mathbf{T}_{\text{test}}, \mathbf{X}_{3D})$$
-4. **2D-3D Comparison**: Compare projected 2D masks against manual Labelme JSON ground-truth to compute unbiased $mIoU$.
-
----
-
-## 5. Master Benchmark Summary Table
-
-| Pillar | Metric | Mathematical Formulation | Recommended Benchmark Target | Primary Motivation & Why Needed |
+| Pillar | Metric | Mathematical Formulation | Recommended Benchmark Target | Rigorous Methodological Rationale |
 | :--- | :--- | :--- | :---: | :--- |
-| **Pillar 1: Semantics** | **Structural $mIoU$** | $\frac{1}{4}\sum_{c=1}^4 IoU_c$ | **$> 85.0\%$** | Penalizes class imbalance across all 4 bridge components |
+| **Pillar 1: Semantics** | **Structural $mIoU$** | $\frac{1}{4}\sum_{c=1}^4 IoU_c$ | **$> 85.0\%$** | Evaluated on the 4 bridge classes, explicitly excluding background |
 | | **Cable $IoU$ ($IoU_{\text{cable}}$)** | $TP / (TP + FP + FN)$ | **$> 75.0\%$** | Measures resistance to background bleeding on slender cables |
-| | **Overall Accuracy ($OA$)** | $\sum TP / N_{\text{total}}$ | **$> 92.0\%$** | Global point classification accuracy |
-| **Pillar 2: Geometry** | **Mean Reprojection Error** | $\frac{1}{N}\sum \|p_{2D} - \pi(X_{3D})\|$ | **$< 1.0\text{ px}$** | Quantifies camera calibration and ray intersection accuracy |
-| | **Point Cloud Completeness** | $\text{Count}(X_{\text{structural}})$ | **$> 75,000\text{ pts}$** | Ensures no structural holes in the bridge model |
-| **Pillar 3: SHM Priors** | **Deck Planarity MAD** | $\text{median}(\|n \cdot x + d\|)$ | **$< 0.05\text{ m}$** | Evaluates roadway flatness and suppresses SfM depth drift |
-| | **Cable Fan Deviation** | $\text{mean}(\text{dist}(x, \text{Fan Planes}))$ | **$< 0.10\text{ m}$** | Verifies cable alignment onto physical left/right fan sheets |
-| | **Off-Fan Outlier Ratio** | $\text{Ratio}(\text{dist} > 0.10\text{m})$ | **$< 2.0\%$** | Quantifies elimination of floating sky/water ghost artifacts |
+| | **Overall Accuracy ($OA$)** | $\sum TP / N_{\text{total}}$ | **$> 92.0\%$** | Macro point classification accuracy across all 5 classes |
+| **Pillar 2: Geometry** | **Mean Reprojection Error** | $\frac{1}{N}\sum \|p_{2D} - \pi(X_{3D})\|$ | **$< 1.0\text{ px}$** | Scale-invariant optical ray intersection accuracy |
+| | **Spatial Point Density** | $N_{\text{struct}} / A_{\text{bridge}}$ | **$\ge 50\text{ pts/m}^2$** | Scale-independent density metric replacing raw point counts |
+| | **Camera Registration Ratio** | $N_{\text{reg}} / N_{\text{total}}$ | **$100.0\%$ (400/400)** | Full coverage of all flight lines with zero missing frames |
+| **Pillar 3: SHM Priors** | **Deck Planarity MAD** | $\text{median}(\|n \cdot x + d\|)$ | **$< 0.05\text{ m}$** | Measured after metric scale recovery via $\text{Sim}(3)$ |
+| | **Cable Fan Deviation** | $\text{mean}(\text{dist}(x, \text{Fan Planes}))$ | **$< 0.10\text{ m}$** | Physical alignment of cable points onto left/right fan sheets |
+| | **Off-Fan Outlier Ratio** | $\text{Ratio}(\text{dist} > \tau)$ | **$< 2.0\%$** | Evaluated at $\tau = 0.10\text{ m}$ with sensitivity analysis across $[0.05, 0.20\text{m}]$ |

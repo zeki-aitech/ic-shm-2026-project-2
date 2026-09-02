@@ -10,6 +10,8 @@ from src.evaluation.metrics import (
     compute_f1_scores,
     compute_deck_planarity_mad,
     compute_cable_fan_deviation,
+    compute_spatial_point_density,
+    umeyama_sim3_alignment,
     evaluate_predictions,
 )
 
@@ -28,7 +30,6 @@ class TestEvaluationMetrics(unittest.TestCase):
         cm = compute_confusion_matrix(self.y_true, self.y_pred, num_classes=5)
         self.assertEqual(cm.shape, (5, 5))
         self.assertEqual(cm.sum(), len(self.y_true))
-        # True deck=1 (4 samples): pred deck=3, pred cable=1
         self.assertEqual(cm[1, 1], 3)
         self.assertEqual(cm[1, 2], 1)
 
@@ -38,8 +39,13 @@ class TestEvaluationMetrics(unittest.TestCase):
         for c in range(5):
             self.assertAlmostEqual(ious[c], 1.0)
 
+        # Structural mIoU excluding background (classes 1..4)
         miou_struct = compute_miou(ious, include_background=False)
         self.assertAlmostEqual(miou_struct, 1.0)
+
+        # All classes mIoU (classes 0..4)
+        miou_all = compute_miou(ious, include_background=True)
+        self.assertAlmostEqual(miou_all, 1.0)
 
         oa = compute_overall_accuracy(cm)
         self.assertAlmostEqual(oa, 1.0)
@@ -47,9 +53,7 @@ class TestEvaluationMetrics(unittest.TestCase):
     def test_imperfect_metrics(self):
         cm = compute_confusion_matrix(self.y_true, self.y_pred, num_classes=5)
         ious = compute_iou_per_class(cm)
-        # Deck: TP=3, FP=0, FN=1 -> IoU = 3/4 = 0.75
         self.assertAlmostEqual(ious[1], 0.75)
-        # Cable: TP=2, FP=1, FN=0 -> IoU = 2/3 = 0.6667
         self.assertAlmostEqual(ious[2], 2.0 / 3.0)
 
         accs = compute_class_accuracy(cm)
@@ -63,21 +67,18 @@ class TestEvaluationMetrics(unittest.TestCase):
 
     def test_deck_planarity_mad(self):
         np.random.seed(42)
-        # Create a planar horizontal deck at Y = 0 with 2D spatial extent
         n_pts = 200
         x = np.random.uniform(-20, 20, n_pts)
         z = np.random.uniform(-3, 3, n_pts)
-        y = np.random.normal(0, 0.005, n_pts) # 5mm noise
+        y = np.random.normal(0, 0.005, n_pts)
         deck_pts = np.column_stack([x, y, z])
 
         mad, normal, d = compute_deck_planarity_mad(deck_pts)
-        self.assertLess(mad, 0.05) # Must satisfy SHM target < 0.05m
-        # Normal should align closely with Y-axis [0, 1, 0]
+        self.assertLess(mad, 0.05)
         self.assertGreater(abs(normal[1]), 0.95)
 
-    def test_cable_fan_deviation(self):
+    def test_cable_fan_deviation_and_sensitivity(self):
         np.random.seed(42)
-        # Create cable points along lateral axis at d_left = -2.0, d_right = +2.0
         n_pts = 50
         lateral_axis = np.array([0.0, 0.0, 1.0])
         x = np.random.uniform(-10, 10, n_pts)
@@ -85,19 +86,38 @@ class TestEvaluationMetrics(unittest.TestCase):
         z = np.array([-2.0] * 25 + [2.0] * 25) + np.random.normal(0, 0.02, n_pts)
         cable_pts = np.column_stack([x, y, z])
 
-        mean_dev, outlier_ratio = compute_cable_fan_deviation(
+        mean_dev, outlier_ratio, sensitivity = compute_cable_fan_deviation(
             cable_pts, lateral_axis, d_left=-2.0, d_right=2.0, tau_threshold=0.10
         )
         self.assertLess(mean_dev, 0.05)
         self.assertEqual(outlier_ratio, 0.0)
+        self.assertIn(0.10, sensitivity)
+        self.assertEqual(sensitivity[0.10], 0.0)
+
+    def test_umeyama_sim3_alignment(self):
+        np.random.seed(42)
+        source = np.random.uniform(-10, 10, (50, 3))
+        # Apply known scale s=2.5, translation t=[1, -2, 3]
+        target = 2.5 * source + np.array([1.0, -2.0, 3.0])
+
+        s, R, t = umeyama_sim3_alignment(source, target)
+        self.assertAlmostEqual(s, 2.5, places=3)
+        np.testing.assert_allclose(t, [1.0, -2.0, 3.0], atol=1e-3)
+
+    def test_spatial_point_density(self):
+        pts = np.zeros((12000, 3))
+        density = compute_spatial_point_density(pts, estimated_area=1200.0)
+        self.assertEqual(density, 10.0)
 
     def test_full_evaluation_report_markdown(self):
         report = evaluate_predictions(
-            self.y_true, self.y_pred, mean_reproj_error=0.65
+            self.y_true, self.y_pred, mean_reproj_error=0.65,
+            spatial_points=np.zeros((60000, 3)), estimated_bridge_area=1000.0
         )
         md = report.to_markdown()
         self.assertIn("Structural mIoU", md)
         self.assertIn("Mean Reprojection Error", md)
+        self.assertIn("Spatial Point Density", md)
         self.assertIn("PASS", md)
 
 
