@@ -399,6 +399,7 @@ def evaluate_multiview_holdout(
     images: Dict,
     mask_cache: Dict[int, np.ndarray],
     holdout_ratio: float = 0.20,
+    split_strategy: str = "trajectory_interleaved",
     seed: int = 42,
     vote_func: Optional[callable] = None,
     lateral_axis: Optional[np.ndarray] = None,
@@ -409,21 +410,34 @@ def evaluate_multiview_holdout(
 ) -> EvaluationReport:
     """
     Performs multi-view hold-out cross-validation:
-    1. Splits available mask images into (1 - holdout_ratio) train views and holdout_ratio test views.
+    1. Splits available mask images into train views and holdout test views.
+       - 'trajectory_interleaved': Strided sampling along sequential UAV flight path (e.g. every 5th frame).
+         Ensures uniform spatial coverage across all bridge spans and camera angles.
+       - 'random': Uniform random shuffle across all images.
     2. Projects labels onto 3D points using ONLY the train views.
     3. Evaluates 2D-3D re-projection consistency on the holdout test views.
     """
     import random
     from collections import Counter
 
-    all_img_ids = list(mask_cache.keys())
-    rng = random.Random(seed)
-    shuffled_ids = list(all_img_ids)
-    rng.shuffle(shuffled_ids)
+    # Sort images by natural name / ID to follow the true UAV flight trajectory
+    sorted_img_ids = sorted(
+        list(mask_cache.keys()),
+        key=lambda iid: (images[iid].name if iid in images else str(iid))
+    )
 
-    n_train = int(len(shuffled_ids) * (1.0 - holdout_ratio))
-    train_ids = set(shuffled_ids[:n_train])
-    holdout_ids = set(shuffled_ids[n_train:])
+    if split_strategy == "trajectory_interleaved":
+        # Strided step along the drone flight path (e.g., step=5 for holdout_ratio=0.20)
+        step = max(1, int(round(1.0 / holdout_ratio))) if holdout_ratio > 0 else 5
+        holdout_ids = set(sorted_img_ids[step - 1 :: step])
+        train_ids = set(sorted_img_ids) - holdout_ids
+    else:  # random split
+        rng = random.Random(seed)
+        shuffled_ids = list(sorted_img_ids)
+        rng.shuffle(shuffled_ids)
+        n_train = int(len(shuffled_ids) * (1.0 - holdout_ratio))
+        train_ids = set(shuffled_ids[:n_train])
+        holdout_ids = set(shuffled_ids[n_train:])
 
     # 1. Vote 3D point classes using ONLY train views
     train_classes: Dict[int, int] = {}
