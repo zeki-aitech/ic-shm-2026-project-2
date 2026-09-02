@@ -109,6 +109,11 @@ $$\text{MAD}_{\text{deck}} = \text{median}\Big( \big| \mathbf{n}_{\text{deck}} \
 - **Why It Is Needed**: Civil bridge decks are continuous planar surfaces. SfM depth drift often warps flat roadways into curved or noisy surfaces. The 2-pass PCA plane residual MAD quantifies roadway surface roughness and noise.
 - **Target**: $\text{MAD}_{\text{deck}} < \mathbf{0.05\text{ m}}$ ($5\text{ cm}$).
 
+> 🚗 **Methodological Note on Moving Traffic & Guardrails**:
+> - **In 2D Ground-Truth Annotations (Pillar 1 — $mIoU_{\text{struct}}$)**: The manual 2D polygons naturally subsume vehicles and traffic moving on the roadway under the `deck` semantic class. When evaluating 2D-to-3D semantic accuracy ($mIoU$), all points on vehicles correctly assigned to `deck` are counted as True Positives ($TP$) without penalty.
+> - **In Structural Health Monitoring (Pillar 3 — $\text{MAD}_{\text{deck}}$)**: In civil engineering SHM, the objective is to extract the invariant load-bearing deck structure (to measure deflection, settlement, or surface degradation), whereas vehicles represent transient live loads.
+> - **How 2-Pass PCA + MAD Handles Traffic**: Because vehicles occupy $< 10\%$ of the surface area and have heights of $1.5 - 3.5\text{ m}$ above the road, the initial median residual $\text{median}(r)$ anchors reliably onto the dominant concrete roadway. The inlier filter ($|r_i| \le 3 \times \text{MAD}$) automatically prunes out-of-plane vehicle points, allowing Pass 2 to measure the true physical planarity of the concrete deck with sub-centimeter fidelity.
+
 ---
 
 ### 3.2 Cable Fan Plane Deviation ($\overline{\text{Deviation}}_{\text{cable}}$)
