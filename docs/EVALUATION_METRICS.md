@@ -116,16 +116,22 @@ $$\text{MAD}_{\text{deck}} = \text{median}\Big( \big| \mathbf{n}_{\text{deck}} \
 
 ---
 
-### 3.2 Cable Fan Plane Deviation ($\overline{\text{Deviation}}_{\text{cable}}$)
+### 3.2 Cable Fan Plane Deviation ($\overline{\text{Deviation}}_{\text{cable}}$) & Fan Thickness ($\sigma_{\text{fan}}$)
 $$\overline{\text{Deviation}}_{\text{cable}} = \frac{1}{|P_{\text{cable}}|} \sum_{x \in P_{\text{cable}}} \min\Big( \big|(\mathbf{x} - \mathbf{x}_0) \cdot \mathbf{w} - d_{\text{left}}\big|, \big|(\mathbf{x} - \mathbf{x}_0) \cdot \mathbf{w} - d_{\text{right}}\big| \Big)$$
+$$\sigma_{\text{fan}} = \text{std.dev}\Big( \min\big(\text{dist}_{\text{left}}, \text{dist}_{\text{right}}\big) \Big)$$
 
-- **Why It Is Needed**: Cable stays are anchored along two symmetric vertical/inclined planes (Left & Right Fan Sheets). Because 2D region masks leak sky/river pixels into the cable class, points scatter across 3D space. This metric measures how tightly 3D cable points adhere to the true physical cable fan sheets.
-- **Target**: $\overline{\text{Deviation}}_{\text{cable}} < \mathbf{0.10\text{ m}}$ ($10\text{ cm}$).
+- **Why It Is Needed**: Cable stays are anchored along two symmetric vertical/inclined planes (Left & Right Fan Sheets). Because 2D region masks leak sky/river pixels into the cable class, points scatter across 3D space. 
+  - The **Deviation** measures how tightly 3D cable points adhere to the true physical cable fan sheets.
+  - The **Fan Thickness ($\sigma_{\text{fan}}$)** measures the standard deviation of this distance, which corresponds directly to the "thickness" of the noise band around the theoretical cable plane. Real cables have a physical thickness ($D \approx 10-20\text{ cm}$), so $\sigma_{\text{fan}}$ shouldn't exceed this bounds significantly.
+- **Targets**: 
+  - $\overline{\text{Deviation}}_{\text{cable}} < \mathbf{0.10\text{ m}}$ ($10\text{ cm}$).
+  - $\sigma_{\text{fan}} < \mathbf{0.15\text{ m}}$.
 
 ---
 
-### 3.3 Off-Fan Cable Outlier Ratio & $\tau$ Tolerance Setting
+### 3.3 Spatial Dispersion Volume ($V_{OBB}$) & Off-Fan Cable Outlier Ratio
 
+#### Off-Fan Cable Outlier Ratio ($\tau$ Tolerance)
 $$\text{Outlier Ratio}(\tau) = \frac{\sum_{x \in P_{\text{cable}}} \mathbb{I}\big[\text{dist}(x, \text{Fan Planes}) > \tau\big]}{|P_{\text{cable}}|} \times 100\%$$
 
 > ⚙️ **Parameter Setting for $\tau$**:
@@ -133,6 +139,13 @@ $$\text{Outlier Ratio}(\tau) = \frac{\sum_{x \in P_{\text{cable}}} \mathbb{I}\bi
 >   $$\tau = \frac{D_{\text{cable}}}{2} + \epsilon_{\text{tol}} \approx 0.10\text{ m} \text{ to } 0.15\text{ m}$$
 > - In our benchmark reports, we provide **Sensitivity Curves** across $\tau \in [0.05\text{ m}, 0.20\text{ m}]$ to demonstrate robustness across cable diameters.
 > - **Target**: $\text{Outlier Ratio}(\tau = 0.10\text{m}) < \mathbf{2.0\%}$.
+
+#### Spatial Dispersion Volume ($V_{OBB}$)
+$$V_{OBB} = \prod_{i=1}^3 \left( \max(\mathbf{p}_{\text{proj}, i}) - \min(\mathbf{p}_{\text{proj}, i}) \right)$$
+*(Where $\mathbf{p}_{\text{proj}}$ are the points projected onto their 3 principal PCA axes).*
+
+- **Why It Is Needed**: Background bleeding causes false "cable" points to float randomly in the sky or over the river. While $\sigma_{\text{fan}}$ captures noise perpendicular to the cable plane, $V_{OBB}$ captures the macro-level spatial explosion of these points. A massive OBB volume directly indicates severe background contamination.
+- **Target**: Minimize (comparative baseline metric).
 
 ---
 
@@ -186,4 +199,6 @@ In the absence of dense 3D terrestrial LiDAR ground-truth, 3D semantic accuracy 
 | | **Camera Registration Ratio** | $N_{\text{reg}} / N_{\text{total}}$ | **$100.0\%$ (400/400)** | Full coverage of all flight lines with zero missing frames |
 | **Pillar 3: SHM Priors** | **Deck Planarity MAD** | $\text{median}(\|n \cdot x + d\|)$ | **$< 0.05\text{ m}$** | Measured after metric scale recovery via $\text{Sim}(3)$ |
 | | **Cable Fan Deviation** | $\text{mean}(\text{dist}(x, \text{Fan Planes}))$ | **$< 0.10\text{ m}$** | Physical alignment of cable points onto left/right fan sheets |
+| | **Cable Fan Thickness ($\sigma$)** | $\text{std}(\text{dist}(x, \text{Fan Planes}))$ | **$< 0.15\text{ m}$** | Measures the noise bandwidth bounding the theoretical cable plane |
 | | **Off-Fan Outlier Ratio** | $\text{Ratio}(\text{dist} > \tau)$ | **$< 2.0\%$** | Evaluated at $\tau = 0.10\text{ m}$ with sensitivity analysis across $[0.05, 0.20\text{m}]$ |
+| | **Spatial Dispersion Vol ($V_{OBB}$)** | $\prod (\max(p) - \min(p))$ | **Minimize** | Captures macro-level spatial background contamination/bleeding |

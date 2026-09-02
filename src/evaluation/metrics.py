@@ -167,6 +167,64 @@ def compute_deck_planarity_mad(deck_points: np.ndarray) -> Tuple[float, np.ndarr
     return final_mad, normal, d
 
 
+def compute_cable_dispersion_metrics(
+    cable_points: np.ndarray,
+    lateral_axis: np.ndarray,
+    d_left: float,
+    d_right: float,
+    x0: Optional[np.ndarray] = None,
+    tau_threshold: float = 0.10,
+) -> Tuple[float, float, Dict[float, float], float, float]:
+    """
+    Measures cable points distance to the two fan planes and computes dispersion metrics.
+
+    Returns:
+        (mean_deviation, outlier_ratio_at_tau, sensitivity_dict, fan_thickness, obb_volume)
+    """
+    points = np.asarray(cable_points, dtype=np.float64)
+    if len(points) == 0:
+        return 0.0, 0.0, {}, 0.0, 0.0
+
+    w = lateral_axis / np.linalg.norm(lateral_axis)
+    origin = np.zeros(3) if x0 is None else np.asarray(x0)
+
+    p_lat = (points - origin) @ w
+    dist_left = np.abs(p_lat - d_left)
+    dist_right = np.abs(p_lat - d_right)
+    
+    # Assign each point to the closest fan
+    is_left = dist_left < dist_right
+    min_dist = np.where(is_left, dist_left, dist_right)
+
+    mean_dev = float(np.mean(min_dist))
+    outlier_ratio = float(np.mean(min_dist > tau_threshold))
+    
+    # Fan Thickness (sigma) - Standard deviation of the minimum distance
+    fan_thickness = float(np.std(min_dist))
+
+    # Sensitivity sweep across tau in [0.05, 0.10, 0.15, 0.20m]
+    sweep_taus = [0.05, 0.08, 0.10, 0.12, 0.15, 0.20]
+    sensitivity: Dict[float, float] = {
+        tau: float(np.mean(min_dist > tau)) for tau in sweep_taus
+    }
+    
+    # Spatial Dispersion Volume (V_OBB)
+    # Computed using the product of the ranges along principal components
+    if len(points) >= 3:
+        centroid = points.mean(axis=0)
+        centered = points - centroid
+        cov = centered.T @ centered / len(points)
+        _, eigvecs = np.linalg.eigh(cov)
+        # Project points onto principal axes
+        proj = centered @ eigvecs
+        ranges = np.max(proj, axis=0) - np.min(proj, axis=0)
+        obb_volume = float(np.prod(ranges))
+    else:
+        obb_volume = 0.0
+
+    return mean_dev, outlier_ratio, sensitivity, fan_thickness, obb_volume
+
+
 def compute_cable_fan_deviation(
     cable_points: np.ndarray,
     lateral_axis: np.ndarray,
@@ -175,33 +233,10 @@ def compute_cable_fan_deviation(
     x0: Optional[np.ndarray] = None,
     tau_threshold: float = 0.10,
 ) -> Tuple[float, float, Dict[float, float]]:
-    """
-    Measures cable points distance to the two fan planes and performs sensitivity sweep over tau.
-
-    Returns:
-        (mean_deviation, outlier_ratio_at_tau, sensitivity_dict)
-    """
-    points = np.asarray(cable_points, dtype=np.float64)
-    if len(points) == 0:
-        return 0.0, 0.0, {}
-
-    w = lateral_axis / np.linalg.norm(lateral_axis)
-    origin = np.zeros(3) if x0 is None else np.asarray(x0)
-
-    p_lat = (points - origin) @ w
-    dist_left = np.abs(p_lat - d_left)
-    dist_right = np.abs(p_lat - d_right)
-    min_dist = np.minimum(dist_left, dist_right)
-
-    mean_dev = float(np.mean(min_dist))
-    outlier_ratio = float(np.mean(min_dist > tau_threshold))
-
-    # Sensitivity sweep across tau in [0.05, 0.10, 0.15, 0.20m]
-    sweep_taus = [0.05, 0.08, 0.10, 0.12, 0.15, 0.20]
-    sensitivity: Dict[float, float] = {
-        tau: float(np.mean(min_dist > tau)) for tau in sweep_taus
-    }
-
+    """Legacy helper returning (mean_dev, outlier_ratio, sensitivity)."""
+    mean_dev, outlier_ratio, sensitivity, _, _ = compute_cable_dispersion_metrics(
+        cable_points, lateral_axis, d_left, d_right, x0=x0, tau_threshold=tau_threshold
+    )
     return mean_dev, outlier_ratio, sensitivity
 
 
@@ -267,6 +302,8 @@ class EvaluationReport:
     cable_mean_deviation: Optional[float] = None
     cable_outlier_ratio: Optional[float] = None
     cable_sensitivity: Optional[Dict[float, float]] = None
+    cable_fan_thickness: Optional[float] = None
+    cable_obb_volume: Optional[float] = None
     mean_reprojection_error: Optional[float] = None
     spatial_point_density: Optional[float] = None
 
@@ -313,10 +350,22 @@ class EvaluationReport:
                 f"| **Cable Fan Sheet Deviation** | `{self.cable_mean_deviation:.4f} m` | `< 0.10 m` | {status} |"
             )
 
+        if self.cable_fan_thickness is not None:
+            status = "✅ PASS" if self.cable_fan_thickness < 0.15 else "⚠️ NEEDS TUNING"
+            lines.append(
+                f"| **Cable Fan Thickness (σ)** | `{self.cable_fan_thickness:.4f} m` | `< 0.15 m` | {status} |"
+            )
+
         if self.cable_outlier_ratio is not None:
             status = "✅ PASS" if self.cable_outlier_ratio < 0.02 else "⚠️ NEEDS TUNING"
             lines.append(
                 f"| **Off-Fan Cable Outlier Ratio (tau=0.10m)** | `{self.cable_outlier_ratio * 100:.2f}%` | `< 2.00%` | {status} |"
+            )
+            
+        if self.cable_obb_volume is not None:
+            # We just show the value as the baseline is typically high due to noise
+            lines.append(
+                f"| **Cable Spatial Dispersion Vol (V_OBB)** | `{self.cable_obb_volume:.2f} m³` | `Minimize` | ℹ️ INFO |"
             )
 
         if self.mean_reprojection_error is not None:
@@ -362,6 +411,8 @@ def evaluate_predictions(
     cable_dev = None
     cable_outliers = None
     cable_sensitivity = None
+    cable_thickness = None
+    cable_volume = None
     if (
         cable_points is not None
         and len(cable_points) > 0
@@ -369,7 +420,7 @@ def evaluate_predictions(
         and d_left is not None
         and d_right is not None
     ):
-        cable_dev, cable_outliers, cable_sensitivity = compute_cable_fan_deviation(
+        cable_dev, cable_outliers, cable_sensitivity, cable_thickness, cable_volume = compute_cable_dispersion_metrics(
             cable_points, lateral_axis, d_left, d_right, tau_threshold=tau_threshold
         )
 
@@ -389,6 +440,8 @@ def evaluate_predictions(
         cable_mean_deviation=cable_dev,
         cable_outlier_ratio=cable_outliers,
         cable_sensitivity=cable_sensitivity,
+        cable_fan_thickness=cable_thickness,
+        cable_obb_volume=cable_volume,
         mean_reprojection_error=mean_reproj_error,
         spatial_point_density=point_density,
     )

@@ -10,6 +10,7 @@ from src.evaluation.metrics import (
     compute_f1_scores,
     compute_deck_planarity_mad,
     compute_cable_fan_deviation,
+    compute_cable_dispersion_metrics,
     compute_spatial_point_density,
     umeyama_sim3_alignment,
     evaluate_predictions,
@@ -93,6 +94,23 @@ class TestEvaluationMetrics(unittest.TestCase):
         self.assertEqual(outlier_ratio, 0.0)
         self.assertIn(0.10, sensitivity)
         self.assertEqual(sensitivity[0.10], 0.0)
+
+    def test_cable_dispersion_metrics(self):
+        np.random.seed(42)
+        n_pts = 50
+        lateral_axis = np.array([0.0, 0.0, 1.0])
+        x = np.random.uniform(-10, 10, n_pts)
+        y = np.random.uniform(5, 20, n_pts)
+        z = np.array([-2.0] * 25 + [2.0] * 25) + np.random.normal(0, 0.02, n_pts)
+        cable_pts = np.column_stack([x, y, z])
+
+        mean_dev, outlier_ratio, sensitivity, fan_thickness, obb_volume = compute_cable_dispersion_metrics(
+            cable_pts, lateral_axis, d_left=-2.0, d_right=2.0, tau_threshold=0.10
+        )
+        self.assertLess(mean_dev, 0.05)
+        self.assertLess(fan_thickness, 0.05)
+        self.assertGreater(obb_volume, 0.0)
+        self.assertEqual(outlier_ratio, 0.0)
 
     def test_umeyama_sim3_alignment(self):
         np.random.seed(42)

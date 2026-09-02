@@ -8,6 +8,7 @@ from .metrics import (
     compute_f1_scores,
     compute_deck_planarity_mad,
     compute_cable_fan_deviation,
+    compute_cable_dispersion_metrics,
     EvaluationReport,
 )
 
@@ -20,5 +21,6 @@ __all__ = [
     "compute_f1_scores",
     "compute_deck_planarity_mad",
     "compute_cable_fan_deviation",
+    "compute_cable_dispersion_metrics",
     "EvaluationReport",
 ]

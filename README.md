@@ -38,7 +38,9 @@ ic-shm-2026-project-2/
 │   ├── THEORY_COLMAP_AND_SIFT.md # Complete handbook on SIFT, Epipolar Geometry & Triangulation
 │   └── SUBMISSION_CHECKLIST_AND_GUIDELINES.md # Official submission items & deliverable tracker
 ├── notebooks/                    # Interactive 3D visualization notebooks
-│   ├── 00_end_to_end_reconstruction_and_baseline_fusion.ipynb # Complete walkthrough from SfM to Baseline Fusion
+│   ├── 00_end_to_end_reconstruction_and_baseline_fusion.ipynb # Baseline pipeline and initial benchmark
+│   ├── 01_2d_mask_refinement_experiments.ipynb               # 2D cable mask refinement (Otsu, Frangi, Erosion)
+│   ├── 02_proposed_structure_aware_fusion_and_filtering.ipynb # Proposed method (Asymmetric Fusion + 8-Stage Filter)
 │   └── old/                      # Archived interactive visualizers (00, 01, 02)
 ├── src/
 │   ├── reconstruction/           # 3D Reconstruction & Semantic Pipeline Core
