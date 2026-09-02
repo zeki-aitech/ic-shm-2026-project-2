@@ -392,3 +392,94 @@ def evaluate_predictions(
         mean_reprojection_error=mean_reproj_error,
         spatial_point_density=point_density,
     )
+
+
+def evaluate_multiview_holdout(
+    pts3d: Dict,
+    images: Dict,
+    mask_cache: Dict[int, np.ndarray],
+    holdout_ratio: float = 0.20,
+    seed: int = 42,
+    vote_func: Optional[callable] = None,
+    lateral_axis: Optional[np.ndarray] = None,
+    d_left: Optional[float] = None,
+    d_right: Optional[float] = None,
+    mean_reproj_error: Optional[float] = None,
+    estimated_bridge_area: float = 1200.0,
+) -> EvaluationReport:
+    """
+    Performs multi-view hold-out cross-validation:
+    1. Splits available mask images into (1 - holdout_ratio) train views and holdout_ratio test views.
+    2. Projects labels onto 3D points using ONLY the train views.
+    3. Evaluates 2D-3D re-projection consistency on the holdout test views.
+    """
+    import random
+    from collections import Counter
+
+    all_img_ids = list(mask_cache.keys())
+    rng = random.Random(seed)
+    shuffled_ids = list(all_img_ids)
+    rng.shuffle(shuffled_ids)
+
+    n_train = int(len(shuffled_ids) * (1.0 - holdout_ratio))
+    train_ids = set(shuffled_ids[:n_train])
+    holdout_ids = set(shuffled_ids[n_train:])
+
+    # 1. Vote 3D point classes using ONLY train views
+    train_classes: Dict[int, int] = {}
+    for p3d_id, pt3d in pts3d.items():
+        train_votes = []
+        for img_id, pt2d_idx in zip(pt3d.image_ids, pt3d.point2d_idxs):
+            if img_id in train_ids:
+                img_pose = images[img_id]
+                mask = mask_cache[img_id]
+                u, v, _ = img_pose.points2d[pt2d_idx]
+                x, y = int(round(u)), int(round(v))
+                if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
+                    train_votes.append(int(mask[y, x]))
+
+        if train_votes:
+            if vote_func is not None:
+                train_classes[p3d_id] = vote_func(train_votes)
+            else:
+                train_classes[p3d_id] = Counter(train_votes).most_common(1)[0][0]
+        else:
+            train_classes[p3d_id] = 0
+
+    # 2. Evaluate against Ground-Truth on Hold-out views
+    y_true_list: List[int] = []
+    y_pred_list: List[int] = []
+
+    for img_id in holdout_ids:
+        img_pose = images[img_id]
+        mask = mask_cache[img_id]
+        for pt2d_idx, (u, v, p3d_id) in enumerate(img_pose.points2d):
+            if p3d_id != -1 and p3d_id in train_classes:
+                x, y = int(round(u)), int(round(v))
+                if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
+                    gt_label = int(mask[y, x])
+                    pred_label = train_classes[p3d_id]
+                    y_true_list.append(gt_label)
+                    y_pred_list.append(pred_label)
+
+    y_true = np.array(y_true_list)
+    y_pred = np.array(y_pred_list)
+
+    # Extract spatial points for SHM geometric metrics
+    all_xyz = np.array([pt.xyz for pt in pts3d.values()])
+    cids_array = np.array([train_classes.get(pid, 0) for pid in pts3d.keys()])
+    deck_pts = all_xyz[cids_array == 1]
+    cable_pts = all_xyz[cids_array == 2]
+
+    return evaluate_predictions(
+        y_true=y_true,
+        y_pred=y_pred,
+        deck_points=deck_pts,
+        cable_points=cable_pts,
+        lateral_axis=lateral_axis,
+        d_left=d_left,
+        d_right=d_right,
+        mean_reproj_error=mean_reproj_error,
+        spatial_points=all_xyz,
+        estimated_bridge_area=estimated_bridge_area,
+    )
