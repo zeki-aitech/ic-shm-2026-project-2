@@ -4,7 +4,7 @@ This document outlines the comprehensive evaluation methodology for the **Struct
 
 > **Research Alignment**: The selected metrics explicitly draw upon standards established in recent research:
 > - **Lin et al. (2025)**: Inspired our 2D/3D semantic metrics (mIoU, OA) and the explicit need to track slender elements like cables ($IoU_{\text{cable}}$).
-> - **Hu et al. (2020)**: Inspired the integration of geometric metrics (Reprojection Error, Chamfer Distance) alongside domain-specific structural constraints (Deck Planarity MAD, Cable Fan Deviation).
+> - **Hu et al. (2020, 2021)**: Inspired the integration of geometric metrics (Reprojection Error, Chamfer Distance) alongside domain-specific structural constraints (Deck Planarity MAD, Cable Fan Deviation).
 
 ---
 
@@ -131,7 +131,45 @@ $$\text{Outlier Ratio}(\tau) = \frac{\sum_{x \in P_{\text{cable}}} \mathbb{I}\bi
 
 ---
 
-## 4. Master Benchmark Summary Scorecard
+## 4. Multi-View Hold-Out Cross-Validation Protocol
+
+In the absence of dense 3D terrestrial LiDAR ground-truth, 3D semantic accuracy is evaluated using **Multi-View 2D Hold-Out Cross-Validation**.
+
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │           TRAJECTORY-INTERLEAVED HOLD-OUT CROSS-VALIDATION (80 / 20)        │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │ • Training Views (80% — 240 frames): {001, 002, 003, 004, 006, 007, ...}    │
+ │   ➔ Used to triangulate 3D coordinates and vote semantic classes.           │
+ │ • Hold-Out Test Views (20% — 60 frames): {005, 010, 015, 020, ..., 300}    │
+ │   ➔ Kept strictly blind during 3D reconstruction and semantic voting.       │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼ Re-project 3D Model onto 60 Hold-Out Cameras
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                PIXEL-LEVEL GROUND-TRUTH RE-PROJECTION MATCHING              │
+ │ • Compare projected 3D classes against manual Labelme JSON 2D masks.        │
+ │ • Evaluates 114,994 observation rays across all 60 hold-out viewpoints.     │
+ │ ➔ Computes authentic, unbiased mIoU, OA, and per-class Confusion Matrix!    │
+ └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Why Trajectory-Interleaved Splitting Over Random Splitting?
+
+| Splitting Strategy | Mathematical Formulation | Photogrammetric Pros & Cons |
+| :--- | :--- | :--- |
+| **Uniform Random Split** | $\mathcal{I}_{\text{test}} = \text{RandomSample}(\mathcal{I}, 20\%)$ | ❌ **High Risk of Spatial Leakage**: Adjacent frames ($I_t$ and $I_{t+1}$) taken fractions of a second apart share $> 99\%$ visual overlap. Random splitting places near-duplicate views in both train and test. Furthermore, random sampling leaves clustering gaps along the flight path. |
+| **Trajectory-Interleaved Split** *(Our Adopted Standard)* | $\mathcal{I}_{\text{test}} = \{ I_k \mid k \pmod 5 = 0 \}$<br>$\mathcal{I}_{\text{train}} = \mathcal{I} \setminus \mathcal{I}_{\text{test}}$ |  **Uniform Spatial-Angular Coverage**: Strided sampling (every 5th frame) guarantees that every bridge span, pylon face, and altitude level is evenly represented in both train and test sets.<br> **Simulates Real SHM Novel-View Synthesis**: Tests the 3D model's ability to interpolate missing flight trajectory viewpoints.<br> **100% Deterministic & Reproducible**: Eliminates random-seed volatility. |
+
+### 4.2 Cross-Validation Algorithm Steps:
+1. **Partition**: Sort all 300 labeled images sequentially along the flight trajectory. Assign every 5th image (`k % 5 == 0`, total 60 images) to $\mathcal{I}_{\text{test}}$, and the remaining 240 images to $\mathcal{I}_{\text{train}}$.
+2. **Reconstruction & Voting**: Triangulate and vote 3D point classes using **ONLY** observations from $\mathcal{I}_{\text{train}}$.
+3. **Evaluation**: For each 2D feature observation $(u, v)$ in $\mathcal{I}_{\text{test}}$, retrieve the 2D ground-truth label $y_{\text{true}} = \text{Mask}[v, u]$ and compare against the predicted 3D point class $y_{\text{pred}} = \text{Class}(\mathbf{X}_{3D})$.
+4. **Metric Calculation**: Compute the $5 \times 5$ confusion matrix, per-class $IoU_c$, $mIoU_{\text{struct}}$, and $OA$.
+
+---
+
+## 5. Master Benchmark Summary Scorecard
 
 | Pillar | Metric | Mathematical Formulation | Recommended Benchmark Target | Rigorous Methodological Rationale |
 | :--- | :--- | :--- | :---: | :--- |
