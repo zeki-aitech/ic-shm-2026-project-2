@@ -38,9 +38,8 @@ ic-shm-2026-project-2/
 │   ├── THEORY_COLMAP_AND_SIFT.md # Complete handbook on SIFT, Epipolar Geometry & Triangulation
 │   └── SUBMISSION_CHECKLIST_AND_GUIDELINES.md # Official submission items & deliverable tracker
 ├── notebooks/                    # Interactive 3D visualization notebooks
-│   ├── 00_understand_colmap_outputs.ipynb # Complete tutorial & visualizer of raw COLMAP outputs
-│   ├── 01_visualize_semantic_3d.ipynb     # Interactive semantic 3D point cloud visualizer
-│   └── 02_visualize_colmap_mapping_2d_3d.ipynb # 2D-3D mapping & voting visualizer
+│   ├── 00_end_to_end_reconstruction_and_baseline_fusion.ipynb # Complete walkthrough from SfM to Baseline Fusion
+│   └── old/                      # Archived interactive visualizers (00, 01, 02)
 ├── src/
 │   ├── reconstruction/           # 3D Reconstruction & Semantic Pipeline Core
 │   │   ├── models.py                  # Core dataclasses (CameraIntrinsics, ImagePose, Point3D)
