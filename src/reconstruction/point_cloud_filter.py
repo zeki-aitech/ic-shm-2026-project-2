@@ -286,8 +286,13 @@ def estimate_up_from_reconstruction(model_path: str) -> np.ndarray:
     Requires pycolmap; `model_path` points to a COLMAP model directory.
     """
     import pycolmap
+    from src.reconstruction.pycolmap_reconstructor import load_contest_model
 
-    rec = pycolmap.Reconstruction(model_path)
+    try:
+        rec = pycolmap.Reconstruction(model_path)
+    except Exception:
+        rec = load_contest_model(model_path)
+
     ups = []
     for img in rec.images.values():
         R = img.cam_from_world().rotation.matrix()
