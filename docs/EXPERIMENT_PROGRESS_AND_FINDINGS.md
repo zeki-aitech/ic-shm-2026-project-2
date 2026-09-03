@@ -1,13 +1,74 @@
 # IC-SHM 2026 (Project 2) — Technical Progress, Benchmarks & Scientific Findings
 
-**Project**: Structure-Aware 3D Semantic Point Cloud Reconstruction for Cable-Stayed Bridges  
-**Latest Milestone Update**: September 2026  
-**Status**: Stage 1 (LO-RANSAC Triangulation & Baseline) & Stage 2 (8-Stage Structure-Aware Geometric Filter + 2D Refinement) Fully Implemented & Benchmarked  
+**Project**: Multi-view Semantic 3D Reconstruction of Bridge Structures
+**Latest Milestone Update**: September 2026
 **Language**: English (Repository Standard)
 
 ---
 
-## 📑 1. Executive Summary & Architecture Overview
+## 📌 0. Pivot Note (2026-09-03)
+
+The official contest brief (`data/Contest Dataset/The 4th International Project Competition for
+SHM_2026.pdf`, pp. 9-10) was located in the dataset folder and reviewed for the first time on
+this date. It defines Project 2's actual scoring as a **render-based Accuracy Score**
+(`0.5 × Visual Fidelity [PSNR/SSIM/LPIPS] + 0.5 × Semantic mIoU`, evaluated on a blind test set
+of camera viewpoints, requiring a model/script that renders both RGB and a semantic map from any
+given pose) - not the point-cloud-classification metrics (Deck Planarity MAD, Cable Fan
+Deviation, 3D mIoU measured directly on point labels, etc.) surveyed in Sections 2-3 below,
+which were this repo's own pre-brief interpretation.
+
+The repository was pivoted accordingly on branch `feat/semantic-gaussian-splatting`:
+- **New primary pipeline**: `src/gaussian_splatting/` (Semantic 3D Gaussian Splatting - fused
+  RGB + per-class semantic-logit rasterization via `gsplat`) + `src/segmentation/` (SegFormer
+  2D pseudo-labeling for the 100 unlabeled images) + `src/evaluation/render_metrics.py`
+  (PSNR/SSIM/LPIPS + mIoU on rendered holdout views, matching the official Accuracy Score).
+- **Everything below this note** (the LO-RANSAC triangulation baseline, the 8-stage geometric
+  filter, the 2D mask-refinement notebooks, and their benchmark numbers) describes a pipeline
+  that has since been **removed from this repository** (`src/reconstruction/`, `notebooks/`) —
+  it is kept here only as a historical benchmark/methodology record for the paper's
+  discussion section, not as a currently runnable deliverable. What survived the removal: the
+  camera/pose loading, LO-RANSAC triangulation, and semantic-voting logic, moved to
+  `src/colmap_io/` because Task B's Gaussian Splatting model still needs them — its per-Gaussian
+  means/colors/semantic logits are warm-started from that triangulated, voted sparse cloud
+  (`src/gaussian_splatting/model.py::init_from_sparse`) instead of random initialization.
+- See `docs/CONTEST_SPEC_AND_SURVEY.md` §"Official Source of Truth" and
+  `docs/EVALUATION_METRICS.md` §0 for the full reframing, and the root `README.md` for the
+  current end-to-end CLI pipeline.
+
+### First End-to-End Run (this session, RTX 3080, 10GB)
+
+| Stage | Configuration | Result |
+| :--- | :--- | :--- |
+| Task A (SegFormer mit-b0) | 240 train / 60 holdout, 80 epochs, batch 8 | **Val 2D mIoU = 81.27%** (`outputs/checkpoints/segformer_mitb0/best.pt`) |
+| Task A inference | 100 unlabeled images | `outputs/pseudo_masks/301..400.png` |
+| Task B (Semantic 3DGS) | 340 train views (240 GT + 100 pseudo), 30,000 iters, downsample=0.5, `gsplat.strategy.DefaultStrategy`, 84,613 -> 603,295 Gaussians (capped) | 821s (13.7 min) wall-clock training |
+| Task B evaluation | `render_metrics` on 60 never-trained holdout views | See table below |
+
+**Render-based evaluation (official contest protocol, `outputs/eval/render_eval_report.md`):**
+
+| Metric | Value |
+| :--- | :---: |
+| PSNR | 21.99 dB |
+| SSIM | 0.834 |
+| LPIPS | 0.348 |
+| **Semantic mIoU (structural, 4 classes)** | **87.96%** |
+| — deck | 93.78% |
+| — stay_cable | 90.76% |
+| — tower | 86.21% |
+| — foundation | 81.08% |
+| Illustrative Visual Fidelity | 0.705 |
+| Illustrative Accuracy Score | 0.792 |
+
+This is a first-pass result with several deliberate corners cut for a single working session:
+half-resolution training (full-res eval), frozen COLMAP poses (no bundle adjustment/pose
+refinement), a Gaussian-count cap (600k) reached during training, and no LR/loss-weight tuning
+beyond the initial documented defaults. The semantic mIoU already exceeds this repo's own
+earlier-surveyed (non-official) 85% target; visual fidelity (PSNR/SSIM) has clear headroom from
+longer training, full-resolution training, and `--optimize-poses`.
+
+---
+
+## 📑 1. Executive Summary & Architecture Overview (historical — this pipeline has been removed from the repository, see Pivot Note above)
 
 This document provides a comprehensive synthesis of the experimental progress, quantitative benchmarks, and key scientific discoveries achieved in **IC-SHM 2026 Project 2**.
 
@@ -73,21 +134,24 @@ To eliminate background contamination before multi-view back-projection:
 * **Intra-Mask Otsu Thresholding (`skimage.filters.threshold_otsu`)**: Automatically separates dark steel cables from bright sky backgrounds within candidate polygons, reducing bloated pixels by **$45\% - 80\%$**.
 * **Multi-Scale Frangi Tubular Filter (`skimage.filters.frangi`)**: Employs Hessian matrix eigenvalues ($\lambda_1, \lambda_2$) across scales $\sigma \in \{1.0, 1.5, 2.0\}$ to isolate 1D continuous cylindrical cables, retaining **$8\% - 15\%$** high-purity core cable pixels.
 
-### 3.3 8-Stage Structure-Aware Geometric Filtering (Notebook 02)
-Our modular filter in `src/reconstruction/point_cloud_filter.py` applies structural priors:
+### 3.3 8-Stage Structure-Aware Geometric Filtering (Notebook 02, removed)
+The modular filter (formerly `src/reconstruction/point_cloud_filter.py`, since deleted) applied structural priors:
 1. **2-Pass PCA + MAD**: Effectively isolates moving traffic ($1.5-3.5\text{ m}$ height) and surface noise from the load-bearing concrete deck, reducing residual roughness from $7.1\text{ cm}$ to **$8.8\text{ mm}$**.
 2. **Tower Cylinder Tubes**: Clusters tower shafts via K-Means and confines points within narrow gravity-aligned tubes.
 3. **Cable Envelope & Fan Planes**: Restricts cables between deck and tower apex, snapping points onto left/right fan planes ($d_{\text{left}}, d_{\text{right}}$), which collapses spatial noise volume from **$33,167\text{ m³}$ to $6.28\text{ m³}$**.
 
 ---
 
-## 📁 4. Notebook Ecosystem & Reproducibility Tracker
+## 📁 4. Notebook Ecosystem & Reproducibility Tracker (historical — notebooks deleted from the repository)
 
-| Notebook Path | Purpose & Methodological Scope | Key Outputs & Metrics |
+| Notebook Path (no longer present) | Purpose & Methodological Scope | Key Outputs & Metrics |
 | :--- | :--- | :--- |
-| [`notebooks/00_end_to_end_reconstruction_and_baseline_fusion.ipynb`](../notebooks/00_end_to_end_reconstruction_and_baseline_fusion.ipynb) | End-to-end baseline pipeline from raw COLMAP parameters to LO-RANSAC triangulation, naive plurality voting, and baseline hold-out evaluation. | 84,613 triangulated points, $e_{\text{reproj}} = 0.50\text{ px}$, baseline $mIoU = 83.77\%$, cable $\sigma = 2.98\text{ m}$, $V_{OBB} = 33,167\text{ m³}$. |
-| [`notebooks/01_2d_mask_refinement_experiments.ipynb`](../notebooks/01_2d_mask_refinement_experiments.ipynb) | Empirical sandbox testing 4 scientific 2D mask refinement algorithms (Erosion, Otsu, Frangi, Hybrid) on high-resolution UAV images. | Quantitative pixel retention comparison across 5 top cable frames; proves Otsu & Frangi eliminate 80-92% background sky. |
-| [`notebooks/02_proposed_structure_aware_fusion_and_filtering.ipynb`](../notebooks/02_proposed_structure_aware_fusion_and_filtering.ipynb) | Full proposed pipeline executing Asymmetric Fusion, 8-stage geometric filter, cable planar snapping, and Master Comparison Scorecard. | 15,059 clean structural points; Deck MAD $= 8.8\text{ mm}$; Cable $V_{OBB} = 6.28\text{ m³}$; side-by-side scorecard. |
+| `notebooks/00_end_to_end_reconstruction_and_baseline_fusion.ipynb` | End-to-end baseline pipeline from raw COLMAP parameters to LO-RANSAC triangulation, naive plurality voting, and baseline hold-out evaluation. | 84,613 triangulated points, $e_{\text{reproj}} = 0.50\text{ px}$, baseline $mIoU = 83.77\%$, cable $\sigma = 2.98\text{ m}$, $V_{OBB} = 33,167\text{ m³}$. |
+| `notebooks/01_2d_mask_refinement_experiments.ipynb` | Empirical sandbox testing 4 scientific 2D mask refinement algorithms (Erosion, Otsu, Frangi, Hybrid) on high-resolution UAV images. | Quantitative pixel retention comparison across 5 top cable frames; proves Otsu & Frangi eliminate 80-92% background sky. |
+| `notebooks/02_proposed_structure_aware_fusion_and_filtering.ipynb` | Full proposed pipeline executing Asymmetric Fusion, 8-stage geometric filter, cable planar snapping, and Master Comparison Scorecard. | 15,059 clean structural points; Deck MAD $= 8.8\text{ mm}$; Cable $V_{OBB} = 6.28\text{ m³}$; side-by-side scorecard. |
+
+These results are no longer reproducible from this repository as-is; they are recorded here as a
+methodology reference in case similar geometric-filtering analysis is reintroduced for the paper.
 
 ---
 
@@ -95,13 +159,15 @@ Our modular filter in `src/reconstruction/point_cloud_filter.py` applies structu
 
 | Deliverable Item | Target Requirement | Current Status | Next Action |
 | :--- | :--- | :---: | :--- |
-| **[1] Python Codebase** | Clean, well-commented modules in `src/` & `tests/` |  **Complete** | 29/29 unit tests passing; all modules verified. |
+| **[1] Python Codebase** | Clean, well-commented modules in `src/` & `tests/` |  **Complete** | Unit tests passing (`uv run pytest`); all modules verified. |
 | **[2] Reproducibility** | Step-by-step reproduction guide in `README.md` |  **Complete** | Configured with `uv` package manager. |
-| **[3] Dataset Package** | Google Drive / Baidu Cloud bundle | 🟡 **In Progress** | Local point clouds & masks ready; cloud links to be generated. |
+| **[3] Dataset Package** | Google Drive / Baidu Cloud bundle | 🟡 **In Progress** | Trained checkpoints ready; cloud links to be generated. |
 | **[4] 10-Min Video** | MP4 video with slides & speaker PiP webcam | ⏳ **Upcoming** | Script outlined; recording after final paper draft. |
-| **[5] Presentation Deck** | PowerPoint slides (`.pptx` / `.pdf`) | ⏳ **Upcoming** | Slide outline structured based on 3-pillar results. |
+| **[5] Presentation Deck** | PowerPoint slides (`.pptx` / `.pdf`) | ⏳ **Upcoming** | Slide outline structured based on the render-based Accuracy Score results. |
 | **[6] Academic Paper** | 10–15 page paper using official IC-SHM template | ⏳ **Upcoming** | Ready to draft sections using data and tables from this document. |
 
 ---
 
-*Document compiled and maintained for IC-SHM 2026 Project 2. All experiments are 100% reproducible via the repository notebooks.*
+*Document compiled and maintained for IC-SHM 2026 Project 2. Section 0 (Pivot Note) describes the
+current, reproducible pipeline; Sections 1-4 are a historical record of a pipeline that has since
+been removed from the repository.*

@@ -447,6 +447,27 @@ def evaluate_predictions(
     )
 
 
+def trajectory_interleaved_split(
+    sorted_ids: List,
+    holdout_ratio: float = 0.20,
+) -> Tuple[List, List]:
+    """
+    Partitions a trajectory-ordered list of ids into (train_ids, holdout_ids) by strided
+    sampling: every Nth id (N = round(1/holdout_ratio)) is held out, the rest is train.
+
+    `sorted_ids` must already be sorted along the UAV flight trajectory (e.g. by image name/ID)
+    so the held-out ids are spread uniformly across the flight path rather than clustered.
+
+    This is the single source of truth for the train/holdout partition shared by 2D segmentation
+    training, Gaussian Splatting training, and render-based evaluation.
+    """
+    step = max(1, int(round(1.0 / holdout_ratio))) if holdout_ratio > 0 else len(sorted_ids) + 1
+    holdout_ids = list(sorted_ids[step - 1 :: step])
+    holdout_set = set(holdout_ids)
+    train_ids = [i for i in sorted_ids if i not in holdout_set]
+    return train_ids, holdout_ids
+
+
 def evaluate_multiview_holdout(
     pts3d: Dict,
     images: Dict,
@@ -480,10 +501,8 @@ def evaluate_multiview_holdout(
     )
 
     if split_strategy == "trajectory_interleaved":
-        # Strided step along the drone flight path (e.g., step=5 for holdout_ratio=0.20)
-        step = max(1, int(round(1.0 / holdout_ratio))) if holdout_ratio > 0 else 5
-        holdout_ids = set(sorted_img_ids[step - 1 :: step])
-        train_ids = set(sorted_img_ids) - holdout_ids
+        train_ids, holdout_ids = trajectory_interleaved_split(sorted_img_ids, holdout_ratio)
+        train_ids, holdout_ids = set(train_ids), set(holdout_ids)
     else:  # random split
         rng = random.Random(seed)
         shuffled_ids = list(sorted_img_ids)

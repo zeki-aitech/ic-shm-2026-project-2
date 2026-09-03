@@ -39,14 +39,25 @@ According to the official competition guidelines extracted from [`docs/required-
 - **Requirement**: Full source code implemented in Python with thorough docstrings and inline comments.
 - **Repository Alignment**:
   - `src/utils/`: 2D data preprocessing (`json_to_mask.py`, `create_overlay_dataset.py`).
-  - `src/reconstruction/`:
-    - `models.py`: Strongly-typed dataclasses (`CameraIntrinsics`, `ImagePose`, `Point3D`).
-    - `pycolmap_reconstructor.py`: Fast LO-RANSAC 3D triangulation.
-    - `gpu_pipeline.py`: GPU-accelerated SIFT extraction and sequential matching on CUDA.
-    - `semantic_projector.py`: 2D-to-3D back-projection & multi-view majority voting.
-    - `point_cloud_filter.py`: 8-stage structure-aware geometric filtering pipeline (Deck PCA, Tower tube, Cable fan planes).
-    - `visualizer.py`: Interactive Plotly and ASCII PLY export.
-  - `tests/`: Automated unit testing suite (20 test cases passing).
+  - `src/segmentation/` (Task A — 2D pseudo-labeling):
+    - `dataset.py`: `BridgeSegDataset` (images + GT masks).
+    - `train.py`: fine-tunes SegFormer (mit-b0), validates 2D mIoU on the 60-image holdout.
+    - `infer.py`: predicts pseudo-masks for the 100 unlabeled images.
+  - `src/gaussian_splatting/` (Task B — **officially scored**, see `docs/EVALUATION_METRICS.md` §0):
+    - `undistort.py`: one-time lens-undistortion pass to a pinhole convention.
+    - `dataset.py`: `GSCamera` / `build_camera_list`, built from `PycolmapReconstructor` output.
+    - `model.py`: `SemanticGaussianModel` — fused RGB + per-class semantic-logit rasterization.
+    - `losses.py`: photometric (L1 + D-SSIM) + semantic cross-entropy.
+    - `train.py`: training loop using `gsplat.strategy.DefaultStrategy` for densification/pruning.
+    - `render.py`: **the contest submission deliverable** — renders RGB + semantic map from any pose.
+  - `src/colmap_io/` (camera/pose loading & semantic voting — shared infrastructure for Task B):
+    - `models.py`: `CameraIntrinsics`, `ImagePose`, `Point3D` dataclasses.
+    - `reconstructor.py`: `PycolmapReconstructor` — LO-RANSAC sparse triangulation.
+    - `semantic_voting.py`: `SemanticProjector` — 2D-to-3D multi-view majority voting.
+  - `src/evaluation/`:
+    - `metrics.py`: confusion matrix / IoU / mIoU, `trajectory_interleaved_split`.
+    - `render_metrics.py`: PSNR/SSIM/LPIPS + mIoU on rendered holdout views (official scoring, §0).
+  - `tests/`: Automated unit testing suite (`uv run pytest`).
 - **Status**:  **Codebase structured, commented, and verified.**
 
 ---
@@ -56,22 +67,25 @@ According to the official competition guidelines extracted from [`docs/required-
 - **Repository Alignment**:
   - Root [`README.md`](../README.md) configured with `uv` package management:
     ```bash
-    # 1. Install dependencies
+    # 1. Install dependencies (gsplat/torch pinned to a working prebuilt-wheel combo, see pyproject.toml)
     uv sync --extra deeplearning
 
     # 2. Run automated test suite
     PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest
 
-    # 3. Generate 2D ground-truth masks
-    uv run python -m src.utils.json_to_mask
+    # 3. Task A: fine-tune 2D segmenter, pseudo-label the 100 unlabeled images
+    uv run python -m src.segmentation.train --epochs 80
+    uv run python -m src.segmentation.infer --checkpoint outputs/checkpoints/segformer_mitb0/best.pt
 
-    # 4. Run 3D semantic projection
-    uv run python -m src.reconstruction.semantic_projector
+    # 4. Task B: train the Semantic 3D Gaussian Splatting model (officially scored deliverable)
+    uv run python -m src.gaussian_splatting.train --iters 20000 --downsample 0.5
 
-    # 5. Run structure-aware geometric filtering
-    uv run python -m src.reconstruction.point_cloud_filter \
-        --input outputs/point_clouds/semantic_bridge_sparse.ply \
-        --output outputs/point_clouds/semantic_bridge_filtered.ply
+    # 5. Render RGB + semantic map from an arbitrary camera pose (contest submission artifact)
+    uv run python -m src.gaussian_splatting.render --checkpoint outputs/checkpoints/gaussians/final.pt \
+        --pose-line "..." --out-rgb rgb.png --out-sem sem.png
+
+    # 6. Evaluate: PSNR/SSIM/LPIPS + mIoU on the 60 never-trained holdout views
+    uv run python -m src.evaluation.render_metrics --checkpoint outputs/checkpoints/gaussians/final.pt
     ```
 - **Status**:  **Fully documented in root README.md.**
 
@@ -84,13 +98,13 @@ According to the official competition guidelines extracted from [`docs/required-
   submission_dataset_bundle/
   ├── raw_contest_dataset/          # 400 images + camera_parameters/
   ├── gt_masks/                     # 300 ground-truth PNG masks
-  ├── pseudo_masks/                 # 100 AI-predicted masks for unlabeled frames
-  └── point_clouds/                 # Reconstructed 3D semantic models (.ply)
-      ├── semantic_bridge_sparse.ply
-      ├── semantic_bridge_gpu.ply
-      └── semantic_bridge_filtered.ply
+  ├── pseudo_masks/                 # 100 AI-predicted masks for unlabeled frames (Task A)
+  ├── checkpoints/
+  │   ├── segformer_mitb0/best.pt       # Task A segmentation checkpoint
+  │   └── gaussians/final.pt            # Task B Semantic Gaussian Splatting checkpoint (scored)
+  └── eval/render_eval_report.md    # PSNR/SSIM/LPIPS + mIoU on the 60 holdout views
   ```
-- **Action Needed**: Upload final `.ply` point clouds and trained model checkpoints to Google Drive and generate a public read-only link prior to submission.
+- **Action Needed**: Upload trained model checkpoints to Google Drive and generate a public read-only link prior to submission.
 - **Status**: 🟡 **Local dataset ready; Cloud link to be generated upon final model export.**
 
 ---
@@ -100,11 +114,10 @@ According to the official competition guidelines extracted from [`docs/required-
 - **Recommended 10-Minute Script Structure**:
   | Time Window | Section | Key Talking Points |
   | :---: | :--- | :--- |
-  | **0:00 – 1:30** | **1. Problem Statement & Challenges** | Drone photogrammetry, SfM camera noise, slender stay-cable challenges. |
-  | **1:30 – 3:30** | **2. Task A: 2D Semantic Segmentation** | Semi-supervised learning (YOLO-seg / SegFormer), handling 100 unlabeled frames. |
-  | **3:30 – 5:30** | **3. Task B: 3D Triangulation & Semantic Fusion** | LO-RANSAC DLT triangulation, Look-Up Table (LUT) back-projection, Majority Voting with $>50\%$ cable safeguard. |
-  | **5:30 – 7:30** | **4. Structure-Aware 3D Filtering** | Domain priors: Deck 2-pass PCA plane, Tower shaft K-Means clustering, Cable Fan Sheet snapping (Hu et al. 2020). |
-  | **7:30 – 9:00** | **5. Experimental Results & Visualizations** | 3D mIoU, Reprojection Error $< 0.8\text{ px}$, Deck Planarity MAD $< 0.05\text{ m}$, 3D interactive Plotly demo. |
+  | **0:00 – 1:30** | **1. Problem Statement & Challenges** | Official brief: render RGB+semantic from blind test viewpoints; SfM camera noise, slender stay-cable challenges. |
+  | **1:30 – 3:30** | **2. Task A: 2D Pseudo-Labeling** | SegFormer (mit-b0) fine-tuning, 240/60 trajectory-interleaved split, pseudo-labeling 100 unlabeled frames. |
+  | **3:30 – 6:30** | **3. Task B: Semantic 3D Gaussian Splatting** | Fused RGB + semantic-logit rasterization (`gsplat`), sparse-cloud + voted-class warm start, `DefaultStrategy` densification. |
+  | **6:30 – 9:00** | **4. Experimental Results & Visualizations** | Accuracy Score = 0.5×Visual Fidelity (PSNR/SSIM/LPIPS) + 0.5×Semantic mIoU on the 60 holdout views; `render.py` novel-view demo. |
   | **9:00 – 10:00** | **6. Conclusion & SHM Implications** | Digital Twin integration for structural health monitoring (vibration & displacement). |
 - **Status**: ⚪ **To be recorded after final experimental results.**
 
@@ -115,15 +128,14 @@ According to the official competition guidelines extracted from [`docs/required-
 - **Slide Deck Outline (12–15 Slides)**:
   1. *Title Slide*: Project Title, Team Members, Affiliations, IC-SHM 2026.
   2. *Introduction & Background*: Digital Twins for Cable-Stayed Bridges.
-  3. *Problem Decomposition*: Two-Task Architecture (Task A + Task B).
+  3. *Problem Decomposition*: Task A (2D pseudo-labeling) + Task B (Semantic 3D Gaussian Splatting).
   4. *Dataset Survey & Camera Geometry*: `SIMPLE_RADIAL` intrinsics, 400 registered frames.
-  5. *Task A Methodology*: Semi-Supervised Segmentation on 100 Unlabeled Frames.
-  6. *Task B Triangulation & LUT Projection*: Fast multi-view voting.
-  7. *Structure-Aware Geometric Filtering*: Mathematical formulation of bridge priors.
-  8. *Quantitative Benchmarks*: 2D/3D mIoU, Reprojection Error, Deck MAD, Cable Deviation.
-  9. *Ablation Studies*: Impact of Cable Majority Rule & Geometric Snapping.
-  10. *Interactive 3D Visualizations*: Before vs. After filtering point clouds.
-  11. *Conclusion & Future Work*: UAV vision vibration & SHM integration.
+  5. *Task A Methodology*: SegFormer fine-tuning, pseudo-labeling the 100 unlabeled frames.
+  6. *Task B Methodology*: Fused RGB+semantic rasterization, sparse-cloud warm start, densification.
+  7. *Quantitative Benchmarks*: Accuracy Score (PSNR/SSIM/LPIPS + mIoU) on the 60 holdout views.
+  8. *Ablation Studies*: Impact of semantic warm-start, pseudo-mask supervision, densification.
+  9. *Interactive Visualizations*: Novel-view RGB + semantic renders vs. ground truth.
+  10. *Conclusion & Future Work*: UAV vision vibration & SHM integration.
 - **Status**: ⚪ **Template structure planned; slides to be assembled.**
 
 ---
@@ -136,16 +148,17 @@ According to the official competition guidelines extracted from [`docs/required-
     - Multi-view Structure-from-Motion (Schönberger et al., Lowe SIFT).
     - 2D/3D Structural Bridge Segmentation (Lin et al. 2025, Hu et al. 2020).
   - **Section 3: Proposed Pipeline Architecture**:
-    - Sub-task A: Semi-Supervised 2D Segmentation & Pseudo-Labeling.
-    - Sub-task B1: Multi-View LO-RANSAC Triangulation & LUT Semantic Fusion.
-    - Sub-task B2: Structure-Aware Geometric Filtering (Deck PCA, Tower Tube, Cable Fan Planes).
+    - Sub-task A: 2D Segmentation & Pseudo-Labeling (SegFormer mit-b0).
+    - Sub-task B: Semantic 3D Gaussian Splatting (fused RGB + semantic-logit rasterization),
+      initialized from a triangulated sparse cloud and per-point voted semantic class.
   - **Section 4: Experiments & Dataset Setup**:
     - IC-SHM 2026 Dataset breakdown (300 labeled + 100 unlabeled + SfM parameters).
-    - Evaluation metrics ($mIoU_{3D}, IoU_{\text{cable}}$, Reprojection Error, Planarity MAD).
+    - Official evaluation metrics: Accuracy Score = 0.5×Visual Fidelity (PSNR/SSIM/LPIPS) +
+      0.5×Semantic mIoU, on the 60-view trajectory-interleaved holdout.
   - **Section 5: Results & Discussion**:
-    - Quantitative comparison tables.
-    - Qualitative 3D point cloud renderings.
-    - Ablation analysis on geometric filtering stages.
+    - Quantitative comparison tables (Accuracy Score, per-class IoU).
+    - Qualitative novel-view RGB + semantic renderings vs. ground truth.
+    - Ablation analysis: semantic warm-start, pseudo-mask supervision, densification.
   - **Section 6: Conclusion**: Summary of findings and practical implications for SHM Digital Twins.
 - **Status**: ⚪ **Draft outline established; text to be written using the IC-SHM template.**
 

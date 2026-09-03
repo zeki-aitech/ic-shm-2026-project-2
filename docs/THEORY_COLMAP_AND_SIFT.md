@@ -345,7 +345,7 @@ COLMAP reconstructs purely geometric 3D points $(X, Y, Z)$ without semantic clas
                  RGB Color = (0, 255, 255) Cyan
 ```
 
-### Multi-View Majority Voting Rules (in `src/reconstruction/semantic_projector.py`):
+### Multi-View Majority Voting Rules (in `src/colmap_io/semantic_voting.py`):
 1. **Slender Structure Safeguard**: Due to thin cable boundaries, a 3D point is assigned to `stay_cable` (Class 2) **only if it achieves strict absolute majority ($> 50\%$)** across observing views.
 2. **Plurality Voting**: If no absolute majority exists for cables, cable votes are discarded and plurality voting applies across remaining structural classes (`tower`, `deck`, `foundation`).
 3. **Geometric Prior Filtering**: Post-fusion, structural filters (`filter_deck_plane`, `filter_tower_core`, `filter_cable_tower_planes`) remove remaining semantic boundary bleed and multi-path reflection noise.

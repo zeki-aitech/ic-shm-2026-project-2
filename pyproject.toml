@@ -1,16 +1,14 @@
 [project]
 name = "ic-shm-2026-project2"
 version = "0.1.0"
-description = "Structure-Aware 3D Semantic Point Cloud Reconstruction for Cable-Stayed Bridges"
+description = "Multi-view Semantic 3D Reconstruction of Bridge Structures (Semantic 3D Gaussian Splatting)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.11"  # gsplat's prebuilt CUDA wheel (see [tool.uv.sources]) is cp310-only
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "pillow>=9.5.0",
     "matplotlib>=3.7.0",
-    "open3d>=0.17.0",
-    "plotly>=5.15.0",
     "pandas>=2.0.0",
     "tqdm>=4.65.0",
     "opencv-python-headless>=4.8.0",
@@ -21,10 +19,15 @@ dependencies = [
 
 [project.optional-dependencies]
 deeplearning = [
-    "torch>=2.0.0",
-    "torchvision>=0.15.0",
-    "transformers>=4.35.0",
+    # Pinned to the exact combo with a prebuilt gsplat CUDA wheel (see [tool.uv.sources] below) -
+    # avoids JIT-compiling gsplat's CUDA kernels, which is fragile across CUDA toolkit versions.
+    "torch==2.4.1",
+    "torchvision==0.19.1",
+    "transformers>=4.35.0,<5.0",  # transformers>=5.0 requires torch>=2.5, incompatible with the gsplat==1.5.3 wheel's torch==2.4.1 pin
     "albumentations>=1.3.0",
+    "gsplat==1.5.3",
+    "lpips>=0.1.4",
+    "setuptools",  # gsplat's backend imports torch.utils.cpp_extension at load time, which needs setuptools even when only loading its prebuilt CUDA wheel
 ]
 
 [dependency-groups]
@@ -32,6 +35,16 @@ dev = [
     "pytest>=7.4.0",
     "ruff>=0.1.0",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+gsplat = { url = "https://github.com/nerfstudio-project/gsplat/releases/download/v1.5.3/gsplat-1.5.3%2Bpt24cu121-cp310-cp310-linux_x86_64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
 
 [build-system]
 requires = ["setuptools>=61.0"]

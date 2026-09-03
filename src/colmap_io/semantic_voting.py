@@ -1,3 +1,11 @@
+"""
+2D-to-3D semantic back-projection via multi-view majority voting.
+
+For every triangulated 3D point, samples the 2D semantic mask class at each observing camera's
+pixel location and votes a single class per point. This is used to warm-start the Semantic
+Gaussian Splatting model's per-Gaussian semantic logits (`src/gaussian_splatting/model.py`)
+instead of random initialization.
+"""
 import os
 import time
 from collections import Counter
@@ -5,8 +13,8 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 from PIL import Image
 
-from src.reconstruction.models import Point3D
-from src.reconstruction.pycolmap_reconstructor import PycolmapReconstructor
+from src.colmap_io.models import Point3D
+from src.colmap_io.reconstructor import PycolmapReconstructor
 
 
 CLASS_NAMES = {
@@ -73,18 +81,13 @@ def vote_majority_class(labels: List[int]) -> int:
 
 
 class SemanticProjector:
-    """
-    Back-projects 2D Ground-Truth PNG mask labels onto 3D sparse points
-    using multi-view majority voting, and exports a colored semantic PLY point cloud.
-    """
+    """Back-projects 2D mask labels onto 3D sparse points using multi-view majority voting."""
 
-    def __init__(self, colmap_dir: str, gt_masks_dir: str, output_dir: str, parser=None):
+    def __init__(self, colmap_dir: str, gt_masks_dir: str, parser=None):
         self.colmap_dir = colmap_dir
         self.gt_masks_dir = gt_masks_dir
-        self.output_dir = output_dir
 
-        # Any object with load() -> (camera, images, points3d) works,
-        # e.g. PycolmapReconstructor or ReconstructionAdapter.
+        # Any object with load() -> (camera, images, points3d) works, e.g. PycolmapReconstructor.
         self.parser = parser if parser is not None else PycolmapReconstructor(colmap_dir)
         self.mask_cache: Dict[str, np.ndarray] = {}
 
@@ -105,13 +108,11 @@ class SemanticProjector:
         return None
 
     def preload_masks(self) -> int:
-        """
-        Preloads all available Ground-Truth PNG masks into memory.
-        """
+        """Preloads all available semantic mask PNGs from `gt_masks_dir` into memory."""
         t0 = time.time()
-        print(f"🔄 Preloading GT masks from '{self.gt_masks_dir}'...")
+        print(f"🔄 Preloading masks from '{self.gt_masks_dir}'...")
         if not os.path.exists(self.gt_masks_dir):
-            raise FileNotFoundError(f"GT masks directory not found at {self.gt_masks_dir}")
+            raise FileNotFoundError(f"Masks directory not found at {self.gt_masks_dir}")
 
         mask_files = [f for f in os.listdir(self.gt_masks_dir) if f.endswith('.png')]
         for mf in mask_files:
@@ -119,13 +120,11 @@ class SemanticProjector:
             self.mask_cache[mpath] = np.array(Image.open(mpath), dtype=np.uint8)
 
         t1 = time.time()
-        print(f"✅ Loaded {len(self.mask_cache)} GT mask images into cache in {t1-t0:.2f}s!")
+        print(f"✅ Loaded {len(self.mask_cache)} mask images into cache in {t1-t0:.2f}s!")
         return len(self.mask_cache)
 
     def project(self) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
-        """
-        Executes 2D-to-3D back-projection using multi-view majority voting.
-        """
+        """Executes 2D-to-3D back-projection using multi-view majority voting."""
         t0 = time.time()
         print("🔄 Executing 2D-to-3D Semantic Back-Projection...")
         cam, images, self.pts3d = self.parser.load()
@@ -174,50 +173,3 @@ class SemanticProjector:
             print(f"  Class {cid} ({cname:12s}): {cnt:6d} points ({pct:5.2f}%)")
 
         return self.point_classes, self.point_colors
-
-    def export_ply(self, output_path: str) -> str:
-        """
-        Exports the triangulated points and their 3D semantic colors to a standard ASCII PLY file.
-        """
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        print(f"🔄 Exporting Semantic Point Cloud to '{output_path}'...")
-
-        num_points = len(self.pts3d)
-
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write("ply\n")
-            f.write("format ascii 1.0\n")
-            f.write(f"element vertex {num_points}\n")
-            f.write("property float x\n")
-            f.write("property float y\n")
-            f.write("property float z\n")
-            f.write("property uchar red\n")
-            f.write("property uchar green\n")
-            f.write("property uchar blue\n")
-            f.write("property int class_id\n")
-            f.write("end_header\n")
-
-            for p3d_id, pt3d in self.pts3d.items():
-                x, y, z = pt3d.xyz
-                r, g, b = self.point_colors[p3d_id]
-                cid = self.point_classes[p3d_id]
-                f.write(f"{x:.6f} {y:.6f} {z:.6f} {r} {g} {b} {cid}\n")
-
-        print(f"✅ PLY export complete! File size: {os.path.getsize(output_path) / 1024 / 1024:.2f} MB")
-        return output_path
-
-    def run(self, output_filename: str = "semantic_bridge_sparse.ply") -> str:
-        self.project()
-        output_path = os.path.join(self.output_dir, output_filename)
-        return self.export_ply(output_path)
-
-
-if __name__ == "__main__":
-    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    DATASET_DIR = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
-    COLMAP_DIR = os.path.join(DATASET_DIR, "camera_parameters")
-    GT_MASKS_DIR = os.path.join(PROJECT_ROOT, "outputs", "gt_masks")
-    OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs", "point_clouds")
-
-    projector = SemanticProjector(COLMAP_DIR, GT_MASKS_DIR, OUTPUT_DIR)
-    projector.run()

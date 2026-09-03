@@ -6,7 +6,7 @@ import numpy as np
 # Add project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.reconstruction.models import CameraIntrinsics, ImagePose, Point3D
+from src.colmap_io.models import CameraIntrinsics, ImagePose, Point3D
 
 
 class TestModels(unittest.TestCase):

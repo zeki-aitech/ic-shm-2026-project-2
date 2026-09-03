@@ -1,12 +1,45 @@
 # IC-SHM 2026 (Project 2) — Technical Specifications & Problem Survey
 
-**Project**: Structure-Aware 3D Semantic Point Cloud Reconstruction for Cable-Stayed Bridges  
-**Survey Date**: September 2026  
-**Goal**: Reconstruct structure-aware semantic 3D point clouds for cable-stayed bridges from multi-view UAV photogrammetry and SfM camera parameters.
+**Project**: Multi-view Semantic 3D Reconstruction of Bridge Structures
+**Survey Date**: September 2026
+
+> ## ⚠️ Official Source of Truth
+> The authoritative task definition and scoring rule for Project 2 are stated verbatim in
+> `data/Contest Dataset/The 4th International Project Competition for SHM_2026.pdf`, pp. 9-10
+> ("Project 2: Multi-view Semantic 3D Reconstruction of Bridge Structures"):
+>
+> - **Task**: *"Participants must develop a model that reconstructs a semantically labeled 3D
+>   representation of a bridge structure from multi-view images."*
+> - **Goal & Evaluation**: submitted models are evaluated on a **separate blind test set** of
+>   camera viewpoints on two criteria:
+>   1. **Visual fidelity** — the reconstructed 3D model is rendered from the test viewpoints and
+>      compared with the original photos via **PSNR, SSIM, and LPIPS**.
+>   2. **Semantic accuracy** — the reconstructed 3D model is rendered into semantic maps (official
+>      class IDs) from the test viewpoints and compared with GT via **mIoU**.
+>   $$\text{Accuracy Score} = 0.50 \times \text{Visual Fidelity Score} + 0.50 \times \text{Semantic mIoU Score}$$
+> - **Submission requirement**: any reconstruction methodology is allowed (point-based, mesh-based,
+>   implicit neural representations, or **3D Gaussian Splatting**), but the submitted model/script
+>   must be able to generate **both** an RGB image and a semantic map from the provided test
+>   viewpoints, using official class IDs, so the organizers can evaluate automatically.
+>
+> **Everything below this notice that references a 3D point-cloud output, $mIoU_{3D}$ measured
+> directly on point classifications, or the Pillar-1/2/3 SHM-prior metric targets was this
+> repository's own early-stage survey/interpretation, written before the official PDF brief was
+> available in this repo — it does **not** define the official scoring rule above, and the
+> point-cloud reconstruction + geometric-filtering pipeline it describes (deck plane fitting,
+> tower core tube, cable fan planes) has since been **removed from this repository** rather than
+> kept as a parallel deliverable. What remains from that earlier work is the camera/pose loading
+> and triangulation infrastructure (`src/colmap_io/`), which the current pipeline reuses to load
+> posed training views and to warm-start the Gaussian Splatting model's parameters from a real
+> triangulated, semantically-voted sparse cloud instead of random initialization (see
+> `src/gaussian_splatting/model.py::init_from_sparse`). The actual implementation matching the
+> official brief lives in `src/gaussian_splatting/` (3D reconstruction + rendering) and
+> `src/segmentation/` (2D pseudo-labeling of the unlabeled frames) — see the root `README.md`
+> for the pipeline and CLI commands.**
 
 ---
 
-## I. PROBLEM STATEMENT & OBJECTIVES
+## I. PROBLEM STATEMENT & OBJECTIVES (historical survey — superseded by the official PDF above)
 
 ### 1. Primary Objective
 The core objective of **IC-SHM 2026 Project 2** is to build a high-fidelity **As-is 3D Semantic Digital Twin** of a real-world cable-stayed bridge by fusing multi-view drone photogrammetry, Structure-from-Motion (SfM) camera poses, and 2D semantic image segmentations.
@@ -15,34 +48,36 @@ The output is a clean, labeled 3D point cloud (`.ply`) where every spatial coord
 
 ---
 
-### 2. Two-Task Problem Decomposition
-
-The overall challenge naturally decomposes into **two complementary technical tasks**:
+### 2. Two-Task Problem Decomposition (this repo's implementation — reframed to match the official rendering-based Accuracy Score)
 
 ```text
  ┌─────────────────────────────────────────────────────────────────────────────┐
  │                      TASK A: 2D SEMANTIC SEGMENTATION                       │
- │  • Train deep learning models (e.g. SegFormer, Mask2Former, SAM, UNet)      │
+ │  • src/segmentation/: fine-tunes SegFormer (mit-b0) on the 240-image        │
+ │    trajectory-interleaved train split                                       │
  │  • Input: Labeled UAV images (300 frames) with Labelme polygon JSON masks   │
- │  • Output: Predict 2D masks for remaining unlabeled frames (~100 images)    │
- │  • Metric: 2D mIoU, Dice coefficient, Boundary F1                           │
+ │  • Output: Pseudo-masks for the 100 unlabeled frames (outputs/pseudo_masks) │
+ │  • Metric: 2D mIoU on the 60-image holdout (paper-reported, not organizer-  │
+ │    scored - Project 2 has no standalone 2D-mIoU criterion in the PDF)       │
  └──────────────────────────────────────┬──────────────────────────────────────┘
                                         │
-                                        ▼ Multi-View Back-Projection
+                                        ▼ Widens semantic supervision for Task B
  ┌─────────────────────────────────────────────────────────────────────────────┐
- │            TASK B: 3D RECONSTRUCTION, SEMANTIC FUSION & FILTERING           │
- │  • 3D Triangulation from SfM camera poses and 2D feature tracks             │
- │  • Multi-View Majority Voting for robust 2D-to-3D label propagation         │
- │  • Structure-Aware 3D Filtering: deck plane, tower tube, cable fan planes   │
- │  • Output: High-density, cleaned semantic ASCII .ply point cloud            │
- │  • Metric: 3D mIoU, Reprojection Error < 1.0 px, Planarity MAD < 0.05 m     │
+ │       TASK B: SEMANTIC 3D GAUSSIAN SPLATTING (officially scored task)       │
+ │  • src/gaussian_splatting/: fused RGB + per-class semantic-logit            │
+ │    rasterization (gsplat), trained on 240 GT-mask + 100 pseudo-mask views   │
+ │  • Gaussian means/colors/semantic-logits warm-started from this repo's      │
+ │    triangulated + semantically-voted sparse cloud (see Section III below)   │
+ │  • Output: render.py renders RGB + semantic map from ANY camera viewpoint   │
+ │  • Metric: Accuracy Score = 0.5*Visual Fidelity (PSNR/SSIM/LPIPS) +         │
+ │    0.5*Semantic mIoU, evaluated on the 60 never-trained holdout views       │
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Task | Core Objective | Inputs | Key Deliverables & Target Metrics |
+| Task | Core Objective | Inputs | Deliverables & Metrics |
 | :---: | :--- | :--- | :--- |
-| **Task A: 2D Semantic Segmentation** | Learn 2D structural component boundaries to segment drone images and automatically annotate unlabeled frames. | `images/` (labeled) + `json/` (Labelme polygons), `unlabeled_Images/` | Per-frame 8-bit PNG semantic masks; 2D $mIoU > 85.0\%$, $IoU_{\text{cable}} > 75.0\%$. |
-| **Task B: 3D Geometric Reconstruction & Fusion** | Triangulate sparse/dense 3D points, back-project 2D segmentations, and filter floating noise using structural bridge priors. | `camera_parameters/` (`cameras.txt`, `images.txt`), 2D masks from Task A | Clean 3D semantic `.ply` cloud; 3D $mIoU > 85.0\%$, Reprojection Error $< 1.0\text{ px}$, Cable Fan Deviation $< 0.10\text{ m}$. |
+| **Task A: 2D Pseudo-Labeling** | Fine-tune a 2D segmenter to pseudo-label the 100 unlabeled frames, widening Task B's semantic supervision. | `images/` + `json/` (Labelme polygons), `unlabeled_Images/` | `outputs/pseudo_masks/*.png`; 2D mIoU on 60-image holdout (internal/paper metric). |
+| **Task B: Semantic 3D Gaussian Splatting** | Reconstruct a model that renders RGB + semantic maps from arbitrary viewpoints. | `camera_parameters/`, GT + pseudo masks | `render.py` CLI; **officially scored**: Accuracy Score on 60 holdout views. |
 
 ---
 
@@ -97,7 +132,7 @@ The `pycolmap` module in our codebase serves three distinct functional roles dep
 
 1. **Mandatory 3D Point Triangulation (LO-RANSAC)**:
    - **Why It Is Required**: The contest dataset delivers camera intrinsics (`cameras.txt`) and 2D feature observations (`images.txt`), but **does not contain precomputed 3D coordinates (`points3D.txt`)**.
-   - **Action**: `pycolmap_reconstructor.py` solves multi-view optical ray intersections using **LO-RANSAC Triangulation** to compute $(X, Y, Z)$ coordinates and reprojection errors for all 86,336 feature tracks.
+   - **Action**: `src/colmap_io/reconstructor.py` (`PycolmapReconstructor`) solves multi-view optical ray intersections using **LO-RANSAC Triangulation** to compute $(X, Y, Z)$ coordinates and reprojection errors for all 86,336 feature tracks.
 2. **Camera Pose Refinement & Calibration (Bundle Adjustment)**:
    - **Why It Is Useful**: As stated in the contest `README.md`, the provided camera parameters are reference SfM estimates rather than ground truth.
    - **Action**: The pipeline can run **Global / Local Bundle Adjustment (BA)** to jointly refine focal length $f$, distortion $k_1$, and 6-DOF camera poses ($R, T$) to minimize residual reprojection drift below $1.0\text{ px}$.
@@ -123,37 +158,44 @@ The `pycolmap` module in our codebase serves three distinct functional roles dep
 
 ---
 
-## III. ARCHITECTURE & ADVANCED ALGORITHMS
+## III. ARCHITECTURE & ADVANCED ALGORITHMS (historical survey; §1-2 still implemented, §3 removed)
 
-### 1. 2D Mask Generation & Drawing Order (`json_to_mask.py`)
+### 1. 2D Mask Generation & Drawing Order (`src/utils/json_to_mask.py`) — still implemented
 Polygon masks from Labelme JSON are rendered in strict ascending priority:
 $$\text{deck (1)} \longrightarrow \text{tower (3)} \longrightarrow \text{foundation (4)} \longrightarrow \mathbf{\text{stay\_cable (2)}}$$
 Drawing `stay_cable` on the top layer ensures thin cable lines are never overwritten by broader deck or pylon masks.
 
-### 2. 2D-to-3D Back-Projection & Multi-View Voting (`semantic_projector.py`)
+### 2. 2D-to-3D Back-Projection & Multi-View Voting (`src/colmap_io/semantic_voting.py`) — still implemented
 - For every triangulated 3D point $X_i$, retrieve all 2D observations $(u_{ik}, v_{ik})$ across observing cameras $I_k$.
 - Sample 2D class label $L_{ik} = \text{Mask}_k(u_{ik}, v_{ik})$.
 - **Voting Decision Rules**:
   - `stay_cable` requires **strict absolute majority** ($> 50\%$).
   - If cable count fails to reach $>50\%$, cable votes are dropped and plurality voting applies to remaining classes.
   - Ties are broken via `TIE_BREAK_PRIORITY` (`tower` > `foundation` > `deck` > `background`).
+- Used today to warm-start the Gaussian Splatting model's per-Gaussian semantic logits (see `src/gaussian_splatting/model.py::init_from_sparse`), not to export a standalone point cloud.
 
-### 3. Structure-Aware 3D Geometric Filtering Pipeline (`point_cloud_filter.py`)
+### 3. Structure-Aware 3D Geometric Filtering Pipeline — **removed from this repository**
+This subsection previously described `point_cloud_filter.py` (deck plane fitting, tower core
+tube, cable fan-plane snapping) in detail. That module, its 2D-mask-refinement notebooks, and
+the PLY-export/visualization tooling around it have been deleted as part of the pivot to the
+render-based Gaussian Splatting pipeline (see the banner at the top of this document). The
+algorithm descriptions below are kept only as a reference for anyone who wants to reintroduce a
+similar geometric-filtering analysis in the future.
 
 1. **Bridge-Local Coordinate Frame**:
    - Estimates world gravity / vertical axis $v$ from UAV camera roll statistics (near-zero roll).
    - Computes longitudinal axis $u$ along the deck span and lateral axis $w$ perpendicular to span ($w = u \times v$).
-2. **Deck Plane Fitting (`filter_deck_plane`)**:
+2. **Deck Plane Fitting**:
    - 2-pass PCA plane fitting on deck points with Median Absolute Deviation (MAD) residual thresholding.
-3. **Deck Core Density (`filter_deck_core_density`)**:
+3. **Deck Core Density**:
    - k-NN density estimation in the bridge $(u, w)$ plane to prune coplanar outliers beyond the roadway boundary.
-4. **Tower Shaft Core Tube (`filter_tower_core`)**:
+4. **Tower Shaft Core Tube**:
    - Clusters tower shafts along the longitudinal axis via 1D K-Means, then bounds points within a narrow $(u, w)$ tube per shaft.
-5. **Stay-Cable Structural Envelope (`filter_cable_structural_envelope`)**:
+5. **Stay-Cable Structural Envelope**:
    - Enforces physical bounding volumes: height restricted to $[h_{\text{deck}}, h_{\text{tower\_top}}]$ and span restricted to bridge corridor.
-6. **Tower-Anchored Fan Planes (`filter_cable_tower_planes`)**:
+6. **Tower-Anchored Fan Planes**:
    - Identifies lateral offsets $d_{\text{left}}, d_{\text{right}}$ of the two cable fan sheets from tower face percentiles. Removes cables exceeding lateral deviation tolerance $\tau$.
-7. **Geometric Cable Snapping (`project_cables_to_fan_planes`)**:
+7. **Geometric Cable Snapping**:
    - Projects cable points perpendicularly onto the nearest fan plane along axis $w$, preserving true elevation $z$ and producing planar sheets for CAD/BIM modeling.
 
 ---

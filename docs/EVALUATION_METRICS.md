@@ -1,6 +1,52 @@
 # IC-SHM 2026 (Project 2) — Evaluation Framework & Performance Metrics
 
-This document outlines the comprehensive evaluation methodology for the **Structure-Aware 3D Semantic Point Cloud Reconstruction of Cable-Stayed Bridges**. The evaluation protocol integrates **3D Semantic Segmentation Metrics**, **3D Geometric Reconstruction Accuracy**, and **Domain-Specific Structural Health Monitoring (SHM) Constraints**.
+## 0. Official Contest Scoring (authoritative)
+
+Per `data/Contest Dataset/The 4th International Project Competition for SHM_2026.pdf` (pp. 9-10),
+Project 2 submissions are scored on a **blind test set of camera viewpoints** using exactly two
+criteria:
+
+| Criterion | What is compared | Metric(s) |
+| :--- | :--- | :--- |
+| **Visual Fidelity** | Rendered RGB image from a test viewpoint vs. the real photo | PSNR, SSIM, LPIPS |
+| **Semantic Accuracy** | Rendered semantic map (official class IDs) vs. GT label map | mIoU |
+
+$$\text{Accuracy Score} = 0.50 \times \text{Visual Fidelity Score} + 0.50 \times \text{Semantic mIoU Score}$$
+
+This repository implements that scoring locally in `src/evaluation/render_metrics.py`
+(`evaluate_render_holdout` / `RenderEvalReport`), evaluated on the trajectory-interleaved 60-image
+holdout split that is never used during training (`src.evaluation.metrics.trajectory_interleaved_split`)
+as a stand-in for the organizers' blind test set. `compute_psnr`/`compute_ssim` use
+`skimage.metrics`; `compute_lpips` uses the `lpips` package; mIoU reuses
+`compute_confusion_matrix`/`compute_iou_per_class`/`compute_miou` from `src/evaluation/metrics.py`.
+The exact intra-"Visual Fidelity" combination of PSNR/SSIM/LPIPS into one number is **not**
+specified by the organizers — `RenderEvalReport` reports all three separately plus a clearly
+labeled, non-authoritative illustrative combination, so the real per-metric numbers are always
+visible regardless of how the organizers ultimately weight them.
+
+The submitted deliverable that gets scored is `src/gaussian_splatting/render.py`: given any
+camera pose, it renders an RGB PNG and a semantic-class PNG (official IDs 0-4) from the trained
+`SemanticGaussianModel`.
+
+---
+
+## Appendix: Historical Structure-Aware Metric Definitions (not used for official scoring, no longer wired into any pipeline)
+
+Everything below this point was this repository's own early-stage survey of plausible evaluation
+criteria, written before the official PDF brief (Section 0 above) was available in this repo. It
+does not define how Project 2 submissions are actually scored, and is kept only as a reference
+for the underlying math (deck plane fitting, cable fan plane deviation, Sim(3) alignment, etc.) -
+**the point-cloud reconstruction and geometric-filtering pipeline that used to produce inputs for
+these metrics has been removed from this repository** (it duplicated work that the official
+brief does not require; only camera/pose loading and semantic voting were kept, in
+`src/colmap_io/`, since Task B's Gaussian Splatting model still needs them to load posed views
+and warm-start its parameters).
+
+The pure-function metric implementations themselves (`compute_deck_planarity_mad`,
+`compute_cable_fan_deviation`, `compute_cable_dispersion_metrics`, `compute_spatial_point_density`,
+`umeyama_sim3_alignment` in `src/evaluation/metrics.py`) are still present and unit-tested, in
+case a future point-cloud export is added back and this analysis becomes relevant again for the
+paper's discussion section - but nothing in the current pipeline calls them.
 
 > **Research Alignment**: The selected metrics explicitly draw upon standards established in recent research:
 > - **Lin et al. (2025)**: Inspired our 2D/3D semantic metrics (mIoU, OA) and the explicit need to track slender elements like cables ($IoU_{\text{cable}}$).
