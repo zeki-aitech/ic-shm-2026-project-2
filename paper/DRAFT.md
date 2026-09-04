@@ -74,6 +74,9 @@ four bridge component classes (deck, stay cable, tower, foundation).
 5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.18 dB,
    SSIM 0.849, LPIPS 0.334, structural mIoU 91.47%.
 
+Our full implementation, including the scripts used to reproduce every number reported in this
+paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
+
 ---
 
 ## 2. Related Work
@@ -178,10 +181,9 @@ class would be counterproductive: with five competing classes, votes for an ambi
 (e.g., one partially occluded in a subset of views) split naturally, so failing to reach 50% is
 the common case rather than a useful signal, and a blanket majority requirement would simply
 discard many genuinely structural points into an uninformative fallback. We verified this
-asymmetry directly on the training-view vote data with `src/evaluation/vote_consistency.py`
-(`python -m src.evaluation.vote_consistency`, reproducing the numbers below and written to
-`outputs/eval/vote_consistency_report.md`): among the 75,963 sparse points with at least one
-train-view observation, computing each point's plurality-winning class and the vote share that
+asymmetry directly on the training-view vote data rather than assuming it: among the 75,963
+sparse points with at least one train-view observation, computing each point's plurality-winning
+class and the vote share that
 winner received shows deck, tower, foundation, and background winning with high, consistent
 margins (mean winning-class vote share 97.6–99.5%; the winner exceeds an absolute majority for
 98.1–99.3% of points won by that class), while stay_cable's plurality wins are markedly less
