@@ -88,8 +88,7 @@ class SemanticGaussianModel:
         """
         Warm-starts Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse
         cloud and semantic logits from `SemanticProjector`'s per-point voted class, instead of
-        random initialization - a genuine synergy between the existing point-cloud pipeline and
-        the new render-based one, not just legacy code left in place.
+        random initialization.
         """
         from scipy.spatial import cKDTree
 
