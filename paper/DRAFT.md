@@ -188,6 +188,22 @@ composited — rendering RGB and semantics together in one pass is both simpler 
 running two independent rasterization passes with duplicated projection and sorting work, and it
 guarantees the two outputs are pixel-aligned by construction.
 
+Crucially, the semantic channels are composited by the *same* alpha-blending rule as color: a
+rendered pixel's logit vector is an opacity- and depth-weighted combination of the semantic
+logits of every Gaussian whose projected splat covers that pixel, not a hard, per-pixel vote
+among discrete labels. The predicted class at a pixel is only resolved by taking the arg max of
+this blended logit vector at read-out time (Section 3.5). During training, this same
+differentiability is what lets semantic supervision reach the individual Gaussians: the
+cross-entropy loss described below is computed on the blended per-pixel logits, and its gradient
+is distributed back through the alpha-compositing weights to exactly the Gaussians that
+contributed to each supervised pixel, in proportion to their contribution. A Gaussian whose
+current class prediction is wrong for a given view is thus pushed toward the correct class, while
+one that is already correct has its logits reinforced — and because each Gaussian is typically
+observed by many training views from different angles over the course of optimization, its final
+semantic identity reflects an accumulation of evidence across the whole trajectory rather than
+any single observation. This is the same mechanism by which color and geometry are refined by the
+photometric loss, applied identically to the semantic channels.
+
 **Losses.** Training minimizes
 $\mathcal{L} = \mathcal{L}_{\text{photo}} + \lambda_{\text{sem}} \, w \, \mathcal{L}_{\text{sem}}$
 for each sampled training view. $\mathcal{L}_{\text{photo}} = 0.8\,\mathcal{L}_1 +
