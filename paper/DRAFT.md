@@ -177,14 +177,21 @@ the cable class, not to all five classes uniformly. Requiring an absolute majori
 class would be counterproductive: with five competing classes, votes for an ambiguous point
 (e.g., one partially occluded in a subset of views) split naturally, so failing to reach 50% is
 the common case rather than a useful signal, and a blanket majority requirement would simply
-discard many genuinely structural points into an uninformative fallback. The other three
-structural classes — deck, tower, foundation — are large, solid volumes with no comparable
-systematic bias in their 2D annotations, so their multi-view votes are already highly
-consistent whenever a point genuinely belongs to that class, and plain plurality suffices. Cable
-is the exception precisely because its label noise is systematic rather than random: it stems
-from the annotation process itself (a polygon necessarily traces a region around a thin cable,
-not the cable pixels alone), not merely from cable occupying few pixels, so only cable benefits
-from — and needs — this stricter threshold. The winning class is encoded as a scaled one-hot
+discard many genuinely structural points into an uninformative fallback. We verified this
+asymmetry directly on the training-view vote data: among the 75,963 sparse points with at least
+one train-view observation, computing each point's plurality-winning class and the vote share
+that winner received shows deck, tower, foundation, and background winning with high, consistent
+margins (mean winning-class vote share 97.6–99.5%; the winner exceeds an absolute majority for
+98.1–99.3% of points won by that class), while stay_cable's plurality wins are markedly less
+consistent (mean vote share 92.0%; only 94.6% clear an absolute majority). Applying the strict
+majority rule to the raw vote counts reclassifies 416 of the 7,673 points that plain plurality
+would have labeled cable (5.4%) to a different class — and 384 of those 416 (92.3%) move
+specifically to background, not to deck or tower, which is precisely the pattern predicted by
+the background-bleeding hypothesis rather than one consistent with generic vote noise. Cable is
+the exception precisely because its label noise is systematic rather than random: it stems from
+the annotation process itself (a polygon necessarily traces a region around a thin cable, not
+the cable pixels alone), not merely from cable occupying few pixels, so only cable benefits from
+— and needs — this stricter threshold. The winning class is encoded as a scaled one-hot
 logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
 semantic channel begins optimization from an informed prior instead of from noise, while
 remaining free to be corrected by the photometric and semantic losses during training.
@@ -333,24 +340,26 @@ each cable polygon is actually sky or water background — the "background-bleed
 motivated our strict absolute-majority voting rule in Section 3.4. Under this framing, one would
 expect `stay_cable` to trail behind the other three structural classes. Our results show the
 opposite: at 92.13% IoU, cable outperforms both `tower` (91.13%) and `foundation` (87.52%),
-second only to `deck`. We attribute this to two design choices acting together rather than any
-single mechanism. First, the strict-majority voting rule used for the semantic warm-start
-(Section 3.4) discards exactly the kind of low-confidence, background-contaminated cable votes
-that would otherwise pollute a plurality vote, so the Gaussians seeded as `cable` at
-initialization are disproportionately the ones genuinely observed as cable from a majority of
-views, not sky pixels caught inside a coarse polygon. Second, because rendered semantic logits
-are alpha-composited identically to color (Section 3.4), a floating "cable" Gaussian that is
-actually sky contributes to the rendered semantic map only in proportion to its opacity and
-depth ordering at each pixel it projects onto; across the full set of training views, such
-spurious Gaussians receive inconsistent semantic gradients (correct from some angles, penalized
-from others) and are pushed toward lower opacity or corrected by the cross-entropy loss, rather
-than accumulating as confidently-labeled cable the way a genuinely thin, consistently-observed
-cable structure does. Together, these suggest that our architecture's resistance to background
-bleeding is not incidental but a direct consequence of combining a majority-vote warm-start with
-differentiable, multi-view semantic supervision. **[NEEDS: an ablation removing the
-strict-majority rule (falling back to plain plurality voting) and/or the semantic warm-start
-entirely, to isolate each mechanism's specific contribution to the cable IoU margin — would
-substantially strengthen this claim if time allows.]**
+second only to `deck`. We attribute this to two design choices acting together, one of which we
+can verify directly and one of which remains a plausible but untested hypothesis. First, the
+strict-majority voting rule used for the semantic warm-start (Section 3.4) measurably discards
+low-confidence, background-contaminated cable votes: of the 7,673 sparse points that plain
+plurality voting alone would have labeled cable, the strict rule reclassifies 416 (5.4%), and
+92.3% of those move specifically to background rather than to another structural class — direct
+confirmation that the rule is removing background-bleeding contamination rather than discarding
+votes at random. The Gaussians seeded as `cable` at initialization are therefore disproportionately
+the ones genuinely observed as cable from a majority of views. Second, we hypothesize that the
+fused alpha-compositing mechanism (Section 3.4) compounds this effect during training: a floating
+"cable" Gaussian that is actually sky would receive semantic gradients that are inconsistent
+across the views that observe it (correct from some angles, penalized from others), which should
+push it toward lower opacity or a corrected label rather than letting it accumulate as
+confidently-labeled cable. Unlike the warm-start effect above, this second mechanism has not been
+measured directly — verifying it would require tracking individual Gaussians' semantic-logit and
+opacity trajectories over training, which we leave to future work. **[NEEDS: an ablation training
+without the strict-majority rule (plain plurality only) and/or without the semantic warm-start
+entirely, to isolate each mechanism's contribution to the final cable IoU margin — the vote-level
+analysis above establishes that the warm-start data itself is cleaner, but not yet how much of
+the final 92.13% IoU that cleanliness is responsible for versus the training dynamics.]**
 
 `foundation` is the weakest of the four structural classes. The most likely explanation is
 viewpoint coverage rather than any class-specific representational difficulty: foundations sit
