@@ -195,12 +195,11 @@ class SemanticGaussianModel:
                 f.write(f"{x:.6f} {y:.6f} {z:.6f} {r} {g} {b} {int(c)}\n")
         return path
 
-    def export_splat_ply(self, path: str) -> str:
-        """Exports the full splat (position, scale, rotation, opacity, color) in the standard
-        3D Gaussian Splatting PLY format via `gsplat.export_splats`, viewable in any standard
-        splat viewer (e.g. SuperSplat, antimatter15/splat) with proper alpha-blended rendering
-        and free camera orbit - unlike `export_ply`, which only summarizes Gaussian centers as a
-        plain point cloud."""
+    def _export_splat_ply_with_colors(self, path: str, colors: torch.Tensor) -> str:
+        """Shared writer for `export_splat_ply`/`export_semantic_splat_ply`: standard 3D
+        Gaussian Splatting PLY format via `gsplat.export_splats`, viewable in any standard splat
+        viewer (e.g. SuperSplat, antimatter15/splat) with proper alpha-blended rendering and
+        free camera orbit. `colors`: (N, 3) in [0, 1]."""
         from gsplat import export_splats
 
         with torch.no_grad():
@@ -208,10 +207,30 @@ class SemanticGaussianModel:
             scales = self.params["scales"].detach()
             quats = torch.nn.functional.normalize(self.params["quats"].detach(), dim=-1)
             opacities = self.params["opacities"].detach()
-            colors = torch.sigmoid(self.params["colors"].detach())
             sh_c0 = 0.28209479177387814  # standard 3DGS degree-0 SH normalization constant
             sh0 = ((colors - 0.5) / sh_c0).unsqueeze(1)  # (N, 1, 3)
             shN = torch.zeros((means.shape[0], 0, 3), device=means.device, dtype=means.dtype)
 
             export_splats(means, scales, quats, opacities, sh0, shN, format="ply", save_to=path)
         return path
+
+    def export_splat_ply(self, path: str) -> str:
+        """Exports the full splat (position, scale, rotation, opacity, true RGB color) in the
+        standard 3D Gaussian Splatting PLY format - unlike `export_ply`, which only summarizes
+        Gaussian centers as a plain point cloud, this preserves splat shape/transparency."""
+        colors = torch.sigmoid(self.params["colors"].detach())
+        return self._export_splat_ply_with_colors(path, colors)
+
+    def export_semantic_splat_ply(self, path: str) -> str:
+        """Same as `export_splat_ply`, but colors each Gaussian by its predicted semantic class
+        (argmax of `sem_logits`, using the official per-class colors) instead of true RGB - lets
+        you visually inspect the 3D semantic segmentation in a standard splat viewer."""
+        from src.colmap_io.semantic_voting import CLASS_COLORS
+
+        with torch.no_grad():
+            classes = self.params["sem_logits"].detach().argmax(dim=-1).cpu().numpy()
+        lut = np.stack([CLASS_COLORS[c] for c in range(NUM_CLASSES)]).astype(np.float32) / 255.0
+        colors = torch.from_numpy(lut[classes]).to(
+            device=self.params["means"].device, dtype=self.params["means"].dtype
+        )
+        return self._export_splat_ply_with_colors(path, colors)

@@ -67,6 +67,14 @@ class TestGaussianModelInit(unittest.TestCase):
                 magic = f.read(3)
             self.assertEqual(magic, b"ply")
 
+    def test_export_semantic_splat_ply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.model.export_semantic_splat_ply(os.path.join(tmp, "splat_sem.ply"))
+            self.assertTrue(os.path.exists(path))
+            with open(path, "rb") as f:
+                magic = f.read(3)
+            self.assertEqual(magic, b"ply")
+
 
 if __name__ == "__main__":
     unittest.main()
