@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import torch
 
 from src.colmap_io.models import Point3D
-from src.gaussian_splatting.model import SemanticGaussianModel, NUM_CLASSES
+from src.gaussian_splatting.model import SemanticGaussianModel, NUM_CLASSES, _quat_to_rotmat
 from src.gaussian_splatting.dataset import GSCamera
 from src.gaussian_splatting.losses import photometric_loss, semantic_ce_loss
 
@@ -48,6 +48,35 @@ class TestGaussianRenderShapes(unittest.TestCase):
         self.assertIsNotNone(self.model.means.grad)
         self.assertGreater(self.model.means.grad.norm().item(), 0.0)
         self.assertIsNotNone(self.model.sem_logits.grad)
+
+    def test_identity_pose_delta_matches_uncorrected_render(self):
+        identity_quat = torch.tensor([1.0, 0.0, 0.0, 0.0], device="cuda")
+        zero_trans = torch.zeros(3, device="cuda")
+        out_a, _, _ = self.model.render_full(self.camera, packed=True)
+        out_b, _, _ = self.model.render_full(
+            self.camera, packed=True, pose_delta_quat=identity_quat, pose_delta_trans=zero_trans
+        )
+        torch.testing.assert_close(out_a, out_b)
+
+    def test_pose_delta_gradients_flow(self):
+        delta_quat = torch.tensor([1.0, 0.0, 0.0, 0.0], device="cuda", requires_grad=True)
+        delta_trans = torch.zeros(3, device="cuda", requires_grad=True)
+        out, _alpha, _meta = self.model.render_full(
+            self.camera, packed=True, pose_delta_quat=delta_quat, pose_delta_trans=delta_trans
+        )
+        rgb = out[0][..., :3].clamp(0, 1)
+        loss = photometric_loss(rgb, torch.rand_like(rgb))
+        loss.backward()
+        self.assertIsNotNone(delta_quat.grad)
+        self.assertIsNotNone(delta_trans.grad)
+        self.assertIsNotNone(self.model.means.grad)
+
+
+class TestQuatToRotmat(unittest.TestCase):
+    def test_identity_quaternion(self):
+        q = torch.tensor([1.0, 0.0, 0.0, 0.0])
+        R = _quat_to_rotmat(q)
+        torch.testing.assert_close(R, torch.eye(3))
 
 
 if __name__ == "__main__":

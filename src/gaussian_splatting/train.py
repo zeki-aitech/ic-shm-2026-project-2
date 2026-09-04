@@ -184,6 +184,8 @@ def train(
     ckpt_every: int = 2000,
     device: str = None,
     seed: int = 42,
+    optimize_poses: bool = False,
+    pose_lr: float = 1e-3,
 ):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(output_dir, exist_ok=True)
@@ -200,6 +202,22 @@ def train(
 
     optimizers = {k: torch.optim.Adam([v], lr=PARAM_LRS[k], eps=1e-15) for k, v in model.params.items()}
     means_lr_init, means_lr_final = PARAM_LRS["means"], PARAM_LRS["means"] * 0.01
+
+    # Optional per-image learnable pose correction (R' = dR @ R, T' = T + dT), jointly optimized
+    # with the Gaussians - refines the reference SfM poses (README: "reference only, not
+    # ground-truth") instead of trusting them as fixed. Held-out/blind-test rendering never uses
+    # these, since there is no way to "correct" a pose that was never observed during training.
+    pose_deltas: Dict[str, Dict[str, torch.nn.Parameter]] = {}
+    pose_optimizer = None
+    if optimize_poses:
+        for cam in train_cameras:
+            pose_deltas[cam.name] = {
+                "quat": torch.nn.Parameter(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device)),
+                "trans": torch.nn.Parameter(torch.zeros(3, device=device)),
+            }
+        pose_params = [p for d in pose_deltas.values() for p in d.values()]
+        pose_optimizer = torch.optim.Adam(pose_params, lr=pose_lr, weight_decay=1e-2)
+        print(f"[gaussian_splatting] pose optimization enabled for {len(pose_deltas)} train views")
 
     scene_scale = _compute_scene_scale(train_cameras)
     strategy = DefaultStrategy(
@@ -236,7 +254,9 @@ def train(
             frac = min(1.0, step / max(1, iters))
             g["lr"] = means_lr_init * (means_lr_final / means_lr_init) ** frac
 
-        out, _alpha, meta = model.render_full(cam, packed=True)
+        delta = pose_deltas.get(name)
+        pose_kwargs = {"pose_delta_quat": delta["quat"], "pose_delta_trans": delta["trans"]} if delta else {}
+        out, _alpha, meta = model.render_full(cam, packed=True, **pose_kwargs)
         strategy.step_pre_backward(model.params, optimizers, state, step, meta)
 
         out0 = out[0]
@@ -251,6 +271,9 @@ def train(
         for opt in optimizers.values():
             opt.step()
             opt.zero_grad(set_to_none=True)
+        if pose_optimizer is not None:
+            pose_optimizer.step()
+            pose_optimizer.zero_grad(set_to_none=True)
 
         if step % log_every == 0:
             elapsed = time.time() - t0
@@ -260,6 +283,17 @@ def train(
         if step % ckpt_every == 0 or step == iters:
             ckpt_path = os.path.join(output_dir, f"step_{step}.pt")
             torch.save({"params": model.state_dict(), "step": step}, ckpt_path)
+
+    if pose_deltas:
+        with torch.no_grad():
+            trans_norms = torch.stack([d["trans"].norm() for d in pose_deltas.values()])
+            angle_deg = torch.stack(
+                [2 * torch.acos(torch.clamp(torch.nn.functional.normalize(d["quat"], dim=-1)[0], -1, 1))
+                 * 180.0 / np.pi for d in pose_deltas.values()]
+            )
+        print(f"[gaussian_splatting] pose correction: mean |dT|={trans_norms.mean().item():.4f} "
+              f"(max {trans_norms.max().item():.4f}), mean |dR|={angle_deg.mean().item():.3f}deg "
+              f"(max {angle_deg.max().item():.3f}deg)")
 
     final_path = os.path.join(output_dir, "final.pt")
     torch.save({"params": model.state_dict(), "step": iters}, final_path)
@@ -280,6 +314,9 @@ def main():
     parser.add_argument("--iters", type=int, default=20000)
     parser.add_argument("--downsample", type=float, default=0.5)
     parser.add_argument("--lambda-sem", type=float, default=0.5)
+    parser.add_argument("--optimize-poses", action="store_true",
+                         help="Jointly refine the reference SfM train-view poses alongside the Gaussians")
+    parser.add_argument("--pose-lr", type=float, default=1e-3)
     args = parser.parse_args()
 
     dataset_dir = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
@@ -294,6 +331,7 @@ def main():
     train(
         colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, output_dir,
         holdout_ratio=args.holdout_ratio, iters=args.iters, downsample=args.downsample, lambda_sem=args.lambda_sem,
+        optimize_poses=args.optimize_poses, pose_lr=args.pose_lr,
     )
 
 

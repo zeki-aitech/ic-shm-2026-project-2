@@ -39,6 +39,18 @@ def _inv_sigmoid(x: np.ndarray) -> np.ndarray:
     return np.log(x / (1 - x)).astype(np.float32)
 
 
+def _quat_to_rotmat(q: torch.Tensor) -> torch.Tensor:
+    """Differentiable (w, x, y, z) unit quaternion -> 3x3 rotation matrix, for pose deltas."""
+    w, x, y, z = q[0], q[1], q[2], q[3]
+    return torch.stack(
+        [
+            torch.stack([1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)]),
+            torch.stack([2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)]),
+            torch.stack([2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]),
+        ]
+    )
+
+
 class SemanticGaussianModel:
     def __init__(self, params: Dict[str, nn.Parameter]):
         self.params = params
@@ -138,17 +150,36 @@ class SemanticGaussianModel:
         fused = torch.cat([colors, self.params["sem_logits"]], dim=-1)  # (N, 3 + num_classes)
         return self.params["means"], quats, scales, opacities, fused
 
-    def render_full(self, camera: GSCamera, packed: bool = True):
+    def render_full(
+        self,
+        camera: GSCamera,
+        packed: bool = True,
+        pose_delta_quat: Optional[torch.Tensor] = None,
+        pose_delta_trans: Optional[torch.Tensor] = None,
+    ):
         """Full `gsplat.rasterization()` output `(colors, alphas, meta)` - `meta` carries the
         `means2d`/`radii`/`gaussian_ids` info that `gsplat.strategy.DefaultStrategy` needs
         during training; `render()` below is the simple (rgb, semantic_logits) view for
-        inference/eval."""
+        inference/eval.
+
+        `pose_delta_quat`/`pose_delta_trans` (optional, (4,)/(3,) tensors *with gradients*) apply
+        a small learnable correction to the camera pose before rendering: `R' = dR @ R`,
+        `T' = T + dT`. This is how `train.py`'s `--optimize-poses` jointly refines the reference
+        SfM poses alongside the Gaussians - held-out/blind-test rendering never passes these,
+        since there's no way to "correct" a pose that wasn't observed during training."""
         means, quats, scales, opacities, fused_colors = self.get_render_params()
         device = means.device
 
+        R = torch.tensor(camera.R, dtype=torch.float32, device=device)
+        T = torch.tensor(camera.T, dtype=torch.float32, device=device)
+        if pose_delta_quat is not None:
+            dR = _quat_to_rotmat(torch.nn.functional.normalize(pose_delta_quat, dim=-1))
+            R = dR @ R
+            T = T + pose_delta_trans
+
         viewmat = torch.eye(4, dtype=torch.float32, device=device)
-        viewmat[:3, :3] = torch.tensor(camera.R, dtype=torch.float32, device=device)
-        viewmat[:3, 3] = torch.tensor(camera.T, dtype=torch.float32, device=device)
+        viewmat[:3, :3] = R
+        viewmat[:3, 3] = T
         viewmat = viewmat.unsqueeze(0)
         K = torch.tensor(camera.K, dtype=torch.float32, device=device).unsqueeze(0)
         # gsplat's packed rasterization path collapses the leading camera-batch dim internally,
