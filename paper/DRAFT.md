@@ -308,18 +308,47 @@ Evaluated on the 60-view held-out split (never used in training):
 
 ### 5.2 Discussion — Per-Class Behavior
 
-- `deck` scores highest — large, well-textured, planar surface observed from many overlapping
-  viewpoints, easiest for both photometric and semantic supervision to converge on.
-- `stay_cable`, despite being the slenderest class and historically the hardest for 2D/3D
-  bridge segmentation (background/sky bleeding is a known failure mode — see Section 3.4's
-  strict-majority voting rule motivated by exactly this), reaches 92.13% IoU — the semantic
-  warm-start (initializing cable Gaussians from already-voted 3D points rather than letting the
-  semantic channel learn cable geometry from scratch) appears to meaningfully help here.
-  **[NEEDS: an ablation isolating warm-start's specific contribution to cable IoU, if time
-  allows, would strengthen this claim.]**
-- `foundation` is the weakest class — likely explained by limited UAV viewpoint coverage of
-  low-lying, partially water-adjacent structures compared to the deck/tower, which are visible
-  from most of the flight path.
+The `deck` class achieves the highest structural IoU (95.09%), which is expected: it is a
+large, well-textured, planar surface observed from a wide range of overlapping viewpoints
+throughout the flight, giving both the photometric and semantic losses abundant, consistent
+supervision to converge on.
+
+`stay_cable` is the more interesting case. In the broader bridge-segmentation literature, thin
+cable-like structures are consistently reported as the hardest class: a cable spans only a
+handful of pixels per view, and because manual 2D polygon annotations necessarily draw a
+bounding region around a whole cable rather than tracing individual strands, a large fraction of
+each cable polygon is actually sky or water background — the "background-bleeding" problem that
+motivated our strict absolute-majority voting rule in Section 3.4. Under this framing, one would
+expect `stay_cable` to trail behind the other three structural classes. Our results show the
+opposite: at 92.13% IoU, cable outperforms both `tower` (91.13%) and `foundation` (87.52%),
+second only to `deck`. We attribute this to two design choices acting together rather than any
+single mechanism. First, the strict-majority voting rule used for the semantic warm-start
+(Section 3.4) discards exactly the kind of low-confidence, background-contaminated cable votes
+that would otherwise pollute a plurality vote, so the Gaussians seeded as `cable` at
+initialization are disproportionately the ones genuinely observed as cable from a majority of
+views, not sky pixels caught inside a coarse polygon. Second, because rendered semantic logits
+are alpha-composited identically to color (Section 3.4), a floating "cable" Gaussian that is
+actually sky contributes to the rendered semantic map only in proportion to its opacity and
+depth ordering at each pixel it projects onto; across the full set of training views, such
+spurious Gaussians receive inconsistent semantic gradients (correct from some angles, penalized
+from others) and are pushed toward lower opacity or corrected by the cross-entropy loss, rather
+than accumulating as confidently-labeled cable the way a genuinely thin, consistently-observed
+cable structure does. Together, these suggest that our architecture's resistance to background
+bleeding is not incidental but a direct consequence of combining a majority-vote warm-start with
+differentiable, multi-view semantic supervision. **[NEEDS: an ablation removing the
+strict-majority rule (falling back to plain plurality voting) and/or the semantic warm-start
+entirely, to isolate each mechanism's specific contribution to the cable IoU margin — would
+substantially strengthen this claim if time allows.]**
+
+`foundation` is the weakest of the four structural classes. The most likely explanation is
+viewpoint coverage rather than any class-specific representational difficulty: foundations sit
+at the low-lying, often partially water-adjacent base of the bridge, and are visible from a
+narrower range of the UAV flight envelope than the deck or towers, which remain in view across
+most of the trajectory. With fewer observing viewpoints per foundation Gaussian, both the
+semantic warm-start vote and the training-time cross-entropy supervision have less evidence to
+converge on, which is consistent with foundation showing the largest gap to its nearest
+neighbor in the per-class ranking (3.6 points below `tower`, versus gaps of 1.0–3.0 points
+between the other adjacent pairs).
 
 ### 5.3 Qualitative Results
 
