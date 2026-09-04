@@ -172,10 +172,22 @@ stay cables are slender and prone to background bleeding — sky and water pixel
 misclassified as cable in coarse 2D polygon annotations — the vote enforces a strict absolute
 majority (greater than 50% of observing views) before assigning the cable class; if no class
 reaches this majority among cable votes, cable votes are discarded and the remaining classes
-compete by plurality with a fixed tie-break priority. The winning class is encoded as a scaled
-one-hot logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so
-that the semantic channel begins optimization from an informed prior instead of from noise,
-while remaining free to be corrected by the photometric and semantic losses during training.
+compete by plurality with a fixed tie-break priority. This asymmetric rule is applied only to
+the cable class, not to all five classes uniformly. Requiring an absolute majority for every
+class would be counterproductive: with five competing classes, votes for an ambiguous point
+(e.g., one partially occluded in a subset of views) split naturally, so failing to reach 50% is
+the common case rather than a useful signal, and a blanket majority requirement would simply
+discard many genuinely structural points into an uninformative fallback. The other three
+structural classes — deck, tower, foundation — are large, solid volumes with no comparable
+systematic bias in their 2D annotations, so their multi-view votes are already highly
+consistent whenever a point genuinely belongs to that class, and plain plurality suffices. Cable
+is the exception precisely because its label noise is systematic rather than random: it stems
+from the annotation process itself (a polygon necessarily traces a region around a thin cable,
+not the cable pixels alone), not merely from cable occupying few pixels, so only cable benefits
+from — and needs — this stricter threshold. The winning class is encoded as a scaled one-hot
+logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
+semantic channel begins optimization from an informed prior instead of from noise, while
+remaining free to be corrected by the photometric and semantic losses during training.
 
 **Fused rendering.** A central design choice of our method is that RGB and semantic outputs
 share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
