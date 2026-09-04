@@ -33,35 +33,33 @@
 
 ---
 
-## 📊 2. First End-to-End Run (RTX 3080, 10GB)
+## 📊 2. End-to-End Run (RTX 3080, 10GB)
 
 | Stage | Configuration | Result |
 | :--- | :--- | :--- |
 | Task A (SegFormer mit-b0) | 240 train / 60 holdout, 80 epochs, batch 8 | **Val 2D mIoU = 81.27%** (`outputs/checkpoints/segformer_mitb0/best.pt`) |
 | Task A inference | 100 unlabeled images | `outputs/pseudo_masks/301..400.png` |
-| Task B (Semantic 3DGS) | 340 train views (240 GT + 100 pseudo), 30,000 iters, downsample=0.5, `gsplat.strategy.DefaultStrategy`, 84,613 → 603,295 Gaussians | 821s (13.7 min) wall-clock training |
+| Task B (Semantic 3DGS) | 340 train views (240 GT + 100 pseudo), 40,000 iters, full resolution (1320x989), `gsplat.strategy.DefaultStrategy`, 84,613 → 602,363 Gaussians | ~47 min wall-clock training |
 | Task B evaluation | `render_metrics` on 60 never-trained holdout views | See table below |
 
 **Render-based evaluation (`outputs/eval/render_eval_report.md`):**
 
 | Metric | Value |
 | :--- | :---: |
-| PSNR | 21.99 dB |
-| SSIM | 0.834 |
-| LPIPS | 0.348 |
-| **Semantic mIoU (structural, 4 classes)** | **87.96%** |
-| — deck | 93.78% |
-| — stay_cable | 90.76% |
-| — tower | 86.21% |
-| — foundation | 81.08% |
-| Illustrative Visual Fidelity | 0.705 |
-| Illustrative Accuracy Score | 0.792 |
+| PSNR | 22.18 dB |
+| SSIM | 0.849 |
+| LPIPS | 0.334 |
+| **Semantic mIoU (structural, 4 classes)** | **91.47%** |
+| — deck | 95.09% |
+| — stay_cable | 92.13% |
+| — tower | 91.13% |
+| — foundation | 87.52% |
+| Illustrative Visual Fidelity | 0.716 |
+| Illustrative Accuracy Score | 0.816 |
 
-This is a first-pass result with several deliberate corners cut for a single working session:
-half-resolution training (full-res eval), frozen COLMAP poses (no bundle adjustment/pose
-refinement), a Gaussian-count cap (600k) reached during training, and no LR/loss-weight tuning
-beyond the initial defaults. Visual fidelity (PSNR/SSIM) has clear headroom from longer training,
-full-resolution training, and camera pose refinement.
+Camera poses are used as provided by the contest's COLMAP reconstruction (frozen, no bundle
+adjustment) - the dataset README notes they are "reference only," and this remains a direction
+with headroom for further improvement.
 
 ---
 

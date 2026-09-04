@@ -155,6 +155,8 @@ Drawing `stay_cable` on the top layer ensures thin cable lines are never overwri
 
 ## V. FUTURE ROADMAP & RESEARCH EXTENSIONS
 
-1. **Camera Pose Refinement**: joint bundle adjustment / per-image pose optimization during Gaussian Splatting training to improve reconstruction sharpness beyond the provided reference SfM poses.
-2. **Full-Resolution Training**: train at native 1320x989 resolution (currently downsampled for iteration speed) for higher Visual Fidelity scores.
-3. **Dynamic Vibration & Displacement Integration**: fuse the reconstructed 3D semantic model with UAV video vision displacement measurements (Project 1) for full-lifecycle structural health monitoring.
+1. **Longer Training / Hyperparameter Tuning**: extend beyond 40,000 iterations and tune the
+   photometric/semantic loss weighting for further Visual Fidelity gains.
+2. **Dynamic Vibration & Displacement Integration**: fuse the reconstructed 3D semantic model
+   with UAV video vision displacement measurements (Project 1) for full-lifecycle structural
+   health monitoring.

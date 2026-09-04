@@ -126,7 +126,7 @@ uv run python -m src.segmentation.infer --checkpoint outputs/checkpoints/segform
 
 # 3. Task B: train the Semantic 3D Gaussian Splatting model
 #    (auto-undistorts images and computes the semantic warm-start on first run)
-uv run python -m src.gaussian_splatting.train --iters 20000 --downsample 0.5
+uv run python -m src.gaussian_splatting.train --iters 40000 --downsample 1.0
 
 # 4. Contest deliverable: render RGB + semantic map from an arbitrary camera pose
 uv run python -m src.gaussian_splatting.render \
@@ -142,14 +142,18 @@ uv run python -m src.evaluation.render_metrics \
 
 ---
 
-## 📊 6. First End-to-End Result (RTX 3080, 10GB)
+## 📊 6. Results (RTX 3080, 10GB)
+
+Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 602,363 Gaussians.
+Evaluated on the 60-image holdout, never used in training:
 
 | Metric | Value |
 | :--- | :---: |
 | Task A val 2D mIoU (60-image holdout) | 81.27% |
-| PSNR | 21.99 dB |
-| SSIM | 0.834 |
-| LPIPS | 0.348 |
-| **Semantic mIoU (structural, 4 classes)** | **87.96%** |
+| PSNR | 22.18 dB |
+| SSIM | 0.849 |
+| LPIPS | 0.334 |
+| **Semantic mIoU (structural, 4 classes)** | **91.47%** |
+| Accuracy Score (illustrative) | 0.816 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.

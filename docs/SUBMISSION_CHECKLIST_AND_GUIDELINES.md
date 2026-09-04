@@ -78,7 +78,7 @@ According to the official competition guidelines extracted from [`docs/required-
     uv run python -m src.segmentation.infer --checkpoint outputs/checkpoints/segformer_mitb0/best.pt
 
     # 4. Task B: train the Semantic 3D Gaussian Splatting model (officially scored deliverable)
-    uv run python -m src.gaussian_splatting.train --iters 20000 --downsample 0.5
+    uv run python -m src.gaussian_splatting.train --iters 40000 --downsample 1.0
 
     # 5. Render RGB + semantic map from an arbitrary camera pose (contest submission artifact)
     uv run python -m src.gaussian_splatting.render --checkpoint outputs/checkpoints/gaussians/final.pt \
