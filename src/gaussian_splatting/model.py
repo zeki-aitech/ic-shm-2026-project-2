@@ -177,8 +177,8 @@ class SemanticGaussianModel:
         return cls(params)
 
     def export_ply(self, path: str) -> str:
-        """ASCII PLY export (same column convention as `semantic_projector.export_ply`) for
-        interop with the existing point-cloud visualizer/analysis tools."""
+        """ASCII point-cloud PLY export (x,y,z,rgb,class_id per Gaussian center) - a lightweight
+        summary for tabular/analysis inspection, not a renderable splat file."""
         with torch.no_grad():
             xyz = self.params["means"].detach().cpu().numpy()
             colors = torch.sigmoid(self.params["colors"]).detach().cpu().numpy()
@@ -193,4 +193,25 @@ class SemanticGaussianModel:
             f.write("property int class_id\nend_header\n")
             for (x, y, z), (r, g, b), c in zip(xyz, rgb_u8, classes):
                 f.write(f"{x:.6f} {y:.6f} {z:.6f} {r} {g} {b} {int(c)}\n")
+        return path
+
+    def export_splat_ply(self, path: str) -> str:
+        """Exports the full splat (position, scale, rotation, opacity, color) in the standard
+        3D Gaussian Splatting PLY format via `gsplat.export_splats`, viewable in any standard
+        splat viewer (e.g. SuperSplat, antimatter15/splat) with proper alpha-blended rendering
+        and free camera orbit - unlike `export_ply`, which only summarizes Gaussian centers as a
+        plain point cloud."""
+        from gsplat import export_splats
+
+        with torch.no_grad():
+            means = self.params["means"].detach()
+            scales = self.params["scales"].detach()
+            quats = torch.nn.functional.normalize(self.params["quats"].detach(), dim=-1)
+            opacities = self.params["opacities"].detach()
+            colors = torch.sigmoid(self.params["colors"].detach())
+            sh_c0 = 0.28209479177387814  # standard 3DGS degree-0 SH normalization constant
+            sh0 = ((colors - 0.5) / sh_c0).unsqueeze(1)  # (N, 1, 3)
+            shN = torch.zeros((means.shape[0], 0, 3), device=means.device, dtype=means.dtype)
+
+            export_splats(means, scales, quats, opacities, sh0, shN, format="ply", save_to=path)
         return path

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 
 import numpy as np
@@ -48,6 +49,23 @@ class TestGaussianModelInit(unittest.TestCase):
         means = self.model.means.detach().cpu().numpy()
         expected = np.stack([self.pts3d[i].xyz for i in sorted(self.pts3d.keys())])
         np.testing.assert_allclose(means, expected, atol=1e-4)
+
+    def test_export_ply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.model.export_ply(os.path.join(tmp, "cloud.ply"))
+            self.assertTrue(os.path.exists(path))
+            with open(path) as f:
+                header = [next(f) for _ in range(3)]
+            self.assertEqual(header[0].strip(), "ply")
+            self.assertIn(f"element vertex {self.n}", header[2])
+
+    def test_export_splat_ply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.model.export_splat_ply(os.path.join(tmp, "splat.ply"))
+            self.assertTrue(os.path.exists(path))
+            with open(path, "rb") as f:
+                magic = f.read(3)
+            self.assertEqual(magic, b"ply")
 
 
 if __name__ == "__main__":
