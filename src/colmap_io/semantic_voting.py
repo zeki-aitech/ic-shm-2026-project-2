@@ -123,38 +123,56 @@ class SemanticProjector:
         print(f"✅ Loaded {len(self.mask_cache)} mask images into cache in {t1-t0:.2f}s!")
         return len(self.mask_cache)
 
+    def gather_observations(
+        self, include_image_stems: Optional[set] = None
+    ) -> Dict[int, List[int]]:
+        """
+        Loads the reconstruction (if not already loaded) and the mask cache (if empty), then
+        returns the raw per-3D-point list of observed 2D mask labels - one entry per
+        (image, pixel) observation, in observation order, before any voting is applied. This is
+        the shared data-gathering step behind both `project()` (which applies
+        `vote_majority_class`) and `src.evaluation.vote_consistency` (which analyzes the raw
+        vote distributions directly).
+
+        `include_image_stems`: if given, only observations from images whose filename stem
+        (e.g. "001") is in this set are included - used to restrict analysis to the train-view
+        split (Section 3.6), matching how the semantic warm-start itself is computed.
+        """
+        cam, images, self.pts3d = self.parser.load()
+        if not self.mask_cache:
+            self.preload_masks()
+
+        observations: Dict[int, List[int]] = {}
+        for p3d_id, pt3d in self.pts3d.items():
+            observed_labels: List[int] = []
+            for img_id, pt2d_idx in zip(pt3d.image_ids, pt3d.point2d_idxs):
+                img_pose = images[img_id]
+                if include_image_stems is not None:
+                    stem = os.path.splitext(img_pose.name)[0]
+                    if stem not in include_image_stems:
+                        continue
+                mpath = self._get_mask_path(img_pose.name)
+                if mpath and mpath in self.mask_cache:
+                    mask = self.mask_cache[mpath]
+                    u, v, _ = img_pose.points2d[pt2d_idx]
+                    x, y = int(round(u)), int(round(v))
+                    if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
+                        observed_labels.append(int(mask[y, x]))
+            observations[p3d_id] = observed_labels
+        return observations
+
     def project(self) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
         """Executes 2D-to-3D back-projection using multi-view majority voting."""
         t0 = time.time()
         print("🔄 Executing 2D-to-3D Semantic Back-Projection...")
-        cam, images, self.pts3d = self.parser.load()
-
-        if not self.mask_cache:
-            self.preload_masks()
+        observations = self.gather_observations()
 
         self.point_classes.clear()
         self.point_colors.clear()
 
         class_counts = Counter()
 
-        for p3d_id, pt3d in self.pts3d.items():
-            observed_labels: List[int] = []
-
-            for img_id, pt2d_idx in zip(pt3d.image_ids, pt3d.point2d_idxs):
-                img_pose = images[img_id]
-                mpath = self._get_mask_path(img_pose.name)
-
-                if mpath and mpath in self.mask_cache:
-                    mask = self.mask_cache[mpath]
-                    u, v, _ = img_pose.points2d[pt2d_idx]
-
-                    x = int(round(u))
-                    y = int(round(v))
-
-                    if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
-                        label = int(mask[y, x])
-                        observed_labels.append(label)
-
+        for p3d_id, observed_labels in observations.items():
             final_class = vote_majority_class(observed_labels)
             color = CLASS_COLORS.get(final_class, CLASS_COLORS[0])
 
