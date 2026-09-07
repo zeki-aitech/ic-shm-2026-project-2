@@ -377,7 +377,14 @@ combination explicit here rather than presenting it as an authoritative formula.
 
 ### 5.1 Main Results
 
-Evaluated on the 60-view held-out split (never used in training):
+We report our final model's performance on the 60-view held-out split defined in Section 3.6 —
+views that contribute to neither Task A fine-tuning, Task B's semantic warm-start, nor its
+photometric/semantic training loss. Table 1 summarizes the four metrics from Section 4.3 together
+with the illustrative Accuracy Score; Table 2 breaks semantic accuracy down by class. All numbers
+are produced by rendering each holdout pose through the same arbitrary-viewpoint entry point
+described in Section 3.5 — the literal function the contest evaluates a submission against.
+
+**Table 1: Overall holdout performance.**
 
 | Metric | Value |
 | :--- | :---: |
@@ -387,7 +394,7 @@ Evaluated on the 60-view held-out split (never used in training):
 | Structural mIoU (4 classes) | **91.47%** |
 | Illustrative Accuracy Score | 0.816 |
 
-**Per-class IoU:**
+**Table 2: Per-class IoU.**
 
 | Class | IoU |
 | :--- | :---: |
@@ -396,6 +403,13 @@ Evaluated on the 60-view held-out split (never used in training):
 | tower | 91.13% |
 | foundation | 87.52% |
 | (background, reported for completeness, excluded from structural mIoU) | 99.24% |
+
+The four structural classes all clear 87% IoU despite substantial differences in physical scale,
+surface texture, and viewpoint coverage, and background — by far the easiest class, since it
+occupies most of every frame's pixels — reaches 99.24%, confirming the model is not achieving a
+high structural mIoU merely by defaulting to the dominant class. The ranking among the four
+structural classes, and in particular why the thin, sparsely-sampled `stay_cable` class outscores
+the geometrically simpler `tower` and `foundation`, is discussed next.
 
 ### 5.2 Discussion — Per-Class Behavior
 
@@ -445,13 +459,29 @@ between the other adjacent pairs).
 
 ### 5.3 Qualitative Results
 
-**[NEEDS: figures]**
-- Side-by-side rendered RGB vs. ground-truth photo for several held-out views.
-- Rendered semantic map vs. ground-truth mask, using the official class-color legend.
-- A novel-view interpolation figure (render at a camera pose interpolated between two flight
-  positions) demonstrating smooth novel-view synthesis within the observed viewpoint envelope.
-- Optionally: a screenshot of the exported splat point cloud (`export_semantic_splat_ply`)
-  color-coded by predicted class, viewed in an interactive splat viewer.
+The metrics in Section 5.1 summarize error over the full holdout set as a single number per
+metric, but do not show where the model succeeds or fails, or what a rendered view actually looks
+like. We complement them with three qualitative figures.
+
+**[NEEDS: Figure 3 — RGB and semantic renders vs. ground truth on held-out views.]** A grid of
+several held-out poses, each shown as four panels: the rendered RGB image, the real photograph,
+the rendered semantic map (official class-color legend), and the ground-truth mask. This figure
+should include at least one view per structural class where that class is prominent, and ideally
+one visibly weaker case (e.g. a foundation view near the water line) alongside a strong one, so
+the qualitative comparison does not only showcase best-case behavior.
+
+**[NEEDS: Figure 4 — novel-view interpolation.]** A short sequence of renders along a camera path
+interpolated between two poses that were actually flown, rather than reproducing a training or
+holdout pose exactly. Because the held-out views in Table 1 still lie on the UAV's original
+flight line, this figure is what demonstrates the property the contest brief actually asks for —
+rendering from a genuinely arbitrary viewpoint, not merely one selected from the acquisition
+trajectory — and that RGB and semantic outputs stay pixel-aligned as the camera moves smoothly
+through space.
+
+**[NEEDS: Figure 5 (optional) — exported splat point cloud.]** A screenshot of the trained
+Gaussians exported as a semantic point cloud and viewed in an interactive splat viewer, color-coded
+by predicted class. This is secondary to Figures 3 and 4 — it illustrates the learned 3D structure
+directly rather than any one rendered view — and can be dropped if space is limited.
 
 ### 5.4 Ablation: Training Resolution
 
