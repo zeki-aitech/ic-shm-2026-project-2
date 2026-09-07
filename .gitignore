@@ -18,6 +18,9 @@ outputs/
 tmp/
 scratch/
 
+# Local reference PDFs for paper citations (not committed - large binaries)
+paper/references/
+
 # Jupyter
 .ipynb_checkpoints/
 
