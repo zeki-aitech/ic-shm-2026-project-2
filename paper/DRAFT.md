@@ -143,14 +143,15 @@ multi-view majority vote over a triangulated sparse point cloud (Section 3.4) ra
 foundation-model distillation process, which requires no pretrained 2D foundation model at all and
 ties the semantic initialization directly to the contest's own annotated classes.
 
-**2D structural bridge segmentation.** Lin et al. [10] propose a structure-oriented loss
-function for automated semantic segmentation of bridge point clouds, explicitly weighting the
+**Structure-aware bridge segmentation.** Lin et al. [10] propose a structure-oriented loss
+function for automated semantic segmentation of bridge *point clouds*, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
 uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
-noise in Section 3.4, though applied to a different stage (2D loss weighting vs. 3D label
-initialization) and a different data modality (point clouds vs. images). Our own 2D pseudo-labeling
-stage (Section 3.3) fine-tunes SegFormer [11], a transformer-based semantic
-segmentation architecture chosen for its strong accuracy-to-compute ratio on a single consumer GPU.
+noise in Section 3.4, though applied to a different stage (a training-time loss on 3D point
+clouds vs. our warm-start label initialization) and a different data modality (point clouds vs.
+the 2D images our pipeline is built on). Our own 2D pseudo-labeling stage (Section 3.3) fine-tunes
+SegFormer [11], a transformer-based semantic segmentation architecture chosen for its strong
+accuracy-to-compute ratio on a single consumer GPU.
 
 **Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
 models of cable-stayed bridges with a recursive network that predicts both a high-level structural
