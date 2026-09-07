@@ -557,13 +557,19 @@ degraded RGB quality in the same view, consistent with Section 5.2's discussion 
 channel's relative robustness — though we present this as an illustrative observation from this
 set of views rather than a claim established over the full holdout.
 
-**[NEEDS: Figure 5 — novel-view interpolation.]** A short sequence of renders along a camera path
-interpolated between two poses that were actually flown, rather than reproducing a training or
-holdout pose exactly. Because the held-out views in Table 1 still lie on the UAV's original
-flight line, this figure is what demonstrates the property the contest brief actually asks for —
-rendering from a genuinely arbitrary viewpoint, not merely one selected from the acquisition
-trajectory — and that RGB and semantic outputs stay pixel-aligned as the camera moves smoothly
-through space.
+![Figure 5: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
+
+**Figure 5: A camera path interpolated between two real flown poses** (images 280 and 300;
+quaternion SLERP for rotation, linear interpolation for translation), rendered at five evenly
+spaced steps $t \in \{0, 0.25, 0.5, 0.75, 1\}$, top row RGB and bottom row the corresponding
+semantic map. Because the held-out views in Table 1 still lie on the UAV's original flight line,
+this figure is what demonstrates the property the contest brief actually asks for: rendering from
+a genuinely arbitrary viewpoint, not merely one selected from the acquisition trajectory. The two
+endpoints ($t=0, 1$) are real flown poses and render cleanly; RGB quality degrades visibly in the
+intermediate frames, where the interpolated pose departs furthest from any training view — but
+the semantic map remains largely stable and structurally coherent across all five frames despite
+this RGB degradation, a second, independent illustration of the pattern discussed in Section 5.2.
+RGB and semantic outputs remain pixel-aligned at every step, including the degraded ones.
 
 **[NEEDS: Figure 6 (optional) — exported splat point cloud.]** A screenshot of the trained
 Gaussians exported as a semantic point cloud and viewed in an interactive splat viewer, color-coded
@@ -682,8 +688,11 @@ need to change accordingly.]**
 - [x] Figure 4 (qualitative render grid, Section 5.3) - 4 real held-out views (005, 050, 250,
   300; verified against the official 60-view holdout list, not arbitrary picks) rendered via
   `src.gaussian_splatting.render` and assembled by `src/evaluation/plot_qualitative_grid.py`.
-- [ ] Produce Figures 5-6 in 5.3 (novel-view interpolation, splat viewer screenshot) and
-  Figures 1-2 in Section 3 (pipeline diagram, cable-voting illustration).
+- [x] Figure 5 (novel-view interpolation filmstrip, Section 5.3) - SLERP/LERP path between real
+  flown poses 280/300 via `src/gaussian_splatting/interpolate.py`, assembled by
+  `src/evaluation/plot_interpolation_sequence.py`.
+- [ ] Produce Figure 6 in 5.3 (optional splat viewer screenshot) and Figures 1-2 in Section 3
+  (pipeline diagram, cable-voting illustration).
 - [x] Strengthen Related Work with real citations (Section 2 now cites 16 verified real papers;
   PDFs in `paper/references/`).
 - [x] Write the Abstract last, after Results is locked.
