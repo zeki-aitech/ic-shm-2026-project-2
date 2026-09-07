@@ -288,9 +288,10 @@ the cable pixels alone), not merely from cable occupying few pixels, so only cab
 real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
 covers a large triangular region of sky and river far beyond the cable strands themselves,
 exactly the annotation artifact motivating the strict-majority rule. Right: an illustrative
-(not one specific real point) schematic of the voting mechanism — a minority of observing views
-seeing a 3D point as cable is not enough to assign it the cable class; those votes are discarded
-and the remaining views decide by plurality.
+(not one specific real point) schematic of the voting mechanism — each triangle is a camera,
+oriented to face the 3D point being voted on, labeled with the class it observes there. A
+minority of observing views seeing the point as cable is not enough to assign it the cable class;
+those votes are discarded and the remaining views decide by plurality.
 
 The winning class is encoded as a scaled one-hot
 logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the

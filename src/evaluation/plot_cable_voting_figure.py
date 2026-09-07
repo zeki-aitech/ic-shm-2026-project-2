@@ -41,10 +41,20 @@ def render_overlay_crop(image_path: str, mask_path: str, crop_box, alpha: float 
     return overlay.astype(np.uint8)
 
 
-def _draw_camera(ax, xy, angle_deg, label, vote_color, vote_text):
-    """Draws a small camera glyph (triangle) at `xy` pointing toward the origin, with its
-    observed-class vote annotated."""
+def _camera_marker_angle_deg(xy, target):
+    """Matplotlib's regular-polygon marker angle is measured counterclockwise from the +y axis
+    (angle=0 -> apex points up/+y; angle=90 -> apex points left/-x - verified empirically).
+    Returns the angle that makes the triangle's apex point from `xy` toward `target`."""
+    dx, dy = target[0] - xy[0], target[1] - xy[1]
+    return np.degrees(np.arctan2(dy, dx)) - 90.0
+
+
+def _draw_camera(ax, xy, target, label, vote_color, vote_text):
+    """Draws a small camera glyph (triangle) at `xy`, its apex pointing toward `target` - i.e.
+    the triangle's orientation shows which way that camera is looking - with its observed-class
+    vote annotated below it."""
     x, y = xy
+    angle_deg = _camera_marker_angle_deg(xy, target)
     ax.plot(x, y, marker=(3, 0, angle_deg), markersize=16, color="dimgray", zorder=4)
     ax.text(x, y - 0.55, label, ha="center", va="top", fontsize=8, color="dimgray")
     ax.text(
@@ -55,7 +65,7 @@ def _draw_camera(ax, xy, angle_deg, label, vote_color, vote_text):
 
 def draw_voting_schematic(ax):
     ax.set_xlim(-4.2, 4.2)
-    ax.set_ylim(-4.6, 4.2)
+    ax.set_ylim(-5.6, 4.2)
     ax.axis("off")
     ax.set_title("Illustrative example: multi-view vote for one 3D point", fontsize=10, pad=8)
 
@@ -68,22 +78,22 @@ def draw_voting_schematic(ax):
     deck_rgb = tuple(_LUT[1] / 255.0)
 
     cams = [
-        # (x, y, angle_deg_pointing_to_origin, label, observed_class, color, is_cable)
-        (-3.4, 2.6, -50, "view 1", "cable", cable_rgb),
-        (0.0, 3.8, 180, "view 2", "cable", cable_rgb),
-        (3.4, 2.6, 130, "view 3", "background", bg_rgb),
-        (-2.6, -3.0, 60, "view 4", "background", bg_rgb),
-        (2.6, -3.0, 100, "view 5", "deck", deck_rgb),
+        # (x, y, label, observed_class, color) - triangle apex is computed to point at `origin`
+        (-3.4, 2.6, "view 1", "cable", cable_rgb),
+        (0.0, 3.8, "view 2", "cable", cable_rgb),
+        (3.4, 2.6, "view 3", "background", bg_rgb),
+        (-2.6, -2.2, "view 4", "background", bg_rgb),
+        (2.6, -2.2, "view 5", "deck", deck_rgb),
     ]
-    for x, y, angle, label, cls_text, color in cams:
+    for x, y, label, cls_text, color in cams:
         ax.add_patch(
             FancyArrowPatch((x, y), origin, arrowstyle="-", linestyle=(0, (3, 3)),
                              color="lightgray", linewidth=1.1, zorder=1)
         )
-        _draw_camera(ax, (x, y), angle, label, color, cls_text)
+        _draw_camera(ax, (x, y), origin, label, color, cls_text)
 
     ax.text(
-        0, -3.9,
+        0, -4.4,
         "2/5 cable votes (40%) < 50% threshold\n"
         "→ cable votes discarded → plurality among remaining: background (2) vs. deck (1)\n"
         "→ point labeled background",
