@@ -209,9 +209,13 @@ truth at inference time.
 The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
 poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
 observations across views, but it does not include precomputed 3D point coordinates. We recover
-a sparse point cloud of the bridge by triangulating every track with LO-RANSAC multi-view
-triangulation, which jointly enforces cheirality and a minimum triangulation-angle constraint to
-reject ill-conditioned geometry; the resulting points have a mean reprojection error of
+a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [12] (Locally
+Optimized RANSAC) multi-view triangulation: as in standard RANSAC, candidate 3D points are estimated from
+small random subsets of a track's observations and validated by reprojection error to reject
+outlier correspondences, with an added local refinement step that further optimizes each accepted
+hypothesis rather than accepting it as-is. This robust estimation jointly enforces cheirality and
+a minimum triangulation-angle constraint to reject ill-conditioned geometry; the resulting points
+have a mean reprojection error of
 approximately 0.5 pixels. A subsequent distance-from-median outlier filter (using the
 interquartile range of each point's distance to the cloud centroid) removes residual floaters,
 leaving 84,613 triangulated points. Because the shared camera carries non-negligible radial
@@ -285,7 +289,7 @@ remaining free to be corrected by the photometric and semantic losses during tra
 **Fused rendering.** A central design choice of our method is that RGB and semantic outputs
 share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
 semantic logits (5 channels) into one 8-channel color tensor, and render it through `gsplat`'s
-differentiable rasterizer [12]: every Gaussian is projected onto the image plane, the projections
+differentiable rasterizer [13]: every Gaussian is projected onto the image plane, the projections
 are depth-sorted, and each pixel is computed by alpha-compositing the sorted splats from front to
 back. Because the geometric projection and depth ordering that determine this composite depend
 only on each Gaussian's position, scale, and rotation — not on which of its channels are being
@@ -321,7 +325,7 @@ views with real manual annotations, reflecting their lower label confidence.
 **Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
 training. Gaussians whose positional gradients are large — an indication that a single primitive
 is being stretched to cover detail it cannot adequately represent — are split or duplicated,
-while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [12] built-in
+while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [13] built-in
 density-control strategy. This process grows the representation from the 84,613-point sparse
 initialization to 602,363 Gaussians by the end of training, allowing the model to allocate
 additional capacity to structurally intricate regions, such as individual cable strands, that
@@ -402,7 +406,7 @@ dimensions, and $\text{MAX}$ the maximum representable pixel value (255 for 8-bi
 PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
 equally regardless of whether that discrepancy is visually salient.
 
-**SSIM** [13] (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
+**SSIM** [14] (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
 addresses this by comparing local luminance, contrast, and structure rather than raw pixel
 differences:
 $$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
@@ -413,7 +417,7 @@ that stabilize the division when the local means or variances are near zero. SSI
 perceived image quality more closely than PSNR alone, but both remain pixel/patch-level
 comparisons.
 
-**LPIPS** [14] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
+**LPIPS** [15] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
 compares deep-network feature activations:
 $$\text{LPIPS}(\hat{I}, I) = \sum_{l} \frac{1}{H_l W_l} \sum_{h,w}
 \left\| w_l \odot \left(\phi_l(\hat{I})_{hw} - \phi_l(I)_{hw}\right) \right\|_2^2,$$
@@ -644,13 +648,15 @@ need to change accordingly.]**
     and Infrastructure Engineering.
 11. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
     Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
-12. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
+12. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
+    (Pattern Recognition), LNCS vol. 2781, 236–243.
+13. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
     Tancik, M., & Kanazawa, A. (2025) — gsplat: An Open-Source Library for Gaussian Splatting.
     Journal of Machine Learning Research, 26(34), 1–17.
-13. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
+14. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
     From Error Visibility to Structural Similarity. IEEE Transactions on Image Processing, 13(4),
     600–612.
-14. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
+15. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
     Effectiveness of Deep Features as a Perceptual Metric. CVPR, 586–595.
 
 ---
