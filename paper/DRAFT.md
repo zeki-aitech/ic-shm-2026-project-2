@@ -14,19 +14,24 @@ research, figures, or numbers not yet produced).
 
 ## Abstract
 
-*(150-250 words — write last, once Results is final)*
-
 We present a method for reconstructing a semantically labeled 3D representation of a
 cable-stayed bridge from multi-view UAV imagery, targeting the IC-SHM 2026 Project 2 evaluation
 protocol: a model must render both an RGB image and a per-pixel semantic map from an arbitrary
 camera viewpoint, scored against held-out views by visual fidelity (PSNR/SSIM/LPIPS) and
 semantic accuracy (mIoU). Our approach extends 3D Gaussian Splatting with a per-Gaussian
-semantic logit vector, rendered jointly with color through a single fused rasterization pass. A
-2D segmentation model pseudo-labels unlabeled frames to widen semantic supervision, and the
-Gaussian model is warm-started from a semantically-voted sparse point cloud rather than random
-initialization. On a 60-view held-out split drawn from the same UAV flight trajectory, our
-method achieves PSNR 22.18 dB, SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47% across the
-four bridge component classes (deck, stay cable, tower, foundation).
+semantic logit vector, rendered jointly with color through a single fused rasterization pass, so
+that the two outputs are pixel-aligned by construction. A 2D segmentation model pseudo-labels
+unlabeled frames to widen semantic supervision to every available image, and the Gaussian model
+is warm-started from a multi-view, majority-voted sparse point cloud rather than random
+initialization, using a strict-majority rule that specifically counteracts the background-bleeding
+noise characteristic of thin cable annotations. On a 60-view held-out split drawn from the same
+UAV flight trajectory but excluded from every stage of training, our method achieves PSNR 22.18
+dB, SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47% across the four bridge component classes
+(deck, stay cable, tower, foundation), for an illustrative Accuracy Score of 0.816. Beyond the
+contest's scoring criteria, the resulting model functions as a queryable digital twin of the
+bridge, rendering both appearance and structural identity from viewpoints never captured during
+data acquisition — a basis for downstream structural health monitoring tasks that must be scoped
+to a specific structural component.
 
 ---
 
