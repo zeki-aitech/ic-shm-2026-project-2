@@ -32,47 +32,58 @@ four bridge component classes (deck, stay cable, tower, foundation).
 
 ## 1. Introduction
 
-**Motivation**
-- Bridges are critical infrastructure; periodic condition assessment is essential for public
-  safety, but manual inspection is slow, costly, and sometimes hazardous (access to towers,
-  cable anchorages, water-adjacent foundations).
-- UAV photogrammetry has become a practical means of large-scale, low-cost bridge data
-  acquisition, motivating automated 3D + semantic digital twin construction directly from
-  drone imagery.
-- Two capabilities are needed for a useful SHM digital twin: (1) accurate 3D geometric
-  reconstruction, and (2) per-component semantic labeling (deck / stay cable / tower /
-  foundation), so downstream analysis (deflection tracking, corrosion mapping, cable tension
-  inference) can be scoped to the correct structural element.
+Bridges are critical infrastructure, and periodic condition assessment is essential for public
+safety, yet manual inspection remains slow, costly, and at times hazardous — towers, cable
+anchorages, and water-adjacent foundations are not always safely or cheaply accessible on foot.
+UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge data
+acquisition, and this in turn motivates building automated 3D, semantically-labeled digital twins
+directly from drone imagery rather than relying on manual survey. A digital twin that is actually
+useful for downstream structural health monitoring needs two capabilities at once: an accurate 3D
+geometric reconstruction of the structure, and a per-component semantic labeling of that geometry
+into its constituent parts (deck, stay cable, tower, foundation), so that later analyses such as
+deflection tracking, corrosion mapping, or cable tension inference can be scoped automatically to
+the correct structural element rather than to the bridge as an undifferentiated whole.
 
-**Problem statement (from the official brief)**
-- Given ~300 labeled and 100 unlabeled multi-view UAV images of a cable-stayed bridge plus
-  COLMAP-estimated camera poses, build a model that renders **both** an RGB image and a
-  semantic map from an arbitrary camera viewpoint.
-- Scored on a blind test set of camera viewpoints via `Accuracy Score = 0.5 x Visual Fidelity
-  (PSNR/SSIM/LPIPS) + 0.5 x Semantic mIoU`.
+This is precisely the task posed by the contest brief: given approximately 300 labeled and 100
+unlabeled multi-view UAV images of a cable-stayed bridge, together with COLMAP-estimated camera
+poses, build a model that renders both an RGB image and a semantic map from an arbitrary camera
+viewpoint. Submissions are scored on a blind test set of held-out camera viewpoints via
+$\text{Accuracy Score} = 0.5 \times \text{Visual Fidelity (PSNR/SSIM/LPIPS)} + 0.5 \times
+\text{Semantic mIoU}$ — a formulation that rewards a method for both photorealistic rendering and
+correct structural labeling simultaneously, from poses the model has never been trained or
+validated on.
 
-**Core technical challenges**
-1. Geometric diversity across structural components — the deck is a large horizontal plane,
-   towers are tall vertical columns, stay cables are slender linear features spanning only a
-   few pixels per view and prone to background bleeding (sky/water misclassified as cable).
-2. Only 300 of 400 images carry manual annotations; the remaining 100 must be exploited without
-   ground truth.
-3. Camera poses are SfM estimates ("reference only" per the dataset documentation), not
-   survey-grade ground truth.
+Three properties of this specific dataset and task make it non-trivial. First, the bridge's
+structural components differ sharply in geometry and visibility: the deck is a large, well-textured
+horizontal plane visible from most of the flight trajectory, towers are tall vertical columns seen
+from a narrower range of angles, and stay cables are slender linear features spanning only a
+handful of pixels per view — and, because a 2D polygon annotation necessarily traces a region
+around a whole cable rather than its individual pixels, cable masks are also disproportionately
+prone to background bleeding, where sky or water pixels are absorbed into the cable label. Second,
+only 300 of the 400 available images carry manual annotations; the remaining 100 must be exploited
+without any ground truth if they are to contribute useful supervision at all. Third, the provided
+camera poses are Structure-from-Motion estimates — documented by the organizers as "reference
+only" rather than survey-grade ground truth — so the method cannot assume the input geometry is
+error-free.
 
-**Contributions**
+We address these challenges with a semantic 3D Gaussian Splatting pipeline whose contributions are:
+
 1. A semantic 3D Gaussian Splatting formulation that renders RGB and a 5-class semantic map in
    a single fused rasterization pass, satisfying the contest's dual-output requirement natively
-   (no separate semantic-segmentation-of-renders post-process).
+   with no separate semantic-segmentation-of-renders post-process, and guaranteeing the two
+   outputs are pixel-aligned by construction.
 2. A semantic warm-start strategy that initializes each Gaussian's class logits from multi-view
-   majority-voted labels on a triangulated sparse point cloud, instead of random initialization.
+   majority-voted labels on a triangulated sparse point cloud instead of random initialization,
+   using a strict-majority voting rule targeted specifically at the cable class to counteract its
+   characteristic background-bleeding noise.
 3. A 2D pseudo-labeling stage (fine-tuned SegFormer) that extends semantic supervision to the
-   100 unlabeled frames, increasing the effective training-view count from 240 to 340.
+   100 unlabeled frames, increasing the effective training-view count from 240 to 340 at no
+   additional annotation cost.
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
    (Section 5.4).
 5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.18 dB,
-   SSIM 0.849, LPIPS 0.334, structural mIoU 91.47%.
+   SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47%.
 
 Our full implementation, including the scripts used to reproduce every number reported in this
 paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
@@ -403,6 +414,11 @@ described in Section 3.5 — the literal function the contest evaluates a submis
 | tower | 91.13% |
 | foundation | 87.52% |
 | (background, reported for completeness, excluded from structural mIoU) | 99.24% |
+
+**[NEEDS: Figure — per-class IoU bar chart.]** A bar chart of Table 2's four structural classes
+(deck, stay_cable, tower, foundation), sorted by IoU, to make the ranking discussed in Section 5.2
+— and in particular the counter-intuitive result that `stay_cable` outscores `tower` and
+`foundation` — immediately visible without reading the table closely.
 
 The four structural classes all clear 87% IoU despite substantial differences in physical scale,
 surface texture, and viewpoint coverage, and background — by far the easiest class, since it
