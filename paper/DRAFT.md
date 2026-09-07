@@ -206,7 +206,7 @@ truth at inference time.
 
 ### 3.2 Camera Geometry and Sparse Point Initialization
 
-The contest dataset provides COLMAP `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
+The contest dataset provides COLMAP [1] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
 poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
 observations across views, but it does not include precomputed 3D point coordinates. We recover
 a sparse point cloud of the bridge by triangulating every track with LO-RANSAC multi-view
@@ -222,7 +222,7 @@ training, evaluation, and rendering step operates in this undistorted space.
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
 Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
-unlabeled. To make use of them, we fine-tune a SegFormer semantic segmentation model (MiT-B0
+unlabeled. To make use of them, we fine-tune a SegFormer [8] semantic segmentation model (MiT-B0
 backbone) on the 240 labeled training images obtained from our trajectory-interleaved split
 (Section 3.6), validating 2D mIoU on the 60-image holdout after every epoch and retaining the
 checkpoint with the best validation score. The fine-tuned model is then applied to the 100
@@ -234,7 +234,7 @@ targets: they are reserved exclusively for the final evaluation in Section 5.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
-**Representation.** Following 3D Gaussian Splatting, we represent the bridge as a set of
+**Representation.** Following 3D Gaussian Splatting [2], we represent the bridge as a set of
 anisotropic 3D Gaussians. Each Gaussian $g_k$ is parameterized by a mean position
 $\mu_k \in \mathbb{R}^3$, a scale $s_k \in \mathbb{R}^3$, a rotation quaternion $q_k$, an
 opacity $\alpha_k$, and an RGB color $c_k$. We augment this standard parameterization with a
