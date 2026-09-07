@@ -590,7 +590,7 @@ the modest absolute training time either way, full resolution is the recommended
 **[NEEDS: reformat into the official template's required citation style once available.]**
 1. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
 2. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
-   Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4).
+   Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
 3. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
    Understanding with Implicit Scene Representation. ICCV.
 4. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
