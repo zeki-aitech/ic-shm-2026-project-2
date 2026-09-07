@@ -2,6 +2,10 @@
 Renders Figure 1 (Section 3): the two-branch pipeline overview diagram. Purely illustrative of
 the fixed architecture (Task A / Task B / rendering) - unlike Figures 3-5, it does not visualize
 data from a specific run, so it takes no arguments beyond the output path.
+
+`plot_pipeline_diagram_horizontal` (left-to-right: input/preprocessing/Task A on the left, Task B
+onward on the right) is the version actually used for the paper figure. `plot_pipeline_diagram`
+(top-to-bottom) is kept as an alternative layout.
 """
 import os
 
@@ -40,6 +44,17 @@ def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
     if label:
         mx, my = (p_from[0] + p_to[0]) / 2, (p_from[1] + p_to[1]) / 2
         ax.text(mx + label_offset[0], my + label_offset[1], label, ha="left", va="center",
+                fontsize=12.5, style="italic", color="dimgray", zorder=3)
+
+
+def _elbow_arrow(ax, p_from, bend_xy, p_to, label=None):
+    """A two-segment connector (straight line then arrow) that bends at `bend_xy`, so it can
+    route around boxes that a direct diagonal line from `p_from` to `p_to` would cut through."""
+    ax.plot([p_from[0], bend_xy[0]], [p_from[1], bend_xy[1]],
+            color=ARROW_COLOR, linewidth=1.6, zorder=1)
+    _arrow(ax, bend_xy, p_to)
+    if label:
+        ax.text(bend_xy[0] + 0.15, bend_xy[1], label, ha="left", va="bottom",
                 fontsize=12.5, style="italic", color="dimgray", zorder=3)
 
 
@@ -115,6 +130,77 @@ def plot_pipeline_diagram(output_path: str) -> str:
     return output_path
 
 
+def plot_pipeline_diagram_horizontal(output_path: str) -> str:
+    """Same content as `plot_pipeline_diagram`, laid out left-to-right instead of top-to-bottom:
+    input + preprocessing + Task A on the left, Task B training through to the rendered outputs
+    on the right, connected by arrows crossing the middle."""
+    fig, ax = plt.subplots(figsize=(19, 10), dpi=200)
+    ax.set_xlim(0, 19)
+    ax.set_ylim(-1.6, 12.6)
+    ax.axis("off")
+
+    sub_l, sub_r = 2.3, 6.9
+    bw, bh = 4.0, 1.7
+
+    # Left half: input
+    in_b, in_t, in_l, in_r = _box(
+        ax, 4.6, 11.4, 8.4, 1.3,
+        "400 UAV images (300 labeled + 100 unlabeled) + COLMAP camera poses",
+        fontsize=14.5, fontweight="bold",
+    )
+
+    # Left half, sub-branch chains
+    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, 9.3, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=13.5)
+    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, 9.3, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)", fontsize=13.5)
+
+    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, 6.9, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=13.5)
+    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, 6.9, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=13.5)
+
+    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, 4.5, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
+
+    # Right half: Task B onward
+    right_x = 14.3
+    merge_b, merge_t, merge_l, merge_r = _box(
+        ax, right_x, 8.6, 8.6, 2.4,
+        "Task B: Semantic 3D\nGaussian Splatting training\nfused single-pass RGB +\nsemantic rasterization",
+        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=16, fontweight="bold",
+    )
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, 5.8, 6.0, 1.4, "Trained model\n(602,363 Gaussians)", fontsize=15)
+    r_b, r_t, r_l, r_r = _box(ax, right_x, 3.6, 7.4, 1.3, "render(pose): arbitrary camera viewpoint",
+                               fontsize=15, fontweight="bold")
+    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.1, 1.2, 3.4, 1.3, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.1, 1.2, 3.4, 1.3, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+
+    # Arrows within left half
+    _arrow(ax, (4.6 - 0.1, in_b[1]), (sub_l, a1_t[1] + 0.05))
+    _arrow(ax, (4.6 + 0.1, in_b[1]), (sub_r, b1_t[1] + 0.05))
+    _arrow(ax, a1_b, a2_t)
+    _arrow(ax, a2_b, a3_t)
+    _arrow(ax, b1_b, b2_t)
+
+    # Cross-over arrows: left half -> Task B (right half). warm-start routes below the
+    # pseudo-mask box (a straight diagonal from a3 would otherwise cut through it) via an elbow;
+    # the pseudo-mask arrow is short enough to go direct.
+    _elbow_arrow(ax, a3_r, (sub_r + bw / 2 + 0.3, a3_r[1]), (merge_l[0], merge_l[1] - 0.7), label="warm-start")
+    _arrow(ax, b2_r, (merge_l[0], merge_l[1] + 0.7), label="340 supervised views")
+
+    # Right half chain
+    fig_arrows = [
+        (merge_b, tm_t),
+        (tm_b, r_t),
+        ((right_x - 0.1, r_b[1]), (right_x - 2.1, o1_t[1] + 0.05)),
+        ((right_x + 0.1, r_b[1]), (right_x + 2.1, o2_t[1] + 0.05)),
+    ]
+    for p_from, p_to in fig_arrows:
+        _arrow(ax, p_from, p_to)
+
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
 def main():
     import argparse
 
@@ -124,8 +210,9 @@ def main():
         "--output",
         default=os.path.join(project_root, "paper", "figures", "fig1_pipeline.png"),
     )
+    parser.add_argument("--horizontal", action="store_true", help="Left-to-right layout instead of top-to-bottom")
     args = parser.parse_args()
-    out = plot_pipeline_diagram(args.output)
+    out = (plot_pipeline_diagram_horizontal if args.horizontal else plot_pipeline_diagram)(args.output)
     print(f"[plot_pipeline_diagram] wrote {out}")
 
 
