@@ -76,18 +76,12 @@ def render_splat_pointcloud_views(
     max_background_points: int = 40_000,
     views=((25, 15),),
     point_size: float = 3.5,
-    trim_percentile: float = 1.0,
+    core_percentile: float = 2.0,
+    show_background: bool = False,
     seed: int = 0,
 ) -> str:
     xyz, rgb = load_ply_points_colors(ply_path)
     n_total = xyz.shape[0]
-
-    # Drop the sparse outlier floaters typical of 3DGS training (per-axis percentile trim), so
-    # the plotted view isn't dominated by empty space around a handful of stray points.
-    lo = np.percentile(xyz, trim_percentile, axis=0)
-    hi = np.percentile(xyz, 100 - trim_percentile, axis=0)
-    keep = np.all((xyz >= lo) & (xyz <= hi), axis=1)
-    xyz, rgb = xyz[keep], rgb[keep]
 
     # Classify by nearest official class color (not a hardcoded-gray equality check, which is
     # unreliable: (128,128,128)/255 = 0.502, not exactly 0.5, before SH round-trip noise even
@@ -96,19 +90,31 @@ def render_splat_pointcloud_views(
     canonical_rgb = _CLASS_LUT[class_ids]
     is_bg = class_ids == BACKGROUND_CLASS_ID
 
+    # Zoom to the DENSE core of the structural classes, not their full min/max range: a 3DGS
+    # model also has a scatter of stray, spatially-outlying floaters that happen to get
+    # classified as a structural color, and those can stretch the bounding box far beyond the
+    # actual bridge, forcing everything else into a tiny fraction of the plot.
+    struct_xyz_all = xyz[~is_bg]
+    lo = np.percentile(struct_xyz_all, core_percentile, axis=0)
+    hi = np.percentile(struct_xyz_all, 100 - core_percentile, axis=0)
+    core = np.all((xyz >= lo) & (xyz <= hi), axis=1)
+
     rng = np.random.default_rng(seed)
 
-    struct_xyz, struct_rgb = xyz[~is_bg], canonical_rgb[~is_bg]
+    struct_xyz, struct_rgb = xyz[~is_bg & core], canonical_rgb[~is_bg & core]
     if struct_xyz.shape[0] > max_points:
         idx = rng.choice(struct_xyz.shape[0], size=max_points, replace=False)
         struct_xyz, struct_rgb = struct_xyz[idx], struct_rgb[idx]
 
-    # A light background subsample for spatial context (deck surroundings, sky/water extent),
-    # capped low and drawn faint so it doesn't drown out the structural classes.
-    bg_xyz = xyz[is_bg]
-    if bg_xyz.shape[0] > max_background_points:
-        idx = rng.choice(bg_xyz.shape[0], size=max_background_points, replace=False)
-        bg_xyz = bg_xyz[idx]
+    # An optional light background subsample for spatial context (deck surroundings, sky/water
+    # extent), capped low and drawn faint so it doesn't drown out the structural classes.
+    if show_background:
+        bg_xyz = xyz[is_bg & core]
+        if bg_xyz.shape[0] > max_background_points:
+            idx = rng.choice(bg_xyz.shape[0], size=max_background_points, replace=False)
+            bg_xyz = bg_xyz[idx]
+    else:
+        bg_xyz = np.zeros((0, 3), dtype=xyz.dtype)
 
     # COLMAP/OpenCV world convention (Y down, Z forward-ish): flip Y and Z for a more natural
     # "looking at the bridge from outside" plot orientation.
@@ -118,8 +124,6 @@ def render_splat_pointcloud_views(
     sx, sy, sz = _flip(struct_xyz)
     bx, by, bz = _flip(bg_xyz)
 
-    # Zoom to the structural-class bounding box (padded) rather than the full scene, which is
-    # dominated by a much wider, diffuse background point spread.
     pad = 0.08
     x_lo, x_hi = sx.min(), sx.max()
     y_lo, y_hi = sy.min(), sy.max()
