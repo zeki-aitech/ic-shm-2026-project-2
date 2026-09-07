@@ -585,12 +585,14 @@ RGB and semantic outputs remain pixel-aligned at every step, including the degra
 ![Figure 6: Trained Gaussians colored by predicted semantic class](figures/fig6_splat_pointcloud.png)
 
 **Figure 6 (optional): The trained Gaussians as a 3D point cloud**, colored by each Gaussian's
-predicted semantic class (150,000 of 602,363 points shown; sparse outlier floaters trimmed).
-This is a static point-cloud scatter of Gaussian centers rather than an alpha-blended render from
-an interactive splat viewer, but is sufficient to show that the four structural classes (deck:
-red, cable: cyan, tower: green, foundation: yellow) organize into a single coherent linear
-structure in 3D — the recognizable shape of the bridge itself — rather than being scattered
-throughout the scene. This figure is secondary to Figures 4 and 5 and can be dropped if space is
+predicted semantic class (deck: red, stay_cable: cyan, tower: green, foundation: yellow;
+background shown as a faint gray subsample for spatial context only). Of 602,363 total Gaussians
+(sparse outlier floaters trimmed, 383,006 structural-class points remaining), 200,000
+structural-class points are shown. This is a static point-cloud scatter of Gaussian centers
+rather than an alpha-blended render from an interactive splat viewer, but is sufficient to show
+that the four structural classes organize into a single coherent linear structure in 3D — the
+recognizable shape of the bridge itself — rather than being scattered throughout the scene. This
+figure is secondary to Figures 4 and 5 and can be dropped if space is
 limited.
 
 ### 5.4 Ablation: Training Resolution

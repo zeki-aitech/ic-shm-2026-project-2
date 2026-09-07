@@ -9,7 +9,6 @@ reasonable static stand-in when no interactive viewer is available, and describe
 figure's caption rather than overclaimed.
 """
 import os
-import struct
 from typing import Tuple
 
 import matplotlib
@@ -19,7 +18,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers the 3d projection)
 
+from src.colmap_io.semantic_voting import CLASS_COLORS
+
 SH_C0 = 0.28209479177387814
+_CLASS_LUT = np.stack([CLASS_COLORS[c] for c in range(len(CLASS_COLORS))]).astype(np.float32) / 255.0
+BACKGROUND_CLASS_ID = 0
 
 _PLY_FIELDS = [
     "x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
@@ -57,12 +60,22 @@ def load_ply_points_colors(ply_path: str) -> Tuple[np.ndarray, np.ndarray]:
     return xyz, rgb
 
 
+def classify_by_nearest_class_color(rgb: np.ndarray) -> np.ndarray:
+    """Maps each decoded (noisy, SH-roundtrip) RGB color to the nearest official class color
+    (`src.colmap_io.semantic_voting.CLASS_COLORS`) by squared distance. Exact equality checks
+    against a hardcoded gray value are unreliable here: e.g. the background color (128,128,128)
+    is 0.502 in [0,1], not exactly 0.5, and SH decoding adds further float noise."""
+    dists = ((rgb[:, None, :] - _CLASS_LUT[None, :, :]) ** 2).sum(axis=2)
+    return dists.argmin(axis=1)
+
+
 def render_splat_pointcloud_views(
     ply_path: str,
     output_path: str,
     max_points: int = 200_000,
-    views=((15, 10),),
-    point_size: float = 1.8,
+    max_background_points: int = 40_000,
+    views=((25, 15),),
+    point_size: float = 3.5,
     trim_percentile: float = 1.0,
     seed: int = 0,
 ) -> str:
@@ -76,45 +89,81 @@ def render_splat_pointcloud_views(
     keep = np.all((xyz >= lo) & (xyz <= hi), axis=1)
     xyz, rgb = xyz[keep], rgb[keep]
 
-    if xyz.shape[0] > max_points:
-        rng = np.random.default_rng(seed)
-        idx = rng.choice(xyz.shape[0], size=max_points, replace=False)
-        xyz, rgb = xyz[idx], rgb[idx]
+    # Classify by nearest official class color (not a hardcoded-gray equality check, which is
+    # unreliable: (128,128,128)/255 = 0.502, not exactly 0.5, before SH round-trip noise even
+    # enters the picture) and recolor with the canonical palette for clean, unambiguous colors.
+    class_ids = classify_by_nearest_class_color(rgb)
+    canonical_rgb = _CLASS_LUT[class_ids]
+    is_bg = class_ids == BACKGROUND_CLASS_ID
+
+    rng = np.random.default_rng(seed)
+
+    struct_xyz, struct_rgb = xyz[~is_bg], canonical_rgb[~is_bg]
+    if struct_xyz.shape[0] > max_points:
+        idx = rng.choice(struct_xyz.shape[0], size=max_points, replace=False)
+        struct_xyz, struct_rgb = struct_xyz[idx], struct_rgb[idx]
+
+    # A light background subsample for spatial context (deck surroundings, sky/water extent),
+    # capped low and drawn faint so it doesn't drown out the structural classes.
+    bg_xyz = xyz[is_bg]
+    if bg_xyz.shape[0] > max_background_points:
+        idx = rng.choice(bg_xyz.shape[0], size=max_background_points, replace=False)
+        bg_xyz = bg_xyz[idx]
 
     # COLMAP/OpenCV world convention (Y down, Z forward-ish): flip Y and Z for a more natural
     # "looking at the bridge from outside" plot orientation.
-    x, y, z = xyz[:, 0], -xyz[:, 1], -xyz[:, 2]
+    def _flip(a):
+        return a[:, 0], -a[:, 1], -a[:, 2]
 
-    # Draw background (gray) points small/first, structural-class points larger/on top, so the
-    # bridge's structure is visually legible instead of drowned out by background point density.
-    is_bg = np.all(np.isclose(rgb, 0.5, atol=1e-3), axis=1)
+    sx, sy, sz = _flip(struct_xyz)
+    bx, by, bz = _flip(bg_xyz)
 
-    panel_w = 9.5 if len(views) == 1 else 6.2
-    panel_h = 5.0 if len(views) == 1 else 6.0
-    fig = plt.figure(figsize=(panel_w * len(views), panel_h), dpi=200)
+    # Zoom to the structural-class bounding box (padded) rather than the full scene, which is
+    # dominated by a much wider, diffuse background point spread.
+    pad = 0.08
+    x_lo, x_hi = sx.min(), sx.max()
+    y_lo, y_hi = sy.min(), sy.max()
+    z_lo, z_hi = sz.min(), sz.max()
+    x_pad, y_pad, z_pad = (x_hi - x_lo) * pad, (y_hi - y_lo) * pad, (z_hi - z_lo) * pad
+
+    n = len(views)
+    fig = plt.figure(figsize=(8.0 * n, 6.0), dpi=220)
     for i, (elev, azim) in enumerate(views):
-        ax = fig.add_subplot(1, len(views), i + 1, projection="3d")
-        ax.scatter(x[is_bg], z[is_bg], y[is_bg], c=rgb[is_bg], s=point_size * 0.5,
-                   linewidths=0, depthshade=False, alpha=0.35)
-        ax.scatter(x[~is_bg], z[~is_bg], y[~is_bg], c=rgb[~is_bg], s=point_size * 1.8,
-                   linewidths=0, depthshade=False, alpha=0.95)
+        left = i / n
+        ax = fig.add_axes([left, 0.0, 1 / n, 1.0], projection="3d")
+        ax.scatter(bx, bz, by, c="#c9c9c9", s=point_size * 0.35,
+                   linewidths=0, depthshade=False, alpha=0.25)
+        ax.scatter(sx, sz, sy, c=struct_rgb, s=point_size,
+                   linewidths=0, depthshade=False, alpha=1.0)
         ax.set_axis_off()
         ax.view_init(elev=elev, azim=azim)
-        ax.set_xlim(x.min(), x.max())
-        ax.set_ylim(z.min(), z.max())
-        ax.set_zlim(y.min(), y.max())
-        ax.set_box_aspect((np.ptp(x), np.ptp(z), np.ptp(y)))
+        ax.set_xlim(x_lo - x_pad, x_hi + x_pad)
+        ax.set_ylim(z_lo - z_pad, z_hi + z_pad)
+        ax.set_zlim(y_lo - y_pad, y_hi + y_pad)
+        ax.set_box_aspect((x_hi - x_lo, z_hi - z_lo, y_hi - y_lo))
 
-    fig.suptitle(
-        f"Trained Gaussians colored by predicted semantic class "
-        f"({xyz.shape[0]:,} of {n_total:,} shown)",
-        fontsize=10,
-    )
-    fig.tight_layout()
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    fig.savefig(output_path, bbox_inches="tight")
+    fig.savefig(output_path)
     plt.close(fig)
+    _autocrop_whitespace(output_path)
     return output_path
+
+
+def _autocrop_whitespace(image_path: str, padding: int = 12) -> None:
+    """3D scatter plots leave large near-white margins around the actual (thin, wide) point
+    cloud regardless of `bbox_inches='tight'`, since that only trims around the full 3D axes
+    box, not the rendered content within it. Crops to the actual non-white content instead."""
+    from PIL import Image
+
+    img = Image.open(image_path).convert("RGB")
+    arr = np.asarray(img)
+    non_white = np.any(arr < 250, axis=2)
+    if not non_white.any():
+        return
+    ys, xs = np.where(non_white)
+    y0, y1 = max(0, ys.min() - padding), min(arr.shape[0], ys.max() + padding)
+    x0, x1 = max(0, xs.min() - padding), min(arr.shape[1], xs.max() + padding)
+    img.crop((x0, y0, x1, y1)).save(image_path)
 
 
 def main():
