@@ -47,6 +47,22 @@ def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
                 fontsize=12.5, style="italic", color="dimgray", zorder=3)
 
 
+def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None):
+    """A 3-segment connector - horizontal, then vertical, then horizontal (arrowhead on the
+    final segment) - that bends at `x_bend`. Lets a connector rise or drop from one row's height
+    to another's while staying clear of boxes in between, without a diagonal line cutting
+    through them. `label`, if given, runs vertically alongside the middle (vertical) segment,
+    where there is dedicated clear space, rather than risking collision with any box near the
+    horizontal segments' endpoints."""
+    ax.plot([p_from[0], x_bend], [p_from[1], p_from[1]], color=ARROW_COLOR, linewidth=1.6, zorder=1)
+    ax.plot([x_bend, x_bend], [p_from[1], p_to[1]], color=ARROW_COLOR, linewidth=1.6, zorder=1)
+    _arrow(ax, (x_bend, p_to[1]), p_to)
+    if label:
+        mid_y = (p_from[1] + p_to[1]) / 2
+        ax.text(x_bend + 0.1, mid_y, label, rotation=90, ha="left", va="center",
+                fontsize=11.5, style="italic", color="dimgray", zorder=3)
+
+
 def plot_pipeline_diagram(output_path: str) -> str:
     fig, ax = plt.subplots(figsize=(12, 15), dpi=200)
     ax.set_xlim(0, 10)
@@ -154,13 +170,14 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
 
     a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
 
-    # Right column: Task B's top is level with row 1 (Task A's row) and its bottom lands exactly
-    # on row3_y, so it is visually paired with Task A (same top, same color) while both
-    # cross-over connectors below still land on its left edge and run perfectly horizontal.
+    # Right column: pulled up so Task B's top is level with row 1 (Task A's row) - but Task B
+    # itself stays sized to fit its own text (not stretched to span multiple rows). The two
+    # cross-over connectors from rows 2 and 3 reach up to its left edge via zigzag connectors
+    # (see below) instead of relying on Task B's height to land on their corners.
     right_x = 14.3
     row1_top = row1_y + bh / 2
-    merge_h = row1_top - row3_y
-    merge_cy = (row1_top + row3_y) / 2
+    merge_h = 2.0
+    merge_cy = row1_top - merge_h / 2
     merge_b, merge_t, merge_l, merge_r = _box(
         ax, right_x, merge_cy, 8.6, merge_h,
         "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
@@ -180,15 +197,14 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     _arrow(ax, a2_b, a3_t)
     _arrow(ax, b1_b, b2_t)
 
-    # Cross-over connectors: perfectly horizontal by construction (see merge_h/merge_cy above).
-    # The pseudo-mask connector is short (only 1.1 units), so its label is placed in the clear
-    # gap between rows 1 and 2 instead of on the line itself, where it would collide with the
-    # "Predict pseudo-masks" box; the warm-start connector is long enough for a directly
-    # above-the-line label.
-    _arrow(ax, b2_r, (merge_l[0], row2_y))
-    ax.text(b2_r[0], (row1_y - bh / 2 + row2_y + bh / 2) / 2, "340 supervised views",
-            ha="right", va="center", fontsize=12.5, style="italic", color="dimgray", zorder=3)
-    _arrow(ax, a3_r, (merge_l[0], row3_y), label="warm-start", label_offset=(-0.55, 0.22))
+    # Cross-over connectors: both rows sit below Task B now, so each rises through the narrow
+    # gap between the left column (ends at x=8.9) and Task B (starts at x=10.0) via a zigzag
+    # bend, entering Task B's left edge at two distinct heights rather than crossing through
+    # any box (or each other) along the way.
+    target_y_pseudo = merge_cy + 0.4
+    target_y_warmstart = merge_cy - 0.4
+    _zigzag_arrow(ax, b2_r, 9.3, (merge_l[0], target_y_pseudo), label="340 supervised views")
+    _zigzag_arrow(ax, a3_r, 9.6, (merge_l[0], target_y_warmstart), label="warm-start")
 
     # Right column chain
     for p_from, p_to in [
