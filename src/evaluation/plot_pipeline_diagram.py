@@ -37,8 +37,8 @@ def _box(ax, cx, cy, w, h, text, face=STAGE_COLOR, edge=STAGE_EDGE, fontsize=15,
 
 def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
     arrow = FancyArrowPatch(
-        p_from, p_to, arrowstyle="-|>", mutation_scale=18,
-        color=ARROW_COLOR, linewidth=1.6, zorder=1, shrinkA=2, shrinkB=2,
+        p_from, p_to, arrowstyle="-|>", mutation_scale=26,
+        color=ARROW_COLOR, linewidth=2.2, zorder=1, shrinkA=2, shrinkB=2,
     )
     ax.add_patch(arrow)
     if label:
@@ -54,8 +54,8 @@ def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None):
     through them. `label`, if given, runs vertically alongside the middle (vertical) segment,
     where there is dedicated clear space, rather than risking collision with any box near the
     horizontal segments' endpoints."""
-    ax.plot([p_from[0], x_bend], [p_from[1], p_from[1]], color=ARROW_COLOR, linewidth=1.6, zorder=1)
-    ax.plot([x_bend, x_bend], [p_from[1], p_to[1]], color=ARROW_COLOR, linewidth=1.6, zorder=1)
+    ax.plot([p_from[0], x_bend], [p_from[1], p_from[1]], color=ARROW_COLOR, linewidth=2.2, zorder=1)
+    ax.plot([x_bend, x_bend], [p_from[1], p_to[1]], color=ARROW_COLOR, linewidth=2.2, zorder=1)
     _arrow(ax, (x_bend, p_to[1]), p_to)
     if label:
         mid_y = (p_from[1] + p_to[1]) / 2
@@ -138,22 +138,43 @@ def plot_pipeline_diagram(output_path: str) -> str:
 def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     """Same content as `plot_pipeline_diagram`, laid out left-to-right instead of top-to-bottom:
     input + preprocessing + Task A on the left, Task B training through to the rendered outputs
-    on the right. Task B's box is deliberately sized so its top-left and bottom-left corners
-    land exactly on the y-coordinates of the two left-column source boxes (pseudo-masks and
-    warm-start respectively), so both cross-over connectors are perfectly horizontal straight
-    lines instead of diagonals or elbows - no crossings, no arrows cutting through boxes."""
-    fig, ax = plt.subplots(figsize=(19, 9.2), dpi=200)
-    ax.set_xlim(0, 19)
-    ax.set_ylim(-1.0, 12.6)
-    ax.axis("off")
+    on the right. Positions are computed top-down from explicit gap constants (ROW_GAP,
+    INPUT_GAP, CHAIN_GAP) rather than hand-picked coordinates, so spacing stays consistent and
+    is easy to widen. Task B's top is level with the input box's top; the two cross-over
+    connectors from rows 2 and 3 reach up into its left edge via zigzag bends (see
+    `_zigzag_arrow`), clear of every box."""
+    ROW_GAP = 1.0       # clear vertical gap between left-column sub-branch boxes
+    INPUT_GAP = 1.0      # clear vertical gap between the input box and row 1
+    CHAIN_GAP = 0.9      # clear vertical gap between the right-column chain boxes
 
     sub_l, sub_r = 2.3, 6.9
     bw, bh = 4.0, 1.7
-    row1_y, row2_y, row3_y = 9.3, 6.9, 4.5
+    input_w, input_h = 8.8, 1.6
+    right_x = 14.3
+    merge_w, merge_h = 8.6, 2.2
 
-    # Left column: input
+    fig, ax = plt.subplots(figsize=(19, 11.5), dpi=200)
+    ax.set_xlim(0, 19)
+
+    # Left column, top-down.
+    input_top = 13.4
+    input_cy = input_top - input_h / 2
+    input_bottom = input_top - input_h
+
+    row1_top = input_bottom - INPUT_GAP
+    row1_y = row1_top - bh / 2
+    row1_bottom = row1_top - bh
+
+    row2_top = row1_bottom - ROW_GAP
+    row2_y = row2_top - bh / 2
+    row2_bottom = row2_top - bh
+
+    row3_top = row2_bottom - ROW_GAP
+    row3_y = row3_top - bh / 2
+    row3_bottom = row3_top - bh
+
     in_b, in_t, in_l, in_r = _box(
-        ax, 4.6, 11.4, 8.8, 1.6,
+        ax, 4.6, input_cy, input_w, input_h,
         "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
         fontsize=14.5, fontweight="bold",
     )
@@ -170,25 +191,32 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
 
     a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
 
-    # Right column: pulled up so Task B's top is level with row 1 (Task A's row) - but Task B
-    # itself stays sized to fit its own text (not stretched to span multiple rows). The two
-    # cross-over connectors from rows 2 and 3 reach up to its left edge via zigzag connectors
-    # (see below) instead of relying on Task B's height to land on their corners.
-    right_x = 14.3
-    row1_top = row1_y + bh / 2
-    merge_h = 2.0
-    merge_cy = row1_top - merge_h / 2
+    # Right column, top-down, starting level with the input box.
+    merge_cy = input_top - merge_h / 2
     merge_b, merge_t, merge_l, merge_r = _box(
-        ax, right_x, merge_cy, 8.6, merge_h,
+        ax, right_x, merge_cy, merge_w, merge_h,
         "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
         face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15, fontweight="bold",
     )
-    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, merge_b[1] - 1.05, 6.0, 1.4, "Trained model\n(602,363 Gaussians)", fontsize=15)
-    r_b, r_t, r_l, r_r = _box(ax, right_x, tm_b[1] - 0.95, 7.4, 1.3, "render(pose): arbitrary camera viewpoint",
+    tm_top = merge_b[1] - CHAIN_GAP
+    tm_h = 1.4
+    tm_cy = tm_top - tm_h / 2
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.2, tm_h, "Trained model\n(602,363 Gaussians)", fontsize=15)
+
+    render_top = tm_b[1] - CHAIN_GAP
+    render_h = 1.3
+    render_cy = render_top - render_h / 2
+    r_b, r_t, r_l, r_r = _box(ax, right_x, render_cy, 7.6, render_h, "render(pose): arbitrary camera viewpoint",
                                fontsize=15, fontweight="bold")
-    out_cy = r_b[1] - 0.95
-    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.1, out_cy, 3.4, 1.3, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
-    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.1, out_cy, 3.4, 1.3, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+
+    output_top = r_b[1] - CHAIN_GAP
+    output_h = 1.3
+    out_cy = output_top - output_h / 2
+    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.2, out_cy, 3.6, output_h, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.2, out_cy, 3.6, output_h, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+
+    ax.set_ylim(min(row3_bottom, o1_b[1]) - 0.6, input_top + 0.4)
+    ax.axis("off")
 
     # Arrows within left column
     _arrow(ax, (4.6 - 0.1, in_b[1]), (sub_l, a1_t[1] + 0.05))
@@ -197,12 +225,12 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     _arrow(ax, a2_b, a3_t)
     _arrow(ax, b1_b, b2_t)
 
-    # Cross-over connectors: both rows sit below Task B now, so each rises through the narrow
-    # gap between the left column (ends at x=8.9) and Task B (starts at x=10.0) via a zigzag
-    # bend, entering Task B's left edge at two distinct heights rather than crossing through
-    # any box (or each other) along the way.
-    target_y_pseudo = merge_cy + 0.4
-    target_y_warmstart = merge_cy - 0.4
+    # Cross-over connectors: both source rows sit well below Task B now, so each rises through
+    # the narrow gap between the left column (ends at x=8.9) and Task B (starts at x=10.0) via a
+    # zigzag bend, entering Task B's left edge at two distinct heights rather than crossing
+    # through any box (or each other) along the way.
+    target_y_pseudo = merge_cy + 0.5
+    target_y_warmstart = merge_cy - 0.5
     _zigzag_arrow(ax, b2_r, 9.3, (merge_l[0], target_y_pseudo), label="340 supervised views")
     _zigzag_arrow(ax, a3_r, 9.6, (merge_l[0], target_y_warmstart), label="warm-start")
 
@@ -210,8 +238,8 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     for p_from, p_to in [
         (merge_b, tm_t),
         (tm_b, r_t),
-        ((right_x - 0.1, r_b[1]), (right_x - 2.1, o1_t[1] + 0.05)),
-        ((right_x + 0.1, r_b[1]), (right_x + 2.1, o2_t[1] + 0.05)),
+        ((right_x - 0.1, r_b[1]), (right_x - 2.2, o1_t[1] + 0.05)),
+        ((right_x + 0.1, r_b[1]), (right_x + 2.2, o2_t[1] + 0.05)),
     ]:
         _arrow(ax, p_from, p_to)
 
