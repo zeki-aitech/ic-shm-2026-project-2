@@ -104,9 +104,9 @@ poses and sparse 3D structure from unordered image collections. The contest data
 intrinsics, per-image poses, and 2D-3D feature tracks are all COLMAP outputs, and we build
 directly on them (Section 3.2) rather than re-deriving pose estimates from scratch.
 
-**Neural scene representations.** Neural Radiance Fields (NeRF) represent a scene implicitly as a
-coordinate-based MLP queried by ray-marching, producing high-fidelity novel views at the cost of
-slow, per-pixel volumetric rendering. 3D Gaussian Splatting [5] instead
+**Neural scene representations.** Neural Radiance Fields (NeRF) [5] represent a scene
+implicitly as a coordinate-based MLP queried by ray-marching, producing high-fidelity novel views
+at the cost of slow, per-pixel volumetric rendering. 3D Gaussian Splatting [6] instead
 represents a scene explicitly as a set of anisotropic 3D Gaussians rendered by fast, tile-based
 rasterization, achieving comparable or better visual quality at real-time rendering speeds. We
 adopt the explicit, primitive-based representation for a reason specific to this task: an explicit
@@ -116,19 +116,19 @@ recover it at render time — an implicit MLP would require a separate semantic 
 with no equivalent one-to-one correspondence to discrete scene elements.
 
 **Semantic and feature-augmented radiance fields.** A growing line of work attaches non-appearance
-information to a radiance-field-style representation. Semantic-NeRF [6] was the
+information to a radiance-field-style representation. Semantic-NeRF [7] was the
 first to jointly encode semantics with appearance and geometry in a NeRF, appending a
 segmentation head to the same implicit MLP and rendering semantic logits by the same volumetric
 integration used for color; the resulting multi-view consistency lets sparse 2D labels propagate
 to dense, accurate semantic maps. Follow-up work moved this idea onto the faster, explicit
 Gaussian Splatting representation while pursuing open-vocabulary rather than fixed-class
-supervision: Feature 3DGS [7] attaches an arbitrary-dimensional feature vector to
+supervision: Feature 3DGS [8] attaches an arbitrary-dimensional feature vector to
 every Gaussian and distills it from a 2D foundation model (e.g. SAM or CLIP-LSeg) via a
 teacher-student loss, rendering RGB and features with what the authors describe as a "parallel"
 N-dimensional rasterizer that shares each Gaussian's opacity and depth ordering across both
-outputs; LangSplat [8] similarly bakes per-Gaussian CLIP language embeddings
+outputs; LangSplat [9] similarly bakes per-Gaussian CLIP language embeddings
 (compressed through a scene-specific autoencoder to keep rendering tractable) to support
-open-vocabulary 3D queries; and Gaussian Grouping [9] attaches a compact identity
+open-vocabulary 3D queries; and Gaussian Grouping [10] attaches a compact identity
 encoding to every Gaussian, supervised by Segment Anything masks, to support open-world instance
 grouping and editing rather than semantic classification. All three explicit-representation
 methods share a structural similarity with our approach — an auxiliary per-Gaussian attribute
@@ -143,14 +143,14 @@ multi-view majority vote over a triangulated sparse point cloud (Section 3.4) ra
 foundation-model distillation process, which requires no pretrained 2D foundation model at all and
 ties the semantic initialization directly to the contest's own annotated classes.
 
-**Structure-aware bridge segmentation.** Lin et al. [10] propose a structure-oriented loss
+**Structure-aware bridge segmentation.** Lin et al. [11] propose a structure-oriented loss
 function for automated semantic segmentation of bridge *point clouds*, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
 uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
 noise in Section 3.4, though applied to a different stage (a training-time loss on 3D point
 clouds vs. our warm-start label initialization) and a different data modality (point clouds vs.
 the 2D images our pipeline is built on). Our own 2D pseudo-labeling stage (Section 3.3) fine-tunes
-SegFormer [11], a transformer-based semantic segmentation architecture chosen for its strong
+SegFormer [12], a transformer-based semantic segmentation architecture chosen for its strong
 accuracy-to-compute ratio on a single consumer GPU.
 
 **Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
@@ -210,7 +210,7 @@ truth at inference time.
 The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
 poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
 observations across views, but it does not include precomputed 3D point coordinates. We recover
-a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [12] (Locally
+a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [13] (Locally
 Optimized RANSAC) multi-view triangulation: as in standard RANSAC, candidate 3D points are estimated from
 small random subsets of a track's observations and validated by reprojection error to reject
 outlier correspondences, with an added local refinement step that further optimizes each accepted
@@ -227,7 +227,7 @@ training, evaluation, and rendering step operates in this undistorted space.
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
 Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
-unlabeled. To make use of them, we fine-tune a SegFormer [11] semantic segmentation model (MiT-B0
+unlabeled. To make use of them, we fine-tune a SegFormer [12] semantic segmentation model (MiT-B0
 backbone) on the 240 labeled training images obtained from our trajectory-interleaved split
 (Section 3.6), validating 2D mIoU on the 60-image holdout after every epoch and retaining the
 checkpoint with the best validation score. The fine-tuned model is then applied to the 100
@@ -239,7 +239,7 @@ targets: they are reserved exclusively for the final evaluation in Section 5.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
-**Representation.** Following 3D Gaussian Splatting [5], we represent the bridge as a set of
+**Representation.** Following 3D Gaussian Splatting [6], we represent the bridge as a set of
 anisotropic 3D Gaussians. Each Gaussian $g_k$ is parameterized by a mean position
 $\mu_k \in \mathbb{R}^3$, a scale $s_k \in \mathbb{R}^3$, a rotation quaternion $q_k$, an
 opacity $\alpha_k$, and an RGB color $c_k$. We augment this standard parameterization with a
@@ -290,7 +290,7 @@ remaining free to be corrected by the photometric and semantic losses during tra
 **Fused rendering.** A central design choice of our method is that RGB and semantic outputs
 share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
 semantic logits (5 channels) into one 8-channel color tensor, and render it through `gsplat`'s
-differentiable rasterizer [13]: every Gaussian is projected onto the image plane, the projections
+differentiable rasterizer [14]: every Gaussian is projected onto the image plane, the projections
 are depth-sorted, and each pixel is computed by alpha-compositing the sorted splats from front to
 back. Because the geometric projection and depth ordering that determine this composite depend
 only on each Gaussian's position, scale, and rotation — not on which of its channels are being
@@ -326,7 +326,7 @@ views with real manual annotations, reflecting their lower label confidence.
 **Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
 training. Gaussians whose positional gradients are large — an indication that a single primitive
 is being stretched to cover detail it cannot adequately represent — are split or duplicated,
-while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [13] built-in
+while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [14] built-in
 density-control strategy. This process grows the representation from the 84,613-point sparse
 initialization to 602,363 Gaussians by the end of training, allowing the model to allocate
 additional capacity to structurally intricate regions, such as individual cable strands, that
@@ -407,7 +407,7 @@ dimensions, and $\text{MAX}$ the maximum representable pixel value (255 for 8-bi
 PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
 equally regardless of whether that discrepancy is visually salient.
 
-**SSIM** [14] (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
+**SSIM** [15] (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
 addresses this by comparing local luminance, contrast, and structure rather than raw pixel
 differences:
 $$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
@@ -418,7 +418,7 @@ that stabilize the division when the local means or variances are near zero. SSI
 perceived image quality more closely than PSNR alone, but both remain pixel/patch-level
 comparisons.
 
-**LPIPS** [15] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
+**LPIPS** [16] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
 compares deep-network feature activations:
 $$\text{LPIPS}(\hat{I}, I) = \sum_{l} \frac{1}{H_l W_l} \sum_{h,w}
 \left\| w_l \odot \left(\phi_l(\hat{I})_{hw} - \phi_l(I)_{hw}\right) \right\|_2^2,$$
@@ -633,31 +633,33 @@ need to change accordingly.]**
    reconstruction and bridge damage detection based on data fusion of unmanned aerial vehicle
    LiDAR and imagery. Computer-Aided Civil and Infrastructure Engineering.
 4. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
-5. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
+5. Mildenhall, B., Srinivasan, P. P., Tancik, M., Barron, J. T., Ramamoorthi, R., & Ng, R. (2020)
+   — NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis. ECCV, 405–421.
+6. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
    Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
-6. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
+7. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
    Understanding with Implicit Scene Representation. ICCV.
-7. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
+8. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
    Kadambi, A. (2024) — Feature 3DGS: Supercharging 3D Gaussian Splatting to Enable Distilled
    Feature Fields. CVPR.
-8. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
+9. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
    Splatting. CVPR.
-9. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
-   in 3D Scenes. ECCV.
-10. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
+10. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
+    in 3D Scenes. ECCV.
+11. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
     function for automated semantic segmentation of bridge point clouds. Computer-Aided Civil
     and Infrastructure Engineering.
-11. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
+12. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
     Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
-12. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
+13. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
     (Pattern Recognition), LNCS vol. 2781, 236–243.
-13. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
+14. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
     Tancik, M., & Kanazawa, A. (2025) — gsplat: An Open-Source Library for Gaussian Splatting.
     Journal of Machine Learning Research, 26(34), 1–17.
-14. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
+15. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
     From Error Visibility to Structural Similarity. IEEE Transactions on Image Processing, 13(4),
     600–612.
-15. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
+16. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
     Effectiveness of Deep Features as a Perceptual Metric. CVPR, 586–595.
 
 ---
