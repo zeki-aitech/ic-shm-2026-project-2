@@ -114,6 +114,11 @@ contest's core requirement: given any camera pose, produce both a photorealistic
 a per-pixel structural-class map. The rest of this section formalizes the task, then describes
 each stage in turn.
 
+**[NEEDS: Figure 1 — pipeline overview diagram. Two-branch flow: posed images -> COLMAP sparse
+point cloud + multi-view semantic voting -> Gaussian warm-start; SegFormer pseudo-labeling of the
+100 unlabeled images (Task A); Task B training loop with fused RGB+semantic rasterization;
+arbitrary-pose rendering producing RGB + semantic-class map as the final output.]**
+
 ### 3.1 Problem Formulation
 
 We are given a set of posed UAV images of a single cable-stayed bridge,
@@ -195,7 +200,14 @@ the background-bleeding hypothesis rather than one consistent with generic vote 
 the exception precisely because its label noise is systematic rather than random: it stems from
 the annotation process itself (a polygon necessarily traces a region around a thin cable, not
 the cable pixels alone), not merely from cable occupying few pixels, so only cable benefits from
-— and needs — this stricter threshold. The winning class is encoded as a scaled one-hot
+— and needs — this stricter threshold.
+
+**[NEEDS: Figure 2 — illustration of background-bleeding in cable annotations and the multi-view
+voting rule. E.g. a cropped real image showing a polygon annotation bleeding onto sky/water around
+a stay cable, alongside a small schematic of multi-view rays converging on a 3D point with per-view
+vote tallies and the strict-majority threshold.]**
+
+The winning class is encoded as a scaled one-hot
 logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
 semantic channel begins optimization from an informed prior instead of from noise, while
 remaining free to be corrected by the photometric and semantic losses during training.
@@ -276,32 +288,88 @@ Section 4.3.
 
 ### 4.1 Dataset
 
-- 300 labeled UAV images + 100 unlabeled, 1320x989 resolution, single shared `SIMPLE_RADIAL`
-  camera ($f\approx925.7$ px, $k_1\approx0.009$).
-- Pixel-level polygon annotations (Labelme) rasterized to 5-class masks (background, deck,
-  stay_cable, tower, foundation), with `stay_cable` drawn last to avoid occlusion by broader
-  deck/tower polygons.
-- 240/60 trajectory-interleaved split for both the 2D segmentation and 3D stages.
+The contest dataset consists of 400 UAV images of a single cable-stayed bridge at
+1320$\times$989 resolution, captured by one shared camera with `SIMPLE_RADIAL` intrinsics
+($f \approx 925.7$ px, $k_1 \approx 0.009$). Of these, 300 carry pixel-level polygon annotations
+over the five structural classes described in Section 3.1; the remaining 100 are unannotated and
+are used only through Task A's pseudo-labeling (Section 3.3). Annotations were produced with
+Labelme and rasterized to per-pixel class masks; because the `stay_cable` polygons are thin and
+frequently nested inside or adjacent to broader `deck` and `tower` regions, they are rasterized
+last so that a cable's mask pixels are never silently overwritten by a coarser structural class
+drawn on top of it. All 400 images share the same 240/60 trajectory-interleaved split defined in
+Section 3.6 — the 60 held-out images are identical across Task A validation, Task B training, and
+final evaluation, so that no stage of the pipeline ever trains on a view another stage reports
+results on.
 
 ### 4.2 Implementation Details
 
-- Hardware: single NVIDIA RTX 3080 (10 GB).
-- Task A: SegFormer MiT-B0, 80 epochs, batch size 8.
-- Task B: `gsplat` differentiable rasterizer, Adam optimizers per parameter group (means,
-  scales, quats, opacities, colors, semantic logits — different learning rates, means LR
-  exponentially decayed), 40,000 iterations, trained at full image resolution (1320x989).
-- Gaussian count capped at 600,000 during densification for memory/iteration-speed
-  predictability on a 10 GB GPU.
+All experiments run on a single NVIDIA RTX 3080 (10 GB). Task A fine-tunes SegFormer (MiT-B0
+backbone) for 80 epochs with AdamW (learning rate $6\times10^{-4}$, weight decay
+$1\times10^{-4}$, cosine-annealed over training), batch size 8, at a downsampled resolution of
+$512\times384$; the checkpoint with the highest validation mIoU on the 60-image holdout is kept
+for pseudo-labeling. Task B optimizes each Gaussian parameter group with its own Adam optimizer
+and learning rate — means $1.6\times10^{-4}$ (exponentially decayed to 1% of its initial value
+over training), scales $5\times10^{-3}$, rotation quaternions $1\times10^{-3}$, opacities
+$5\times10^{-2}$, and both color and semantic logits $2.5\times10^{-3}$ — for 40,000 iterations
+at full image resolution ($1320\times989$). The semantic loss weight $\lambda_{\text{sem}}$ is
+set to 0.5, and pseudo-labeled views are additionally down-weighted by a factor of 0.5 relative
+to manually-annotated views when computing $\mathcal{L}_{\text{sem}}$, reflecting their lower
+label confidence. Densification (Section 3.4) is active between iterations 500 and 15,000 and is
+capped at 600,000 Gaussians, bounding both memory use and per-iteration cost on a 10 GB GPU.
 
 ### 4.3 Metrics
 
-- **Visual fidelity**: PSNR, SSIM (`skimage.metrics`), LPIPS (AlexNet backbone).
-- **Semantic accuracy**: per-class IoU and structural mIoU (4 classes, background excluded),
-  from a standard confusion matrix over rendered-vs-GT class labels.
-- **Accuracy Score** (illustrative combination, since the brief does not define how
-  PSNR/SSIM/LPIPS combine into one Visual Fidelity number): mean of PSNR normalized against a
-  35 dB reference, raw SSIM, and $(1-\text{LPIPS})$, averaged with mIoU per the official 0.5/0.5
-  weighting.
+We report the two components of the contest's Accuracy Score separately as well as combined,
+using four metrics computed between each rendered holdout view and its corresponding ground
+truth (real photograph for visual fidelity, annotated mask for semantic accuracy).
+
+**PSNR** (peak signal-to-noise ratio, in decibels, higher is better) measures raw pixel-wise
+reconstruction error:
+$$\text{PSNR} = 10 \log_{10}\!\left(\frac{\text{MAX}^2}{\text{MSE}}\right), \qquad
+\text{MSE} = \frac{1}{HW}\sum_{h,w}\left(\hat{I}(h,w) - I(h,w)\right)^2,$$
+where $\hat{I}$ and $I$ are the rendered and ground-truth images, $H \times W$ the image
+dimensions, and $\text{MAX}$ the maximum representable pixel value (255 for 8-bit images). Because
+PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
+equally regardless of whether that discrepancy is visually salient.
+
+**SSIM** (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
+addresses this by comparing local luminance, contrast, and structure rather than raw pixel
+differences:
+$$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
+{(\mu_{\hat{I}}^2 + \mu_I^2 + c_1)(\sigma_{\hat{I}}^2 + \sigma_I^2 + c_2)},$$
+where $\mu$, $\sigma^2$, and $\sigma_{\hat{I}I}$ are the mean, variance, and covariance computed
+over local sliding windows (averaged over the full image), and $c_1$, $c_2$ are small constants
+that stabilize the division when the local means or variances are near zero. SSIM tracks
+perceived image quality more closely than PSNR alone, but both remain pixel/patch-level
+comparisons.
+
+**LPIPS** (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
+compares deep-network feature activations:
+$$\text{LPIPS}(\hat{I}, I) = \sum_{l} \frac{1}{H_l W_l} \sum_{h,w}
+\left\| w_l \odot \left(\phi_l(\hat{I})_{hw} - \phi_l(I)_{hw}\right) \right\|_2^2,$$
+where $\phi_l$ is the (channel-normalized) feature map extracted at layer $l$ of a pretrained
+network, $H_l \times W_l$ its spatial resolution, and $w_l$ a per-channel weight learned to
+match human perceptual judgments. Because it compares learned features rather than pixels, LPIPS
+correlates more closely with human judgments of visual similarity than either PSNR or SSIM, and
+is comparatively more sensitive to structural artifacts (e.g. blurred cable strands) that are
+easy to miss in raw pixel error but visually obvious.
+
+**Semantic accuracy** is measured by per-class intersection-over-union and a structural mIoU that
+averages it over the four structural classes while excluding the background class. For class $c$,
+$$\text{IoU}_c = \frac{TP_c}{TP_c + FP_c + FN_c}, \qquad
+\text{mIoU} = \frac{1}{|\mathcal{C}|}\sum_{c \in \mathcal{C}} \text{IoU}_c, \quad
+\mathcal{C} = \{\text{deck}, \text{stay\_cable}, \text{tower}, \text{foundation}\},$$
+where $TP_c$, $FP_c$, and $FN_c$ are the true-positive, false-positive, and false-negative pixel
+counts for class $c$, obtained from a standard confusion matrix between the rendered semantic
+map's per-pixel argmax class and the ground-truth mask over the same 60 holdout views. Background
+is excluded from the mean because it occupies the large majority of most frames and, being the
+least structurally informative class, would otherwise dominate the average and mask errors on the
+four classes the contest actually cares about. Because the
+contest brief specifies the 0.5/0.5 weighting between Visual Fidelity and Semantic mIoU but does
+not define how PSNR, SSIM, and LPIPS combine into a single Visual Fidelity number, we report an
+illustrative Accuracy Score computed as the mean of PSNR (normalized against a 35 dB reference),
+raw SSIM, and $(1-\text{LPIPS})$, averaged with mIoU under the official weighting; we make this
+combination explicit here rather than presenting it as an authoritative formula.
 
 ---
 
