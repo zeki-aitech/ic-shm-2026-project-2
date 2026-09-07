@@ -47,17 +47,6 @@ def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
                 fontsize=12.5, style="italic", color="dimgray", zorder=3)
 
 
-def _elbow_arrow(ax, p_from, bend_xy, p_to, label=None):
-    """A two-segment connector (straight line then arrow) that bends at `bend_xy`, so it can
-    route around boxes that a direct diagonal line from `p_from` to `p_to` would cut through."""
-    ax.plot([p_from[0], bend_xy[0]], [p_from[1], bend_xy[1]],
-            color=ARROW_COLOR, linewidth=1.6, zorder=1)
-    _arrow(ax, bend_xy, p_to)
-    if label:
-        ax.text(bend_xy[0] + 0.15, bend_xy[1], label, ha="left", va="bottom",
-                fontsize=12.5, style="italic", color="dimgray", zorder=3)
-
-
 def plot_pipeline_diagram(output_path: str) -> str:
     fig, ax = plt.subplots(figsize=(12, 15), dpi=200)
     ax.set_xlim(0, 10)
@@ -133,65 +122,76 @@ def plot_pipeline_diagram(output_path: str) -> str:
 def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     """Same content as `plot_pipeline_diagram`, laid out left-to-right instead of top-to-bottom:
     input + preprocessing + Task A on the left, Task B training through to the rendered outputs
-    on the right, connected by arrows crossing the middle."""
-    fig, ax = plt.subplots(figsize=(19, 10), dpi=200)
+    on the right. Task B's box is deliberately sized so its top-left and bottom-left corners
+    land exactly on the y-coordinates of the two left-column source boxes (pseudo-masks and
+    warm-start respectively), so both cross-over connectors are perfectly horizontal straight
+    lines instead of diagonals or elbows - no crossings, no arrows cutting through boxes."""
+    fig, ax = plt.subplots(figsize=(19, 9.2), dpi=200)
     ax.set_xlim(0, 19)
-    ax.set_ylim(-1.6, 12.6)
+    ax.set_ylim(-1.0, 12.6)
     ax.axis("off")
 
     sub_l, sub_r = 2.3, 6.9
     bw, bh = 4.0, 1.7
+    row1_y, row2_y, row3_y = 9.3, 6.9, 4.5
 
-    # Left half: input
+    # Left column: input
     in_b, in_t, in_l, in_r = _box(
         ax, 4.6, 11.4, 8.4, 1.3,
         "400 UAV images (300 labeled + 100 unlabeled) + COLMAP camera poses",
         fontsize=14.5, fontweight="bold",
     )
 
-    # Left half, sub-branch chains
-    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, 9.3, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=13.5)
-    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, 9.3, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)", fontsize=13.5)
+    # Left column, two sub-branch chains
+    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=13.5)
+    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)", fontsize=13.5)
 
-    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, 6.9, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=13.5)
-    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, 6.9, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=13.5)
+    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=13.5)
+    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=13.5)
 
-    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, 4.5, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
+    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
 
-    # Right half: Task B onward
+    # Right column: Task B sized so its left edge spans exactly [row3_y, row2_y] -> both
+    # incoming connectors land on its corners and run perfectly horizontal.
     right_x = 14.3
+    merge_h = row2_y - row3_y
+    merge_cy = (row2_y + row3_y) / 2
     merge_b, merge_t, merge_l, merge_r = _box(
-        ax, right_x, 8.6, 8.6, 2.4,
-        "Task B: Semantic 3D\nGaussian Splatting training\nfused single-pass RGB +\nsemantic rasterization",
-        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=16, fontweight="bold",
+        ax, right_x, merge_cy, 8.6, merge_h,
+        "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
+        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15, fontweight="bold",
     )
-    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, 5.8, 6.0, 1.4, "Trained model\n(602,363 Gaussians)", fontsize=15)
-    r_b, r_t, r_l, r_r = _box(ax, right_x, 3.6, 7.4, 1.3, "render(pose): arbitrary camera viewpoint",
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, merge_b[1] - 1.05, 6.0, 1.4, "Trained model\n(602,363 Gaussians)", fontsize=15)
+    r_b, r_t, r_l, r_r = _box(ax, right_x, tm_b[1] - 0.95, 7.4, 1.3, "render(pose): arbitrary camera viewpoint",
                                fontsize=15, fontweight="bold")
-    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.1, 1.2, 3.4, 1.3, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
-    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.1, 1.2, 3.4, 1.3, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+    out_cy = r_b[1] - 0.95
+    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.1, out_cy, 3.4, 1.3, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.1, out_cy, 3.4, 1.3, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
 
-    # Arrows within left half
+    # Arrows within left column
     _arrow(ax, (4.6 - 0.1, in_b[1]), (sub_l, a1_t[1] + 0.05))
     _arrow(ax, (4.6 + 0.1, in_b[1]), (sub_r, b1_t[1] + 0.05))
     _arrow(ax, a1_b, a2_t)
     _arrow(ax, a2_b, a3_t)
     _arrow(ax, b1_b, b2_t)
 
-    # Cross-over arrows: left half -> Task B (right half). warm-start routes below the
-    # pseudo-mask box (a straight diagonal from a3 would otherwise cut through it) via an elbow;
-    # the pseudo-mask arrow is short enough to go direct.
-    _elbow_arrow(ax, a3_r, (sub_r + bw / 2 + 0.3, a3_r[1]), (merge_l[0], merge_l[1] - 0.7), label="warm-start")
-    _arrow(ax, b2_r, (merge_l[0], merge_l[1] + 0.7), label="340 supervised views")
+    # Cross-over connectors: perfectly horizontal by construction (see merge_h/merge_cy above).
+    # The pseudo-mask connector is short (only 1.1 units), so its label is placed in the clear
+    # gap between rows 1 and 2 instead of on the line itself, where it would collide with the
+    # "Predict pseudo-masks" box; the warm-start connector is long enough for a directly
+    # above-the-line label.
+    _arrow(ax, b2_r, (merge_l[0], row2_y))
+    ax.text(b2_r[0], (row1_y - bh / 2 + row2_y + bh / 2) / 2, "340 supervised views",
+            ha="right", va="center", fontsize=12.5, style="italic", color="dimgray", zorder=3)
+    _arrow(ax, a3_r, (merge_l[0], row3_y), label="warm-start", label_offset=(-0.55, 0.22))
 
-    # Right half chain
-    fig_arrows = [
+    # Right column chain
+    for p_from, p_to in [
         (merge_b, tm_t),
         (tm_b, r_t),
         ((right_x - 0.1, r_b[1]), (right_x - 2.1, o1_t[1] + 0.05)),
         ((right_x + 0.1, r_b[1]), (right_x + 2.1, o2_t[1] + 0.05)),
-    ]
-    for p_from, p_to in fig_arrows:
+    ]:
         _arrow(ax, p_from, p_to)
 
     fig.tight_layout()
