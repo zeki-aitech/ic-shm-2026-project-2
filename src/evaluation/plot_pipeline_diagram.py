@@ -20,11 +20,11 @@ OUTPUT_EDGE = "#2f6b3d"
 ARROW_COLOR = "#333333"
 
 
-def _box(ax, cx, cy, w, h, text, face=STAGE_COLOR, edge=STAGE_EDGE, fontsize=9.5, fontweight="normal"):
+def _box(ax, cx, cy, w, h, text, face=STAGE_COLOR, edge=STAGE_EDGE, fontsize=15, fontweight="normal"):
     box = FancyBboxPatch(
         (cx - w / 2, cy - h / 2), w, h,
         boxstyle="round,pad=0.08,rounding_size=0.12",
-        facecolor=face, edgecolor=edge, linewidth=1.4, zorder=2,
+        facecolor=face, edgecolor=edge, linewidth=1.8, zorder=2,
     )
     ax.add_patch(box)
     ax.text(cx, cy, text, ha="center", va="center", fontsize=fontsize, fontweight=fontweight, zorder=3)
@@ -33,59 +33,60 @@ def _box(ax, cx, cy, w, h, text, face=STAGE_COLOR, edge=STAGE_EDGE, fontsize=9.5
 
 def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
     arrow = FancyArrowPatch(
-        p_from, p_to, arrowstyle="-|>", mutation_scale=14,
-        color=ARROW_COLOR, linewidth=1.3, zorder=1, shrinkA=2, shrinkB=2,
+        p_from, p_to, arrowstyle="-|>", mutation_scale=18,
+        color=ARROW_COLOR, linewidth=1.6, zorder=1, shrinkA=2, shrinkB=2,
     )
     ax.add_patch(arrow)
     if label:
         mx, my = (p_from[0] + p_to[0]) / 2, (p_from[1] + p_to[1]) / 2
         ax.text(mx + label_offset[0], my + label_offset[1], label, ha="left", va="center",
-                fontsize=8, style="italic", color="dimgray", zorder=3)
+                fontsize=12.5, style="italic", color="dimgray", zorder=3)
 
 
 def plot_pipeline_diagram(output_path: str) -> str:
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=200)
+    fig, ax = plt.subplots(figsize=(12, 15), dpi=200)
     ax.set_xlim(0, 10)
-    ax.set_ylim(-1.5, 15)
+    ax.set_ylim(-2.0, 17.5)
     ax.axis("off")
 
     left_x, right_x = 2.8, 7.2
-    bw, bh = 4.6, 1.3
+    bw, bh = 4.8, 1.8
 
     # Row 0: input
     in_b, in_t, in_l, in_r = _box(
-        ax, 5, 14, 7.0, 1.1,
+        ax, 5, 16.3, 7.4, 1.4,
         "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
-        fontweight="bold",
+        fontsize=16, fontweight="bold",
     )
 
     # Row 1
-    a1_b, a1_t, a1_l, a1_r = _box(ax, left_x, 12.1, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)")
-    b1_b, b1_t, b1_l, b1_r = _box(ax, right_x, 12.1, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)")
+    a1_b, a1_t, a1_l, a1_r = _box(ax, left_x, 14.0, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)")
+    b1_b, b1_t, b1_l, b1_r = _box(ax, right_x, 14.0, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)")
 
     # Row 2
-    a2_b, a2_t, a2_l, a2_r = _box(ax, left_x, 10.2, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)")
-    b2_b, b2_t, b2_l, b2_r = _box(ax, right_x, 10.2, bw, bh, "Predict pseudo-masks for\n100 unlabeled images")
+    a2_b, a2_t, a2_l, a2_r = _box(ax, left_x, 11.6, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)")
+    b2_b, b2_t, b2_l, b2_r = _box(ax, right_x, 11.6, bw, bh, "Predict pseudo-masks for\n100 unlabeled images")
 
     # Row 3
-    a3_b, a3_t, a3_l, a3_r = _box(ax, left_x, 8.3, bw, bh, "Semantic warm-start\n(Gaussian means, colors, logits)")
+    a3_b, a3_t, a3_l, a3_r = _box(ax, left_x, 9.2, bw, bh, "Semantic warm-start\n(Gaussian means, colors, logits)")
 
     # Merge box
     merge_b, merge_t, merge_l, merge_r = _box(
-        ax, 5, 6.1, 8.4, 1.5,
+        ax, 5, 6.7, 8.8, 1.9,
         "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
-        face=MERGE_COLOR, edge=MERGE_EDGE, fontweight="bold",
+        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=16, fontweight="bold",
     )
 
     # Trained model
-    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.2, 5.0, 1.1, "Trained model\n(602,363 Gaussians)")
+    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.5, 5.4, 1.4, "Trained model\n(602,363 Gaussians)")
 
     # Render
-    r_b, r_t, r_l, r_r = _box(ax, 5, 2.4, 6.5, 1.0, "render(pose): arbitrary camera viewpoint", fontweight="bold")
+    r_b, r_t, r_l, r_r = _box(ax, 5, 2.4, 7.0, 1.3, "render(pose): arbitrary camera viewpoint",
+                               fontsize=16, fontweight="bold")
 
     # Outputs
-    o1_b, o1_t, o1_l, o1_r = _box(ax, left_x, 0.4, bw - 0.6, 1.0, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE)
-    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x, 0.4, bw - 0.6, 1.0, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE)
+    o1_b, o1_t, o1_l, o1_r = _box(ax, left_x, 0.2, bw - 0.6, 1.3, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE)
+    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x, 0.2, bw - 0.6, 1.3, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE)
 
     # Arrows: input -> two branches
     _arrow(ax, (5 - 0.1, in_b[1]), (left_x, a1_t[1] + 0.05))
