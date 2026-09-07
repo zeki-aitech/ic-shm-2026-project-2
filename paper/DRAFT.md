@@ -585,16 +585,18 @@ RGB and semantic outputs remain pixel-aligned at every step, including the degra
 ![Figure 6: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
 
 **Figure 6 (optional): The trained Gaussians viewed in an interactive splat viewer**
-([SuperSplat](https://superspl.at/editor)), from the same viewpoint, exported via
-`export_splat_ply` (left, true RGB color) and `export_semantic_splat_ply` (right, colored by
-each Gaussian's predicted semantic class: deck red, stay_cable cyan, tower green, foundation
-yellow, background gray). Unlike the arbitrary-viewpoint renders in Figures 4-5, which cover only
-what a single camera pose sees, this alpha-blended splat render shows the full learned 3D
-structure at once — both towers, the cable fan, the deck, and the foundation piers are
-simultaneously visible and spatially coherent, confirming that the semantic warm-start and
-training loss converge to a structurally sensible 3D segmentation rather than scattered,
-inconsistent per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can be dropped
-if space is limited.
+([SuperSplat](https://superspl.at/editor)), from the same viewpoint. **(a)** Exported via
+`export_splat_ply` and rendered in true RGB color, showing the reconstructed appearance of the
+whole bridge at once rather than one camera pose at a time. **(b)** The same Gaussians exported
+via `export_semantic_splat_ply` and colored by each Gaussian's predicted semantic class (deck
+red, stay_cable cyan, tower green, foundation yellow, background gray). Unlike the
+arbitrary-viewpoint renders in Figures 4-5, which each cover only what a single camera pose sees,
+this alpha-blended splat render exposes the full learned 3D structure simultaneously: both towers,
+the cable fan, the deck, and the foundation piers are all visible at once in panel (b) and clearly
+spatially coherent with the true-color reconstruction in panel (a), confirming that the semantic
+warm-start and training loss converge to a structurally sensible 3D segmentation rather than
+scattered, inconsistent per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can
+be dropped if space is limited.
 
 ### 5.4 Ablation: Training Resolution
 

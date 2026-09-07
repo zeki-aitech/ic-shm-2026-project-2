@@ -13,21 +13,23 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-LABEL_H = 34
-
 
 def _labeled_panel(image_path: str, label: str) -> Image.Image:
     img = Image.open(image_path).convert("RGB")
-    panel = Image.new("RGB", (img.width, img.height + LABEL_H), "white")
-    panel.paste(img, (0, LABEL_H))
+    font_size = max(14, img.width // 28)
+    label_h = font_size + 24
+
+    panel = Image.new("RGB", (img.width, img.height + label_h), "white")
+    panel.paste(img, (0, label_h))
     draw = ImageDraw.Draw(panel)
     try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
     except OSError:
         font = ImageFont.load_default()
     bbox = draw.textbbox((0, 0), label, font=font)
     text_w = bbox[2] - bbox[0]
-    draw.text(((panel.width - text_w) / 2, 6), label, fill="black", font=font)
+    draw.text(((panel.width - text_w) / 2, (label_h - font_size) / 2 - bbox[1]),
+               label, fill="black", font=font)
     return panel
 
 
@@ -35,8 +37,8 @@ def compose_splat_screenshots(
     rgb_path: str,
     semantic_path: str,
     output_path: str,
-    rgb_label: str = "True-color splat render",
-    semantic_label: str = "Colored by predicted semantic class",
+    rgb_label: str = "(a) True-color splat render",
+    semantic_label: str = "(b) Colored by predicted semantic class",
     gap: int = 12,
 ) -> str:
     left = _labeled_panel(rgb_path, rgb_label)
