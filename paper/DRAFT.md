@@ -39,10 +39,11 @@ to a specific structural component.
 
 Bridges are critical infrastructure, and periodic condition assessment is essential for public
 safety, yet manual inspection remains slow, costly, and at times hazardous — towers, cable
-anchorages, and water-adjacent foundations are not always safely or cheaply accessible on foot.
-UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge data
-acquisition, and this in turn motivates building automated 3D, semantically-labeled digital twins
-directly from drone imagery rather than relying on manual survey. A digital twin that is actually
+anchorages, and water-adjacent foundations are not always safely or cheaply accessible on foot
+[11]. UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge
+data acquisition [11], and this in turn motivates building automated 3D, semantically-labeled
+digital twins directly from drone imagery rather than relying on manual survey [9, 10]. A digital
+twin that is actually
 useful for downstream structural health monitoring needs two capabilities at once: an accurate 3D
 geometric reconstruction of the structure, and a per-component semantic labeling of that geometry
 into its constituent parts (deck, stay cable, tower, foundation), so that later analyses such as
@@ -97,7 +98,7 @@ paper, is publicly available. **[NEEDS: repository URL once the submission link 
 
 ## 2. Related Work
 
-**Structure-from-Motion and multi-view geometry.** COLMAP (Schönberger & Frahm) is the de facto
+**Structure-from-Motion and multi-view geometry.** COLMAP [1] is the de facto
 standard incremental Structure-from-Motion and multi-view stereo pipeline for recovering camera
 poses and sparse 3D structure from unordered image collections. The contest dataset's camera
 intrinsics, per-image poses, and 2D-3D feature tracks are all COLMAP outputs, and we build
@@ -105,7 +106,7 @@ directly on them (Section 3.2) rather than re-deriving pose estimates from scrat
 
 **Neural scene representations.** Neural Radiance Fields (NeRF) represent a scene implicitly as a
 coordinate-based MLP queried by ray-marching, producing high-fidelity novel views at the cost of
-slow, per-pixel volumetric rendering. 3D Gaussian Splatting (Kerbl et al., 2023) instead
+slow, per-pixel volumetric rendering. 3D Gaussian Splatting [2] instead
 represents a scene explicitly as a set of anisotropic 3D Gaussians rendered by fast, tile-based
 rasterization, achieving comparable or better visual quality at real-time rendering speeds. We
 adopt the explicit, primitive-based representation for a reason specific to this task: an explicit
@@ -115,19 +116,19 @@ recover it at render time — an implicit MLP would require a separate semantic 
 with no equivalent one-to-one correspondence to discrete scene elements.
 
 **Semantic and feature-augmented radiance fields.** A growing line of work attaches non-appearance
-information to a radiance-field-style representation. Semantic-NeRF (Zhi et al., 2021) was the
+information to a radiance-field-style representation. Semantic-NeRF [3] was the
 first to jointly encode semantics with appearance and geometry in a NeRF, appending a
 segmentation head to the same implicit MLP and rendering semantic logits by the same volumetric
 integration used for color; the resulting multi-view consistency lets sparse 2D labels propagate
 to dense, accurate semantic maps. Follow-up work moved this idea onto the faster, explicit
 Gaussian Splatting representation while pursuing open-vocabulary rather than fixed-class
-supervision: Feature 3DGS (Zhou et al., 2024) attaches an arbitrary-dimensional feature vector to
+supervision: Feature 3DGS [4] attaches an arbitrary-dimensional feature vector to
 every Gaussian and distills it from a 2D foundation model (e.g. SAM or CLIP-LSeg) via a
 teacher-student loss, rendering RGB and features with what the authors describe as a "parallel"
 N-dimensional rasterizer that shares each Gaussian's opacity and depth ordering across both
-outputs; LangSplat (Qin et al., 2024) similarly bakes per-Gaussian CLIP language embeddings
+outputs; LangSplat [5] similarly bakes per-Gaussian CLIP language embeddings
 (compressed through a scene-specific autoencoder to keep rendering tractable) to support
-open-vocabulary 3D queries; and Gaussian Grouping (Ye et al., 2024) attaches a compact identity
+open-vocabulary 3D queries; and Gaussian Grouping [6] attaches a compact identity
 encoding to every Gaussian, supervised by Segment Anything masks, to support open-world instance
 grouping and editing rather than semantic classification. All three explicit-representation
 methods share a structural similarity with our approach — an auxiliary per-Gaussian attribute
@@ -142,26 +143,26 @@ multi-view majority vote over a triangulated sparse point cloud (Section 3.4) ra
 foundation-model distillation process, which requires no pretrained 2D foundation model at all and
 ties the semantic initialization directly to the contest's own annotated classes.
 
-**2D structural bridge segmentation.** Lin et al. (2025) propose a structure-oriented loss
+**2D structural bridge segmentation.** Lin et al. [7] propose a structure-oriented loss
 function for automated semantic segmentation of bridge point clouds, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
 uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
 noise in Section 3.4, though applied to a different stage (2D loss weighting vs. 3D label
 initialization) and a different data modality (point clouds vs. images). Our own 2D pseudo-labeling
-stage (Section 3.3) fine-tunes SegFormer (Xie et al., 2021), a transformer-based semantic
+stage (Section 3.3) fine-tunes SegFormer [8], a transformer-based semantic
 segmentation architecture chosen for its strong accuracy-to-compute ratio on a single consumer GPU.
 
-**Structure-aware 3D bridge reconstruction.** Hu et al. (2021) reconstruct structure-aware 3D
+**Structure-aware 3D bridge reconstruction.** Hu et al. [9] reconstruct structure-aware 3D
 models of cable-stayed bridges with a recursive network that predicts both a high-level structural
 relation graph and low-level 3D geometry from multi-view images and a photogrammetric point cloud
 — sharing our goal of a structurally-labeled 3D bridge model, but pursuing it through explicit
 geometric/graph prediction and mesh-level outputs rather than a differentiable, renderable scene
-representation. Li et al. (2024) fuse UAV LiDAR and imagery for high-resolution bridge model
+representation. Li et al. [10] fuse UAV LiDAR and imagery for high-resolution bridge model
 reconstruction and damage detection, illustrating a complementary sensor-fusion route to bridge
 digital twins that, unlike our approach, depends on dedicated LiDAR hardware rather than imagery
 and poses alone.
 
-**UAV-based bridge inspection.** Zhang et al. (2022) systematically review 115 UAV-enabled bridge
+**UAV-based bridge inspection.** Zhang et al. [11] systematically review 115 UAV-enabled bridge
 inspection studies and find that, despite UAVs' promise for automating the full inspection
 pipeline, most existing approaches still require substantial human intervention at some stage —
 typically manual review of captured imagery or point clouds rather than an end-to-end model that
@@ -610,7 +611,10 @@ identification to quantitative structural response over a bridge's full inspecti
 
 ## References
 
-**[NEEDS: reformat into the official template's required citation style once available.]**
+In-text citations use numbered brackets (e.g. `[1]`) matching this list's order.
+**[NEEDS: reformat into the official template's required citation style once available — if the
+template mandates author-year, both the in-text citations above and this list's ordering will
+need to change accordingly.]**
 1. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
 2. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
    Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
