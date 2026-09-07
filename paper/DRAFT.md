@@ -560,6 +560,8 @@ directly rather than any one rendered view — and can be dropped if space is li
 
 ### 5.4 Ablation: Training Resolution
 
+**Table 3: Effect of training resolution on holdout performance.**
+
 | Training resolution | PSNR | SSIM | LPIPS | mIoU |
 | :--- | :---: | :---: | :---: | :---: |
 | Half (660x494) | 21.99 | 0.834 | 0.348 | 87.96% |
@@ -622,9 +624,9 @@ need to change accordingly.]**
 2. Hu, F., Zhao, J., Huang, Y., & Li, H. (2021) — Structure-aware 3D reconstruction for
    cable-stayed bridges: A learning-based method. Computer-Aided Civil and Infrastructure
    Engineering, 36(1), 89–108.
-3. Li et al. (2024) — High-resolution model reconstruction and bridge damage detection based on
-   data fusion of unmanned aerial vehicle LiDAR and imagery. Computer-Aided Civil and
-   Infrastructure Engineering.
+3. Li, H., Chen, Y., Liu, J., Che, C., Meng, Z., & Zhu, H. (2024) — High-resolution model
+   reconstruction and bridge damage detection based on data fusion of unmanned aerial vehicle
+   LiDAR and imagery. Computer-Aided Civil and Infrastructure Engineering.
 4. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
 5. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
    Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
@@ -637,8 +639,9 @@ need to change accordingly.]**
    Splatting. CVPR.
 9. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
    in 3D Scenes. ECCV.
-10. Lin et al. (2025) — A structure-oriented loss function for automated semantic segmentation
-    of bridge point clouds.
+10. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
+    function for automated semantic segmentation of bridge point clouds. Computer-Aided Civil
+    and Infrastructure Engineering.
 11. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
     Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
 12. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
