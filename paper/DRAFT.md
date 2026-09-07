@@ -40,9 +40,9 @@ to a specific structural component.
 Bridges are critical infrastructure, and periodic condition assessment is essential for public
 safety, yet manual inspection remains slow, costly, and at times hazardous — towers, cable
 anchorages, and water-adjacent foundations are not always safely or cheaply accessible on foot
-[11]. UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge
-data acquisition [11], and this in turn motivates building automated 3D, semantically-labeled
-digital twins directly from drone imagery rather than relying on manual survey [9, 10]. A digital
+[1]. UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge
+data acquisition [1], and this in turn motivates building automated 3D, semantically-labeled
+digital twins directly from drone imagery rather than relying on manual survey [2, 3]. A digital
 twin that is actually
 useful for downstream structural health monitoring needs two capabilities at once: an accurate 3D
 geometric reconstruction of the structure, and a per-component semantic labeling of that geometry
@@ -98,7 +98,7 @@ paper, is publicly available. **[NEEDS: repository URL once the submission link 
 
 ## 2. Related Work
 
-**Structure-from-Motion and multi-view geometry.** COLMAP [1] is the de facto
+**Structure-from-Motion and multi-view geometry.** COLMAP [4] is the de facto
 standard incremental Structure-from-Motion and multi-view stereo pipeline for recovering camera
 poses and sparse 3D structure from unordered image collections. The contest dataset's camera
 intrinsics, per-image poses, and 2D-3D feature tracks are all COLMAP outputs, and we build
@@ -106,7 +106,7 @@ directly on them (Section 3.2) rather than re-deriving pose estimates from scrat
 
 **Neural scene representations.** Neural Radiance Fields (NeRF) represent a scene implicitly as a
 coordinate-based MLP queried by ray-marching, producing high-fidelity novel views at the cost of
-slow, per-pixel volumetric rendering. 3D Gaussian Splatting [2] instead
+slow, per-pixel volumetric rendering. 3D Gaussian Splatting [5] instead
 represents a scene explicitly as a set of anisotropic 3D Gaussians rendered by fast, tile-based
 rasterization, achieving comparable or better visual quality at real-time rendering speeds. We
 adopt the explicit, primitive-based representation for a reason specific to this task: an explicit
@@ -116,19 +116,19 @@ recover it at render time — an implicit MLP would require a separate semantic 
 with no equivalent one-to-one correspondence to discrete scene elements.
 
 **Semantic and feature-augmented radiance fields.** A growing line of work attaches non-appearance
-information to a radiance-field-style representation. Semantic-NeRF [3] was the
+information to a radiance-field-style representation. Semantic-NeRF [6] was the
 first to jointly encode semantics with appearance and geometry in a NeRF, appending a
 segmentation head to the same implicit MLP and rendering semantic logits by the same volumetric
 integration used for color; the resulting multi-view consistency lets sparse 2D labels propagate
 to dense, accurate semantic maps. Follow-up work moved this idea onto the faster, explicit
 Gaussian Splatting representation while pursuing open-vocabulary rather than fixed-class
-supervision: Feature 3DGS [4] attaches an arbitrary-dimensional feature vector to
+supervision: Feature 3DGS [7] attaches an arbitrary-dimensional feature vector to
 every Gaussian and distills it from a 2D foundation model (e.g. SAM or CLIP-LSeg) via a
 teacher-student loss, rendering RGB and features with what the authors describe as a "parallel"
 N-dimensional rasterizer that shares each Gaussian's opacity and depth ordering across both
-outputs; LangSplat [5] similarly bakes per-Gaussian CLIP language embeddings
+outputs; LangSplat [8] similarly bakes per-Gaussian CLIP language embeddings
 (compressed through a scene-specific autoencoder to keep rendering tractable) to support
-open-vocabulary 3D queries; and Gaussian Grouping [6] attaches a compact identity
+open-vocabulary 3D queries; and Gaussian Grouping [9] attaches a compact identity
 encoding to every Gaussian, supervised by Segment Anything masks, to support open-world instance
 grouping and editing rather than semantic classification. All three explicit-representation
 methods share a structural similarity with our approach — an auxiliary per-Gaussian attribute
@@ -143,26 +143,26 @@ multi-view majority vote over a triangulated sparse point cloud (Section 3.4) ra
 foundation-model distillation process, which requires no pretrained 2D foundation model at all and
 ties the semantic initialization directly to the contest's own annotated classes.
 
-**2D structural bridge segmentation.** Lin et al. [7] propose a structure-oriented loss
+**2D structural bridge segmentation.** Lin et al. [10] propose a structure-oriented loss
 function for automated semantic segmentation of bridge point clouds, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
 uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
 noise in Section 3.4, though applied to a different stage (2D loss weighting vs. 3D label
 initialization) and a different data modality (point clouds vs. images). Our own 2D pseudo-labeling
-stage (Section 3.3) fine-tunes SegFormer [8], a transformer-based semantic
+stage (Section 3.3) fine-tunes SegFormer [11], a transformer-based semantic
 segmentation architecture chosen for its strong accuracy-to-compute ratio on a single consumer GPU.
 
-**Structure-aware 3D bridge reconstruction.** Hu et al. [9] reconstruct structure-aware 3D
+**Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
 models of cable-stayed bridges with a recursive network that predicts both a high-level structural
 relation graph and low-level 3D geometry from multi-view images and a photogrammetric point cloud
 — sharing our goal of a structurally-labeled 3D bridge model, but pursuing it through explicit
 geometric/graph prediction and mesh-level outputs rather than a differentiable, renderable scene
-representation. Li et al. [10] fuse UAV LiDAR and imagery for high-resolution bridge model
+representation. Li et al. [3] fuse UAV LiDAR and imagery for high-resolution bridge model
 reconstruction and damage detection, illustrating a complementary sensor-fusion route to bridge
 digital twins that, unlike our approach, depends on dedicated LiDAR hardware rather than imagery
 and poses alone.
 
-**UAV-based bridge inspection.** Zhang et al. [11] systematically review 115 UAV-enabled bridge
+**UAV-based bridge inspection.** Zhang et al. [1] systematically review 115 UAV-enabled bridge
 inspection studies and find that, despite UAVs' promise for automating the full inspection
 pipeline, most existing approaches still require substantial human intervention at some stage —
 typically manual review of captured imagery or point clouds rather than an end-to-end model that
@@ -206,7 +206,7 @@ truth at inference time.
 
 ### 3.2 Camera Geometry and Sparse Point Initialization
 
-The contest dataset provides COLMAP [1] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
+The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
 poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
 observations across views, but it does not include precomputed 3D point coordinates. We recover
 a sparse point cloud of the bridge by triangulating every track with LO-RANSAC multi-view
@@ -222,7 +222,7 @@ training, evaluation, and rendering step operates in this undistorted space.
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
 Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
-unlabeled. To make use of them, we fine-tune a SegFormer [8] semantic segmentation model (MiT-B0
+unlabeled. To make use of them, we fine-tune a SegFormer [11] semantic segmentation model (MiT-B0
 backbone) on the 240 labeled training images obtained from our trajectory-interleaved split
 (Section 3.6), validating 2D mIoU on the 60-image holdout after every epoch and retaining the
 checkpoint with the best validation score. The fine-tuned model is then applied to the 100
@@ -234,7 +234,7 @@ targets: they are reserved exclusively for the final evaluation in Section 5.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
-**Representation.** Following 3D Gaussian Splatting [2], we represent the bridge as a set of
+**Representation.** Following 3D Gaussian Splatting [5], we represent the bridge as a set of
 anisotropic 3D Gaussians. Each Gaussian $g_k$ is parameterized by a mean position
 $\mu_k \in \mathbb{R}^3$, a scale $s_k \in \mathbb{R}^3$, a rotation quaternion $q_k$, an
 opacity $\alpha_k$, and an RGB color $c_k$. We augment this standard parameterization with a
@@ -611,35 +611,36 @@ identification to quantitative structural response over a bridge's full inspecti
 
 ## References
 
-In-text citations use numbered brackets (e.g. `[1]`) matching this list's order.
+In-text citations use numbered brackets (e.g. `[1]`), numbered in order of first appearance in
+the text, matching this list's order.
 **[NEEDS: reformat into the official template's required citation style once available — if the
 template mandates author-year, both the in-text citations above and this list's ordering will
 need to change accordingly.]**
-1. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
-2. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
-   Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
-3. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
-   Understanding with Implicit Scene Representation. ICCV.
-4. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
-   Kadambi, A. (2024) — Feature 3DGS: Supercharging 3D Gaussian Splatting to Enable Distilled
-   Feature Fields. CVPR.
-5. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
-   Splatting. CVPR.
-6. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
-   in 3D Scenes. ECCV.
-7. Lin et al. (2025) — A structure-oriented loss function for automated semantic segmentation
-   of bridge point clouds.
-8. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
-   Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
-9. Hu, F., Zhao, J., Huang, Y., & Li, H. (2021) — Structure-aware 3D reconstruction for
+1. Zhang, C., Zou, Y., Wang, F., del Rey Castillo, E., Dimyadi, J., & Chen, L. (2022) — Towards
+   fully automated unmanned aerial vehicle-enabled bridge inspection: Where are we at?
+   Construction and Building Materials, 347, 128543.
+2. Hu, F., Zhao, J., Huang, Y., & Li, H. (2021) — Structure-aware 3D reconstruction for
    cable-stayed bridges: A learning-based method. Computer-Aided Civil and Infrastructure
    Engineering, 36(1), 89–108.
-10. Li et al. (2024) — High-resolution model reconstruction and bridge damage detection based on
-    data fusion of unmanned aerial vehicle LiDAR and imagery. Computer-Aided Civil and
-    Infrastructure Engineering.
-11. Zhang, C., Zou, Y., Wang, F., del Rey Castillo, E., Dimyadi, J., & Chen, L. (2022) — Towards
-    fully automated unmanned aerial vehicle-enabled bridge inspection: Where are we at?
-    Construction and Building Materials, 347, 128543.
+3. Li et al. (2024) — High-resolution model reconstruction and bridge damage detection based on
+   data fusion of unmanned aerial vehicle LiDAR and imagery. Computer-Aided Civil and
+   Infrastructure Engineering.
+4. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
+5. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
+   Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
+6. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
+   Understanding with Implicit Scene Representation. ICCV.
+7. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
+   Kadambi, A. (2024) — Feature 3DGS: Supercharging 3D Gaussian Splatting to Enable Distilled
+   Feature Fields. CVPR.
+8. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
+   Splatting. CVPR.
+9. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
+   in 3D Scenes. ECCV.
+10. Lin et al. (2025) — A structure-oriented loss function for automated semantic segmentation
+    of bridge point clouds.
+11. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
+    Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
 12. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
     Tancik, M., & Kanazawa, A. (2025) — gsplat: An Open-Source Library for Gaussian Splatting.
     Journal of Machine Learning Research, 26(34), 1–17.
