@@ -569,19 +569,37 @@ the modest absolute training time either way, full resolution is the recommended
 
 ## 6. Conclusion
 
-- Summarize: a semantic 3D Gaussian Splatting pipeline that natively satisfies the contest's
-  dual RGB+semantic rendering requirement, using a fused single-pass rasterization design and a
-  point-cloud-informed semantic warm-start, reaching 91.47% structural mIoU and an illustrative
-  Accuracy Score of 0.816 on the held-out evaluation protocol.
-- Practical implication for SHM: a trained model of this kind is a queryable digital twin —
-  any future inspection viewpoint (not limited to the original flight path) can be rendered
-  with per-component semantic labels, a basis for downstream tasks like deflection tracking,
-  cable-tension inference, or automated defect localization scoped to the correct structural
-  element.
-- **Future work** [NEEDS: keep this section limited to genuinely presentable directions —
-  longer training / hyperparameter tuning for further Visual Fidelity gains, and integration
-  with UAV vision displacement measurements (Project 1) for full-lifecycle SHM, are safe to
-  list; do not include unfinished/negative-result experiments here].
+We presented a semantic 3D Gaussian Splatting pipeline that natively satisfies the contest's
+dual-output requirement: a single trained model that renders both an RGB image and a per-pixel
+structural-class map from any camera viewpoint, using a fused single-pass rasterization design in
+which the two outputs are pixel-aligned by construction rather than reconciled after the fact. A
+point-cloud-informed semantic warm-start, together with a strict-majority voting rule targeted at
+the stay-cable class's characteristic annotation noise, and a pseudo-labeling stage that extends
+supervision to every available image regardless of annotation status, let this representation
+reach 91.47% structural mIoU and an illustrative Accuracy Score of 0.816 on a held-out evaluation
+protocol built to mirror the organizers' own blind-test methodology as closely as possible.
+
+Beyond the contest's scoring criteria, a trained model of this kind functions as a queryable
+digital twin of the bridge: once optimized, it can be rendered from any future inspection
+viewpoint — not only the ones captured during the original UAV flight — with per-component
+semantic labels attached to every pixel. This is a natural basis for downstream structural health
+monitoring tasks that need to be scoped to a specific structural element, such as tracking deck
+deflection over repeated inspections, inferring cable tension from cable-region imagery, or
+localizing detected defects to the deck, tower, cable, or foundation they actually belong to,
+rather than to the bridge as an undifferentiated whole.
+
+Two directions follow naturally from the results in Section 5. First, since full-resolution
+training already improved every metric over half-resolution (Section 5.4) purely from sharper
+supervision, further gains in visual fidelity are plausible from longer training schedules or
+additional hyperparameter tuning within the same architecture, without changing the underlying
+method. Second, the semantic warm-start's measured effect on the raw vote data (Section 3.4) has
+not yet been isolated from its effect on final training dynamics; an ablation that removes the
+warm-start or the strict-majority rule individually, holding everything else fixed, would
+quantify how much of the model's final per-class IoU is attributable to each mechanism rather than
+to their combination. Beyond the scope of this contest submission, a semantically-labeled,
+queryable 3D reconstruction of this kind is also a natural complement to UAV-based displacement
+and deformation measurement systems, toward a single pipeline that ties visual structural
+identification to quantitative structural response over a bridge's full inspection lifecycle.
 
 ---
 
