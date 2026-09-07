@@ -137,25 +137,30 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
 
     # Left column: input
     in_b, in_t, in_l, in_r = _box(
-        ax, 4.6, 11.4, 8.4, 1.3,
-        "400 UAV images (300 labeled + 100 unlabeled) + COLMAP camera poses",
+        ax, 4.6, 11.4, 8.8, 1.6,
+        "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
         fontsize=14.5, fontweight="bold",
     )
 
-    # Left column, two sub-branch chains
+    # Left column, two sub-branch chains. Task A and Task B share a color (MERGE_COLOR) to mark
+    # them visually as the pipeline's two named tasks, distinct from the plain preprocessing
+    # steps (COLMAP/voting/warm-start/pseudo-labeling) around them.
     a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=13.5)
-    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)", fontsize=13.5)
+    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)",
+                                   face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=13.5, fontweight="bold")
 
     a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=13.5)
     b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=13.5)
 
     a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
 
-    # Right column: Task B sized so its left edge spans exactly [row3_y, row2_y] -> both
-    # incoming connectors land on its corners and run perfectly horizontal.
+    # Right column: Task B's top is level with row 1 (Task A's row) and its bottom lands exactly
+    # on row3_y, so it is visually paired with Task A (same top, same color) while both
+    # cross-over connectors below still land on its left edge and run perfectly horizontal.
     right_x = 14.3
-    merge_h = row2_y - row3_y
-    merge_cy = (row2_y + row3_y) / 2
+    row1_top = row1_y + bh / 2
+    merge_h = row1_top - row3_y
+    merge_cy = (row1_top + row3_y) / 2
     merge_b, merge_t, merge_l, merge_r = _box(
         ax, right_x, merge_cy, 8.6, merge_h,
         "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
