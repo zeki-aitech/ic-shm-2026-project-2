@@ -389,7 +389,7 @@ results on.
 ### 4.2 Implementation Details
 
 All experiments run on a single NVIDIA RTX 3080 (10 GB). Task A fine-tunes SegFormer (MiT-B0
-backbone) for 80 epochs with AdamW (learning rate $6\times10^{-4}$, weight decay
+backbone) for 80 epochs with AdamW (learning rate $6\times10^{-5}$, weight decay
 $1\times10^{-4}$, cosine-annealed over training), batch size 8, at a downsampled resolution of
 $512\times384$; the checkpoint with the highest validation mIoU on the 60-image holdout is kept
 for pseudo-labeling. Task B optimizes each Gaussian parameter group with its own Adam optimizer
