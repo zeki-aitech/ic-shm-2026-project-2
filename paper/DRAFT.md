@@ -563,9 +563,11 @@ ground-truth mask, all colored by the official class legend. Views 005 and 250 a
 strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the foreground deck
 region; 300 is the weakest RGB reconstruction in this set, with color artifacts across the distant
 background. Notably, the semantic map for 300 remains close to the ground truth despite the
-degraded RGB quality in the same view, consistent with Section 5.2's discussion of the semantic
-channel's relative robustness — though we present this as an illustrative observation from this
-set of views rather than a claim established over the full holdout.
+degraded RGB quality in the same view. A plausible explanation is that per-pixel classification
+is a coarser, lower-precision target than exact color reconstruction — an appearance error large
+enough to visibly corrupt RGB may still leave the arg-max class unchanged — but we present this
+as an illustrative observation from this set of views rather than a claim established over the
+full holdout.
 
 ![Figure 5: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
 
@@ -578,8 +580,8 @@ a genuinely arbitrary viewpoint, not merely one selected from the acquisition tr
 endpoints ($t=0, 1$) are real flown poses and render cleanly; RGB quality degrades visibly in the
 intermediate frames, where the interpolated pose departs furthest from any training view — but
 the semantic map remains largely stable and structurally coherent across all five frames despite
-this RGB degradation, a second, independent illustration of the pattern discussed in Section 5.2.
-RGB and semantic outputs remain pixel-aligned at every step, including the degraded ones.
+this RGB degradation, a second, independent illustration of the pattern noted in Figure 4. RGB
+and semantic outputs remain pixel-aligned at every step, including the degraded ones.
 
 ![Figure 6: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
 
