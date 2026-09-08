@@ -60,7 +60,7 @@ def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None):
     if label:
         mid_y = (p_from[1] + p_to[1]) / 2
         ax.text(x_bend + 0.1, mid_y, label, rotation=90, ha="left", va="center",
-                fontsize=11.5, style="italic", color="dimgray", zorder=3)
+                fontsize=14.5, style="italic", fontweight="bold", color="dimgray", zorder=3)
 
 
 def plot_pipeline_diagram(output_path: str) -> str:
