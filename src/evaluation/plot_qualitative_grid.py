@@ -63,9 +63,9 @@ def build_qualitative_grid(
             for spine in ax.spines.values():
                 spine.set_visible(False)
             if row == 0:
-                ax.set_title(col_titles[col], fontsize=11, fontweight="bold")
+                ax.set_title(col_titles[col], fontsize=16, fontweight="bold")
             if col == 0:
-                ax.set_ylabel(vid, fontsize=10, rotation=0, labelpad=28, va="center")
+                ax.set_ylabel(vid, fontsize=15, fontweight="bold", rotation=0, labelpad=32, va="center")
 
     fig.tight_layout()
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
