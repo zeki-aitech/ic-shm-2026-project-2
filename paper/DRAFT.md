@@ -599,6 +599,11 @@ be dropped if space is limited.
 
 ### 5.4 Training Convergence
 
+The results in Sections 5.1-5.3 characterize the final trained models but say nothing about how
+they got there — whether the reported numbers reflect a stably converged optimum or an early,
+possibly fragile checkpoint. We check this directly against the real training logs for both
+tasks.
+
 ![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
 
 **Figure 7: Task A (SegFormer) training convergence.** Training loss (red, left axis) and
@@ -617,6 +622,13 @@ occasional spikes that persist even after the Gaussian count stabilizes around s
 consistent with per-view difficulty variance (e.g. grazing viewing angles or motion-blurred
 training photos) rather than an optimization instability. The moving average nonetheless shows
 steady convergence with no divergence, settling to a stable plateau by roughly step 20,000.
+
+Task A's clean, monotonic curves and Task B's noisier but still clearly convergent one differ
+because Task A's loss is a per-epoch average over the full 240-image training set, while Task
+B's is a per-view, per-step loss, so individual hard viewpoints show up directly in the raw
+curve rather than being averaged away. In both cases, training had clearly finished improving
+well before its final checkpoint, supporting the Section 5.1 numbers as representative of a
+converged model rather than a lucky snapshot.
 
 ### 5.5 Ablation: Training Resolution
 
