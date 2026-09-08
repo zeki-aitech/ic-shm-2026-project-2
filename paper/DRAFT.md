@@ -82,6 +82,11 @@ We address these challenges with a semantic 3D Gaussian Splatting pipeline whose
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
    (Section 5.5).
+5. An ablation isolating the cable voting rule and semantic warm-start's individual
+   contributions to final holdout IoU (Section 5.2), showing that while the voting rule
+   measurably cleans the warm-start data, neither mechanism has a measurable effect on cable's
+   final IoU once training converges - evidence that training dynamics, not initialization
+   quality, explain cable's counter-intuitively strong performance.
 5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.18 dB,
    SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47%.
 
@@ -514,22 +519,55 @@ each cable polygon is actually sky or water background — the "background-bleed
 motivated our strict absolute-majority voting rule in Section 3.4. Under this framing, one would
 expect `stay_cable` to trail behind the other three structural classes. Our results show the
 opposite: at 92.13% IoU, cable outperforms both `tower` (91.13%) and `foundation` (87.52%),
-second only to `deck`. We attribute this to two design choices acting together, one of which we
-can verify directly and one of which remains a plausible but untested hypothesis. First, the
-strict-majority voting rule used for the semantic warm-start (Section 3.4) measurably discards
-low-confidence, background-contaminated cable votes: of the 7,673 sparse points that plain
+second only to `deck`.
+
+We first checked whether the strict-majority voting rule actually does what Section 3.4 claims
+at the data level, independent of its effect on final IoU: of the 7,673 sparse points that plain
 plurality voting alone would have labeled cable, the strict rule reclassifies 416 (5.4%), and
-92.3% of those move specifically to background rather than to another structural class — direct
-confirmation that the rule is removing background-bleeding contamination rather than discarding
-votes at random. The Gaussians seeded as `cable` at initialization are therefore disproportionately
-the ones genuinely observed as cable from a majority of views. Second, we hypothesize that the
-fused alpha-compositing mechanism (Section 3.4) compounds this effect during training: a floating
-"cable" Gaussian that is actually sky would receive semantic gradients that are inconsistent
-across the views that observe it (correct from some angles, penalized from others), which should
-push it toward lower opacity or a corrected label rather than letting it accumulate as
-confidently-labeled cable. Unlike the warm-start effect above, this second mechanism has not been
-measured directly — verifying it would require tracking individual Gaussians' semantic-logit and
-opacity trajectories over training, which we leave to future work.
+92.3% of those move specifically to background rather than to another structural class —
+confirming the rule does remove background-bleeding contamination from the warm-start data
+rather than discarding votes at random. This data-level effect is real, but to find out whether
+it - or the semantic warm-start mechanism more broadly - actually explains cable's final IoU
+margin, we retrained Task B twice with one mechanism disabled at a time (Table 3): once with
+plain plurality voting instead of the strict-majority rule, and once with semantic logits
+initialized to a neutral zero vector instead of the voted-class warm-start, holding every other
+setting (including the full 40,000-iteration, full-resolution schedule) fixed.
+
+If the strict-majority rule's data-cleaning effect (established above) were the primary driver
+of cable's strong IoU, disabling it should measurably hurt cable's final performance. Table 3
+shows this is not the case: plain plurality changes cable IoU by only +0.23 points (92.36% vs.
+92.13%) and removing the semantic warm-start entirely changes it by only -0.11 points (92.02%),
+both comfortably within the run-to-run noise we would expect from stochastic densification and
+view-order shuffling, and if anything in the opposite direction from what cleaner warm-start
+data would predict. The data-cleaning effect on the warm-start itself is real (established
+above), but it does not translate into a measurable final-IoU advantage for cable. The more
+consistent reading of Table 3 is that with 340 supervised views and 40,000 training iterations,
+the semantic cross-entropy loss corrects most warm-start label noise during training regardless
+of its initial quality, making cable's converged IoU largely insensitive to how it was
+initialized. This is consistent with - though does not directly confirm - a fused
+alpha-compositing correction mechanism during training: a floating "cable" Gaussian that is
+actually sky would receive inconsistent semantic gradients across the views that observe it,
+pushing it toward a corrected label; directly confirming this would require tracking individual
+Gaussians' semantic-logit and opacity trajectories over training, which we leave to future work.
+
+Table 3 also surfaces a secondary pattern we did not anticipate: `tower` IoU drops by
+1.4-1.5 points under both ablations (89.71% and 89.62%, vs. 91.13% baseline) - a larger swing
+than either ablation produces on cable itself - while `deck` improves slightly under both
+(95.72% and 95.91%, vs. 95.09%). We do not have a verified explanation for this and did not
+design this ablation to isolate it; we note it here as an observation for follow-up work rather
+than a claim.
+
+**Table 3: Effect of the cable voting rule and semantic warm-start on holdout performance,**
+each row trained for the same 40,000 iterations at full resolution as the baseline, changing
+only the mechanism named. PSNR/SSIM/LPIPS are omitted as they are nearly identical across all
+three rows (22.17-22.19 dB, 0.849-0.851, 0.325-0.335 respectively), as expected since only the
+semantic-branch initialization differs.
+
+| Configuration | mIoU | deck | stay_cable | tower | foundation |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Baseline (strict-majority + semantic warm-start)** | **91.47%** | 95.09% | 92.13% | **91.13%** | 87.52% |
+| Plain plurality (no strict-majority rule) | 91.28% | 95.72% | **92.36%** | 89.71% | 87.34% |
+| No semantic warm-start (neutral init) | 91.45% | **95.91%** | 92.02% | 89.62% | **88.25%** |
 
 `foundation` is the weakest of the four structural classes. The most likely explanation is
 viewpoint coverage rather than any class-specific representational difficulty: foundations sit
@@ -641,14 +679,14 @@ converged model rather than a lucky snapshot.
 
 ### 5.5 Ablation: Training Resolution
 
-**Table 3: Effect of training resolution on holdout performance.**
+**Table 4: Effect of training resolution on holdout performance.**
 
 | Training resolution | PSNR | SSIM | LPIPS | mIoU |
 | :--- | :---: | :---: | :---: | :---: |
 | Half (660x494) | 21.99 | 0.834 | 0.348 | 87.96% |
 | **Full (1320x989)** | **22.18** | **0.849** | **0.334** | **91.47%** |
 
-As Table 3 shows, training at native image resolution improves every metric, most notably mIoU
+As Table 4 shows, training at native image resolution improves every metric, most notably mIoU
 (+3.5 points), consistent with the intuition that thin structures (cable) and fine boundaries
 benefit from
 sharper photometric/semantic gradients during optimization. The cost is proportionally longer
@@ -682,11 +720,13 @@ Two directions follow naturally from the results in Section 5. First, since full
 training already improved every metric over half-resolution (Section 5.5) purely from sharper
 supervision, further gains in visual fidelity are plausible from longer training schedules or
 additional hyperparameter tuning within the same architecture, without changing the underlying
-method. Second, the semantic warm-start's measured effect on the raw vote data (Section 3.4) has
-not yet been isolated from its effect on final training dynamics; an ablation that removes the
-warm-start or the strict-majority rule individually, holding everything else fixed, would
-quantify how much of the model's final per-class IoU is attributable to each mechanism rather than
-to their combination. Beyond the scope of this contest submission, a semantically-labeled,
+method. Second, Section 5.2's ablation found that neither the strict-majority voting rule nor
+the semantic warm-start has a measurable individual effect on cable's final IoU at the
+40,000-iteration budget used throughout this paper, despite the voting rule's real, measured
+effect on the warm-start data itself - suggesting training dynamics dominate over initialization
+quality once training converges. Whether initialization quality matters more at shorter training
+budgets, before the semantic loss has had as much opportunity to correct early label noise,
+remains open. Beyond the scope of this contest submission, a semantically-labeled,
 queryable 3D reconstruction of this kind is also a natural complement to UAV-based displacement
 and deformation measurement systems, toward a single pipeline that ties visual structural
 identification to quantitative structural response over a bridge's full inspection lifecycle.

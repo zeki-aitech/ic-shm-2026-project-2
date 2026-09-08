@@ -18,13 +18,17 @@ it once the paper is finalized and submitted — it is not part of the paper its
   (`DRAFT.md` title block, currently `[NEEDS]`).
 - [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
   `[NEEDS]`) once the submission link is finalized.
-- [ ] Ablation training without the strict-majority rule (plain plurality only) and/or without
-  the semantic warm-start entirely (`DRAFT.md` Section 5.2), to isolate each mechanism's
-  contribution to the final cable IoU margin — the vote-level analysis in Section 5.2
-  establishes that the warm-start data itself is cleaner, but not yet how much of the final
-  92.13% IoU that cleanliness is responsible for versus the training dynamics.
-
 ## Done
+
+- [x] Ablation training without the strict-majority rule (plain plurality only) and without
+  the semantic warm-start entirely (`DRAFT.md` Section 5.2, Table 3) - two real 40,000-iteration,
+  full-resolution runs (`--plain-plurality` and `--no-semantic-warmstart` flags added to
+  `src/gaussian_splatting/train.py`), evaluated via `src/evaluation/render_metrics.py`
+  (`outputs/eval/render_eval_report_plain_plurality.md`,
+  `outputs/eval/render_eval_report_no_warmstart.md`). Result: neither mechanism has a
+  measurable effect on cable's final IoU (92.36% and 92.02% vs. 92.13% baseline, within noise) -
+  this contradicted the hypothesis in an earlier draft of Section 5.2, which has been rewritten
+  to report the ablation honestly instead.
 
 - [x] Fill in final Gaussian count in Section 3.4 (602,363 per
   `outputs/checkpoints/gaussians/final.pt`).
