@@ -87,7 +87,7 @@ We address these challenges with a semantic 3D Gaussian Splatting pipeline whose
    additional annotation cost.
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
-   (Section 5.4).
+   (Section 5.5).
 5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.18 dB,
    SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47%.
 
@@ -597,7 +597,28 @@ warm-start and training loss converge to a structurally sensible 3D segmentation
 scattered, inconsistent per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can
 be dropped if space is limited.
 
-### 5.4 Ablation: Training Resolution
+### 5.4 Training Convergence
+
+![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
+
+**Figure 7: Task A (SegFormer) training convergence.** Training loss (red, left axis) and
+validation mIoU on the 60-image holdout (blue, right axis) over 80 epochs on the 240-image
+labeled training split. Both curves plateau well before epoch 80 (final validation mIoU
+81.27%), indicating the fine-tuned model has converged rather than still improving or
+overfitting when its pseudo-labels are handed to Task B.
+
+![Figure 8: Task B (semantic Gaussian Splatting) training convergence over 40,000 steps](figures/fig8_task_b_training.png)
+
+**Figure 8: Task B (semantic Gaussian Splatting) training convergence.** Training loss over
+40,000 steps for the full-resolution model reported throughout this paper (light gray: raw
+per-step loss; green: a 15-step trailing moving average). Unlike Task A's per-epoch average,
+each step's raw loss is computed on a single rendered view and fluctuates accordingly, with
+occasional spikes that persist even after the Gaussian count stabilizes around step 8,700 —
+consistent with per-view difficulty variance (e.g. grazing viewing angles or motion-blurred
+training photos) rather than an optimization instability. The moving average nonetheless shows
+steady convergence with no divergence, settling to a stable plateau by roughly step 20,000.
+
+### 5.5 Ablation: Training Resolution
 
 **Table 3: Effect of training resolution on holdout performance.**
 
@@ -636,7 +657,7 @@ localizing detected defects to the deck, tower, cable, or foundation they actual
 rather than to the bridge as an undifferentiated whole.
 
 Two directions follow naturally from the results in Section 5. First, since full-resolution
-training already improved every metric over half-resolution (Section 5.4) purely from sharper
+training already improved every metric over half-resolution (Section 5.5) purely from sharper
 supervision, further gains in visual fidelity are plausible from longer training schedules or
 additional hyperparameter tuning within the same architecture, without changing the underlying
 method. Second, the semantic warm-start's measured effect on the raw vote data (Section 3.4) has
@@ -724,7 +745,13 @@ need to change accordingly.]**
   (https://superspl.at/editor), composed side-by-side via
   `src/evaluation/compose_splat_screenshots.py`. (`plot_splat_pointcloud.py`'s static
   point-cloud-scatter render kept in the repo as a documented fallback for when no interactive
-  viewer is available, no longer used for the paper figure itself.) **All 6 figures now done.**
+  viewer is available, no longer used for the paper figure itself.)
+- [x] Figure 7 (Task A training convergence, Section 5.4) - loss + validation mIoU per epoch,
+  parsed directly from `outputs/logs/segmentation_train.log` (the real 80-epoch run) by
+  `src/evaluation/plot_training_curves.py`.
+- [x] Figure 8 (Task B training convergence, Section 5.4) - per-step loss + moving average,
+  parsed directly from `outputs/logs/gaussian_train_v3a.log` (the real run behind the official
+  602,363-Gaussian checkpoint) by the same script. **All 8 figures now done.**
 - [x] Strengthen Related Work with real citations (Section 2 now cites 16 verified real papers;
   PDFs in `paper/references/`).
 - [x] Write the Abstract last, after Results is locked.
