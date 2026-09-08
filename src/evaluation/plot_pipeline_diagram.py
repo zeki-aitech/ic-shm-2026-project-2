@@ -44,7 +44,7 @@ def _arrow(ax, p_from, p_to, label=None, label_offset=(0.15, 0)):
     if label:
         mx, my = (p_from[0] + p_to[0]) / 2, (p_from[1] + p_to[1]) / 2
         ax.text(mx + label_offset[0], my + label_offset[1], label, ha="left", va="center",
-                fontsize=12.5, style="italic", color="dimgray", zorder=3)
+                fontsize=14, style="italic", color="dimgray", zorder=3)
 
 
 def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None):
@@ -60,7 +60,7 @@ def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None):
     if label:
         mid_y = (p_from[1] + p_to[1]) / 2
         ax.text(x_bend + 0.1, mid_y, label, rotation=90, ha="left", va="center",
-                fontsize=14.5, style="italic", fontweight="bold", color="dimgray", zorder=3)
+                fontsize=16, style="italic", fontweight="bold", color="dimgray", zorder=3)
 
 
 def plot_pipeline_diagram(output_path: str) -> str:
@@ -148,10 +148,10 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     CHAIN_GAP = 0.9      # clear vertical gap between the right-column chain boxes
 
     sub_l, sub_r = 2.3, 6.9
-    bw, bh = 4.0, 1.7
-    input_w, input_h = 8.8, 1.6
+    bw, bh = 4.3, 1.9
+    input_w, input_h = 8.8, 1.8
     right_x = 14.3
-    merge_w, merge_h = 8.6, 2.2
+    merge_w, merge_h = 8.8, 2.4
 
     fig, ax = plt.subplots(figsize=(19, 11.5), dpi=200)
     ax.set_xlim(0, 19)
@@ -176,44 +176,44 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     in_b, in_t, in_l, in_r = _box(
         ax, 4.6, input_cy, input_w, input_h,
         "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
-        fontsize=14.5, fontweight="bold",
+        fontsize=16.5, fontweight="bold",
     )
 
     # Left column, two sub-branch chains. Task A and Task B share a color (MERGE_COLOR) to mark
     # them visually as the pipeline's two named tasks, distinct from the plain preprocessing
     # steps (COLMAP/voting/warm-start/pseudo-labeling) around them.
-    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=13.5)
+    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=15.5)
     b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)",
-                                   face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=13.5, fontweight="bold")
+                                   face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15.5, fontweight="bold")
 
-    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=13.5)
-    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=13.5)
+    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(strict-majority rule for cable)", fontsize=15.5)
+    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=15.5)
 
-    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=13.5)
+    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=15.5)
 
     # Right column, top-down, starting level with the input box.
     merge_cy = input_top - merge_h / 2
     merge_b, merge_t, merge_l, merge_r = _box(
         ax, right_x, merge_cy, merge_w, merge_h,
         "Task B: Semantic 3D Gaussian Splatting training\nfused single-pass RGB + semantic rasterization",
-        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15, fontweight="bold",
+        face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=17, fontweight="bold",
     )
     tm_top = merge_b[1] - CHAIN_GAP
-    tm_h = 1.4
+    tm_h = 1.6
     tm_cy = tm_top - tm_h / 2
-    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.2, tm_h, "Trained model\n(602,363 Gaussians)", fontsize=15)
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.4, tm_h, "Trained model\n(602,363 Gaussians)", fontsize=17)
 
     render_top = tm_b[1] - CHAIN_GAP
-    render_h = 1.3
+    render_h = 1.5
     render_cy = render_top - render_h / 2
-    r_b, r_t, r_l, r_r = _box(ax, right_x, render_cy, 7.6, render_h, "render(pose): arbitrary camera viewpoint",
-                               fontsize=15, fontweight="bold")
+    r_b, r_t, r_l, r_r = _box(ax, right_x, render_cy, 7.9, render_h, "render(pose): arbitrary camera viewpoint",
+                               fontsize=17, fontweight="bold")
 
     output_top = r_b[1] - CHAIN_GAP
-    output_h = 1.3
+    output_h = 1.5
     out_cy = output_top - output_h / 2
-    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.2, out_cy, 3.6, output_h, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
-    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.2, out_cy, 3.6, output_h, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=14)
+    o1_b, o1_t, o1_l, o1_r = _box(ax, right_x - 2.3, out_cy, 3.9, output_h, "RGB image", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=16)
+    o2_b, o2_t, o2_l, o2_r = _box(ax, right_x + 2.3, out_cy, 3.9, output_h, "Semantic map\n(classes 0–4)", face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=16)
 
     ax.set_ylim(min(row3_bottom, o1_b[1]) - 0.6, input_top + 0.4)
     ax.axis("off")
@@ -238,8 +238,8 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     for p_from, p_to in [
         (merge_b, tm_t),
         (tm_b, r_t),
-        ((right_x - 0.1, r_b[1]), (right_x - 2.2, o1_t[1] + 0.05)),
-        ((right_x + 0.1, r_b[1]), (right_x + 2.2, o2_t[1] + 0.05)),
+        ((right_x - 0.1, r_b[1]), (right_x - 2.3, o1_t[1] + 0.05)),
+        ((right_x + 0.1, r_b[1]), (right_x + 2.3, o2_t[1] + 0.05)),
     ]:
         _arrow(ax, p_from, p_to)
 
