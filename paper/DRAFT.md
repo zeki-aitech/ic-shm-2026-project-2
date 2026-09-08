@@ -418,9 +418,8 @@ dimensions, and $\text{MAX}$ the maximum representable pixel value (255 for 8-bi
 PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
 equally regardless of whether that discrepancy is visually salient.
 
-**SSIM** [15] (structural similarity index, in $[0,1]$, higher is better, via `skimage.metrics`)
-addresses this by comparing local luminance, contrast, and structure rather than raw pixel
-differences:
+**SSIM** [15] (structural similarity index, in $[0,1]$, higher is better) addresses this by
+comparing local luminance, contrast, and structure rather than raw pixel differences:
 $$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
 {(\mu_{\hat{I}}^2 + \mu_I^2 + c_1)(\sigma_{\hat{I}}^2 + \sigma_I^2 + c_2)},$$
 where $\mu$, $\sigma^2$, and $\sigma_{\hat{I}I}$ are the mean, variance, and covariance computed
@@ -585,11 +584,11 @@ RGB and semantic outputs remain pixel-aligned at every step, including the degra
 ![Figure 6: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
 
 **Figure 6 (optional): The trained Gaussians viewed in an interactive splat viewer**
-([SuperSplat](https://superspl.at/editor)), from the same viewpoint. **(a)** Exported via
-`export_splat_ply` and rendered in true RGB color, showing the reconstructed appearance of the
-whole bridge at once rather than one camera pose at a time. **(b)** The same Gaussians exported
-via `export_semantic_splat_ply` and colored by each Gaussian's predicted semantic class (deck
-red, stay_cable cyan, tower green, foundation yellow, background gray). Unlike the
+([SuperSplat](https://superspl.at/editor)), from the same viewpoint. **(a)** Rendered in true
+RGB color, showing the reconstructed appearance of the whole bridge at once rather than one
+camera pose at a time. **(b)** The same Gaussians, each recolored by its predicted semantic
+class rather than its true RGB color (deck red, stay_cable cyan, tower green, foundation yellow,
+background gray). Unlike the
 arbitrary-viewpoint renders in Figures 4-5, which each cover only what a single camera pose sees,
 this alpha-blended splat render exposes the full learned 3D structure simultaneously: both towers,
 the cable fan, the deck, and the foundation piers are all visible at once in panel (b) and clearly
