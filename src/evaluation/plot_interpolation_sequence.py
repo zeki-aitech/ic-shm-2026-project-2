@@ -56,10 +56,10 @@ def build_interpolation_filmstrip(frame_dir: str, output_path: str) -> str:
             for spine in ax.spines.values():
                 spine.set_visible(False)
 
-        axes[0, col].set_title(f"t={t:.2f}", fontsize=10, fontweight="bold")
+        axes[0, col].set_title(f"t={t:.2f}", fontsize=15, fontweight="bold")
 
-    axes[0, 0].set_ylabel("RGB", fontsize=10, rotation=90, va="center")
-    axes[1, 0].set_ylabel("Semantic", fontsize=10, rotation=90, va="center")
+    axes[0, 0].set_ylabel("RGB", fontsize=14, fontweight="bold", rotation=90, va="center")
+    axes[1, 0].set_ylabel("Semantic", fontsize=14, fontweight="bold", rotation=90, va="center")
 
     fig.tight_layout()
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
