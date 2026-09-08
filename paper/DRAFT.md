@@ -788,7 +788,7 @@ need to change accordingly.]**
 - [x] Figure 8 (Task B training convergence, Section 5.4) - per-step loss + moving average,
   parsed directly from `outputs/logs/gaussian_train_v3a.log` (the real run behind the official
   602,363-Gaussian checkpoint) by the same script. **All 8 figures now done.**
-- [x] Strengthen Related Work with real citations (Section 2 now cites 16 verified real papers;
+- [x] Strengthen Related Work with real citations (Section 2 now cites 18 verified real papers;
   PDFs in `paper/references/`).
 - [x] Write the Abstract last, after Results is locked.
 - [ ] Team/author details.
