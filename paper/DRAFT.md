@@ -658,8 +658,9 @@ converged model rather than a lucky snapshot.
 | Half (660x494) | 21.99 | 0.834 | 0.348 | 87.96% |
 | **Full (1320x989)** | **22.18** | **0.849** | **0.334** | **91.47%** |
 
-Training at native image resolution improves every metric, most notably mIoU (+3.5 points),
-consistent with the intuition that thin structures (cable) and fine boundaries benefit from
+As Table 3 shows, training at native image resolution improves every metric, most notably mIoU
+(+3.5 points), consistent with the intuition that thin structures (cable) and fine boundaries
+benefit from
 sharper photometric/semantic gradients during optimization. The cost is proportionally longer
 training time (≈47 min vs. ≈14 min for a comparable iteration budget on the same GPU); given
 the modest absolute training time either way, full resolution is the recommended default.
