@@ -123,12 +123,12 @@ integration used for color; the resulting multi-view consistency lets sparse 2D 
 to dense, accurate semantic maps. Follow-up work moved this idea onto the faster, explicit
 Gaussian Splatting representation while pursuing open-vocabulary rather than fixed-class
 supervision: Feature 3DGS [8] attaches an arbitrary-dimensional feature vector to
-every Gaussian and distills it from a 2D foundation model (e.g. SAM or CLIP-LSeg) via a
+every Gaussian and distills it from a 2D foundation model (e.g. SAM [9] or CLIP-LSeg [10]) via a
 teacher-student loss, rendering RGB and features with what the authors describe as a "parallel"
 N-dimensional rasterizer that shares each Gaussian's opacity and depth ordering across both
-outputs; LangSplat [9] similarly bakes per-Gaussian CLIP language embeddings
+outputs; LangSplat [11] similarly bakes per-Gaussian CLIP language embeddings
 (compressed through a scene-specific autoencoder to keep rendering tractable) to support
-open-vocabulary 3D queries; and Gaussian Grouping [10] attaches a compact identity
+open-vocabulary 3D queries; and Gaussian Grouping [12] attaches a compact identity
 encoding to every Gaussian, supervised by Segment Anything masks, to support open-world instance
 grouping and editing rather than semantic classification. All three explicit-representation
 methods share a structural similarity with our approach — an auxiliary per-Gaussian attribute
@@ -143,14 +143,14 @@ multi-view majority vote over a triangulated sparse point cloud (Section 3.4) ra
 foundation-model distillation process, which requires no pretrained 2D foundation model at all and
 ties the semantic initialization directly to the contest's own annotated classes.
 
-**Structure-aware bridge segmentation.** Lin et al. [11] propose a structure-oriented loss
+**Structure-aware bridge segmentation.** Lin et al. [13] propose a structure-oriented loss
 function for automated semantic segmentation of bridge *point clouds*, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
 uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
 noise in Section 3.4, though applied to a different stage (a training-time loss on 3D point
 clouds vs. our warm-start label initialization) and a different data modality (point clouds vs.
 the 2D images our pipeline is built on). Our own 2D pseudo-labeling stage (Section 3.3) fine-tunes
-SegFormer [12], a transformer-based semantic segmentation architecture chosen for its strong
+SegFormer [14], a transformer-based semantic segmentation architecture chosen for its strong
 accuracy-to-compute ratio on a single consumer GPU.
 
 **Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
@@ -216,7 +216,7 @@ truth at inference time.
 The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
 poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
 observations across views, but it does not include precomputed 3D point coordinates. We recover
-a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [13] (Locally
+a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [15] (Locally
 Optimized RANSAC) multi-view triangulation: as in standard RANSAC, candidate 3D points are estimated from
 small random subsets of a track's observations and validated by reprojection error to reject
 outlier correspondences, with an added local refinement step that further optimizes each accepted
@@ -233,7 +233,7 @@ training, evaluation, and rendering step operates in this undistorted space.
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
 Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
-unlabeled. To make use of them, we fine-tune a SegFormer [12] semantic segmentation model (MiT-B0
+unlabeled. To make use of them, we fine-tune a SegFormer [14] semantic segmentation model (MiT-B0
 backbone) on the 240 labeled training images obtained from our trajectory-interleaved split
 (Section 3.6), validating 2D mIoU on the 60-image holdout after every epoch and retaining the
 checkpoint with the best validation score. The fine-tuned model is then applied to the 100
@@ -300,7 +300,7 @@ remaining free to be corrected by the photometric and semantic losses during tra
 **Fused rendering.** A central design choice of our method is that RGB and semantic outputs
 share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
 semantic logits (5 channels) into one 8-channel color tensor, and render it through `gsplat`'s
-differentiable rasterizer [14]: every Gaussian is projected onto the image plane, the projections
+differentiable rasterizer [16]: every Gaussian is projected onto the image plane, the projections
 are depth-sorted, and each pixel is computed by alpha-compositing the sorted splats from front to
 back. Because the geometric projection and depth ordering that determine this composite depend
 only on each Gaussian's position, scale, and rotation — not on which of its channels are being
@@ -336,7 +336,7 @@ views with real manual annotations, reflecting their lower label confidence.
 **Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
 training. Gaussians whose positional gradients are large — an indication that a single primitive
 is being stretched to cover detail it cannot adequately represent — are split or duplicated,
-while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [14] built-in
+while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [16] built-in
 density-control strategy. This process grows the representation from the 84,613-point sparse
 initialization to 602,363 Gaussians by the end of training, allowing the model to allocate
 additional capacity to structurally intricate regions, such as individual cable strands, that
@@ -417,7 +417,7 @@ dimensions, and $\text{MAX}$ the maximum representable pixel value (255 for 8-bi
 PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
 equally regardless of whether that discrepancy is visually salient.
 
-**SSIM** [15] (structural similarity index, in $[0,1]$, higher is better) addresses this by
+**SSIM** [17] (structural similarity index, in $[0, 1]$, higher is better) addresses this by
 comparing local luminance, contrast, and structure rather than raw pixel differences:
 $$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
 {(\mu_{\hat{I}}^2 + \mu_I^2 + c_1)(\sigma_{\hat{I}}^2 + \sigma_I^2 + c_2)},$$
@@ -427,7 +427,7 @@ that stabilize the division when the local means or variances are near zero. SSI
 perceived image quality more closely than PSNR alone, but both remain pixel/patch-level
 comparisons.
 
-**LPIPS** [16] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
+**LPIPS** [18] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
 compares deep-network feature activations:
 $$\text{LPIPS}(\hat{I}, I) = \sum_{l} \frac{1}{H_l W_l} \sum_{h,w}
 \left\| w_l \odot \left(\phi_l(\hat{I})_{hw} - \phi_l(I)_{hw}\right) \right\|_2^2,$$
@@ -729,24 +729,28 @@ need to change accordingly.]**
 8. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
    Kadambi, A. (2024) — Feature 3DGS: Supercharging 3D Gaussian Splatting to Enable Distilled
    Feature Fields. CVPR.
-9. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
+9. Kirillov, A., Mintun, E., Ravi, N., Mao, H., Rolland, C., Gustafson, L., Xiao, T., Whitehead,
+   S., Berg, A. C., Lo, W.-Y., et al. (2023) — Segment Anything. ICCV.
+10. Li, B., Weinberger, K. Q., Belongie, S., Koltun, V., & Ranftl, R. (2022) — Language-Driven
+    Semantic Segmentation. ICLR.
+11. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
    Splatting. CVPR.
-10. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
+12. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
     in 3D Scenes. ECCV.
-11. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
+13. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
     function for automated semantic segmentation of bridge point clouds. Computer-Aided Civil
     and Infrastructure Engineering.
-12. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
+14. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
     Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
-13. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
+15. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
     (Pattern Recognition), LNCS vol. 2781, 236–243.
-14. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
+16. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
     Tancik, M., & Kanazawa, A. (2025) — gsplat: An Open-Source Library for Gaussian Splatting.
     Journal of Machine Learning Research, 26(34), 1–17.
-15. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
+17. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
     From Error Visibility to Structural Similarity. IEEE Transactions on Image Processing, 13(4),
     600–612.
-16. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
+18. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
     Effectiveness of Deep Features as a Perceptual Metric. CVPR, 586–595.
 
 ---
