@@ -29,6 +29,12 @@ it once the paper is finalized and submitted — it is not part of the paper its
   measurable effect on cable's final IoU (92.36% and 92.02% vs. 92.13% baseline, within noise) -
   this contradicted the hypothesis in an earlier draft of Section 5.2, which has been rewritten
   to report the ablation honestly instead.
+- [x] Figure 9 (cable IoU vs. training step for the ablation, Section 5.2, optional) - added
+  after asking "is the null result in Table 3 a bug in the metric/methodology?": evaluated
+  intermediate checkpoints (every 2,000-8,000 steps) of all three Table 3 runs via
+  `src/evaluation/plot_ablation_convergence.py`. Confirms no bug - the warm-start/voting-rule
+  mechanisms give a real, measurable early-training advantage (2.3 IoU points at step 2,000)
+  that converges away by ~step 24,000, well inside the 40,000-iteration budget used for Table 3.
 
 - [x] Fill in final Gaussian count in Section 3.4 (602,363 per
   `outputs/checkpoints/gaussians/final.pt`).

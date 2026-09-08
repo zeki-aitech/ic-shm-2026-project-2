@@ -540,15 +540,33 @@ shows this is not the case: plain plurality changes cable IoU by only +0.23 poin
 both comfortably within the run-to-run noise we would expect from stochastic densification and
 view-order shuffling, and if anything in the opposite direction from what cleaner warm-start
 data would predict. The data-cleaning effect on the warm-start itself is real (established
-above), but it does not translate into a measurable final-IoU advantage for cable. The more
-consistent reading of Table 3 is that with 340 supervised views and 40,000 training iterations,
-the semantic cross-entropy loss corrects most warm-start label noise during training regardless
-of its initial quality, making cable's converged IoU largely insensitive to how it was
-initialized. This is consistent with - though does not directly confirm - a fused
-alpha-compositing correction mechanism during training: a floating "cable" Gaussian that is
-actually sky would receive inconsistent semantic gradients across the views that observe it,
-pushing it toward a corrected label; directly confirming this would require tracking individual
-Gaussians' semantic-logit and opacity trajectories over training, which we leave to future work.
+above), but it does not translate into a measurable final-IoU advantage for cable.
+
+Before concluding that the warm-start mechanisms simply do not matter, we checked whether this
+null result was an artifact of evaluating only the fully-converged, 40,000-iteration checkpoint
+rather than a genuine property of training - by evaluating cable IoU from intermediate
+checkpoints of all three runs (Figure 9). It shows the mechanisms clearly do work as intended
+early in training: at step 2,000, the no-warm-start run trails the baseline by 2.3 points
+(80.98% vs. 83.32%), confirming the warm-start gives a real head start. But this gap closes
+rapidly and is essentially gone by step 24,000 (91.72% vs. 91.92%), well before the
+40,000-iteration budget used throughout this paper. The plain-plurality run shows the same
+pattern on a smaller scale, tracking the baseline closely from step 4,000 onward. This resolves
+the apparent contradiction: the mechanisms measurably affect *how fast* cable's semantic
+representation converges, but not *where* it converges to, at least at the iteration budget used
+here. Table 3's near-zero final-IoU deltas are therefore a real convergence effect, not a null
+result caused by an insensitive metric or a broken ablation. This is consistent with - though
+does not fully substitute for - the fused alpha-compositing correction mechanism we described in
+Section 3.4: a floating "cable" Gaussian that is actually sky would receive inconsistent semantic
+gradients across the views that observe it, pushing it toward a corrected label over enough
+training steps; directly attributing the correction to that specific mechanism (rather than to
+the semantic cross-entropy loss more generally) would require tracking individual Gaussians'
+semantic-logit and opacity trajectories over training, which we leave to future work.
+
+![Figure 9: Cable IoU vs. training step for the baseline and both ablations](figures/fig9_ablation_convergence.png)
+
+**Figure 9 (optional).** `stay_cable` IoU on the 60-view holdout evaluated from intermediate
+checkpoints (every 2,000-8,000 steps) of the baseline and both Table 3 ablation runs, showing
+the training-step budget at which their curves converge to within noise of each other.
 
 Table 3 also surfaces a secondary pattern we did not anticipate: `tower` IoU drops by
 1.4-1.5 points under both ablations (89.71% and 89.62%, vs. 91.13% baseline) - a larger swing
