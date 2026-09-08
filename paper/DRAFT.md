@@ -177,23 +177,24 @@ annotation.
 
 ## 3. Method
 
-Our pipeline has two stages. Task A produces pixel-level semantic labels for images the contest
-leaves unannotated, so that the widest possible set of viewpoints can supervise the 3D model.
-Task B fits a semantically-augmented 3D Gaussian Splatting model to the posed images and their
-(real or predicted) semantic masks, and exposes a single rendering function that answers the
-contest's core requirement: given any camera pose, produce both a photorealistic RGB image and
-a per-pixel structural-class map. The rest of this section formalizes the task, then describes
-each stage in turn.
+Our pipeline has two stages, summarized in Figure 1. Task A produces pixel-level semantic labels
+for images the contest leaves unannotated, so that the widest possible set of viewpoints can
+supervise the 3D model. Task B fits a semantically-augmented 3D Gaussian Splatting model to the
+posed images and their (real or predicted) semantic masks, and exposes a single rendering
+function that answers the contest's core requirement: given any camera pose, produce both a
+photorealistic RGB image and a per-pixel structural-class map. Posed UAV images feed two parallel
+branches — sparse triangulation and multi-view semantic voting produce a semantic warm-start for
+the Gaussians, while Task A's fine-tuned SegFormer pseudo-labels the 100 unlabeled images to
+widen Task B's supervision to 340 views — before Task B trains the semantically-augmented
+Gaussians with fused single-pass RGB+semantic rasterization and exposes a single `render(pose)`
+entry point producing both an RGB image and a semantic map for any camera viewpoint. The rest of
+this section formalizes the task, then describes each stage in turn.
 
 ![Figure 1: Pipeline overview](figures/fig1_pipeline.png)
 
-**Figure 1: Pipeline overview.** Posed UAV images feed two parallel branches — sparse
-triangulation and multi-view semantic voting produce a semantic warm-start for the Gaussians
-(left), while Task A's fine-tuned SegFormer pseudo-labels the 100 unlabeled images to widen
-Task B's supervision to 340 views (right). Task B trains the semantically-augmented Gaussians
-with fused single-pass RGB+semantic rasterization; the resulting model exposes a single
-`render(pose)` entry point producing both an RGB image and a semantic map for any camera
-viewpoint.
+**Figure 1.** Pipeline overview. Left: sparse triangulation and multi-view voting produce a
+semantic warm-start, alongside Task A's SegFormer pseudo-labeling of the unlabeled images.
+Right: Task B trains on both, and its trained model exposes the `render(pose)` entry point.
 
 ### 3.1 Problem Formulation
 
@@ -256,8 +257,8 @@ practice, we exploit the sparse point cloud from Section 3.2 as a geometric and 
 Each Gaussian's initial position and color are taken directly from a corresponding triangulated
 point, and its semantic logits are warm-started from that point's class, determined by a
 multi-view majority vote over the 2D masks of every training view that observes it. Because
-stay cables are slender and prone to background bleeding — sky and water pixels are easily
-misclassified as cable in coarse 2D polygon annotations — the vote enforces a strict absolute
+stay cables are slender and prone to background bleeding (Figure 2) — sky and water pixels are
+easily misclassified as cable in coarse 2D polygon annotations — the vote enforces a strict absolute
 majority (greater than 50% of observing views) before assigning the cable class; if no class
 reaches this majority among cable votes, cable votes are discarded and the remaining classes
 compete by plurality with a fixed tie-break priority. This asymmetric rule is applied only to
@@ -284,14 +285,12 @@ the cable pixels alone), not merely from cable occupying few pixels, so only cab
 
 ![Figure 2: Background-bleeding in cable annotations and the multi-view voting rule](figures/fig2_cable_voting.png)
 
-**Figure 2: Background-bleeding in cable annotations and the multi-view voting rule.** Left: a
+**Figure 2.** Background-bleeding in cable annotations and the multi-view voting rule. Left: a
 real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
-covers a large triangular region of sky and river far beyond the cable strands themselves,
-exactly the annotation artifact motivating the strict-majority rule. Right: an illustrative
-(not one specific real point) schematic of the voting mechanism — each triangle is a camera,
-oriented to face the 3D point being voted on, labeled with the class it observes there. A
-minority of observing views seeing the point as cable is not enough to assign it the cable class;
-those votes are discarded and the remaining views decide by plurality.
+covers a large triangular region of sky and river far beyond the cable strands themselves. Right:
+an illustrative (not one specific real point) schematic of the voting mechanism — each triangle
+is a camera, oriented to face the 3D point being voted on, labeled with the class it observes
+there.
 
 The winning class is encoded as a scaled one-hot
 logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
@@ -489,19 +488,22 @@ described in Section 3.5 — the literal function the contest evaluates a submis
 | foundation | 87.52% |
 | (background, reported for completeness, excluded from structural mIoU) | 99.24% |
 
+Figure 3 visualizes this per-class breakdown, sorted by class and colored by the official
+class-color legend (Section 3.1), with the overall structural mIoU marked for reference — making
+the counter-intuitive result discussed in Section 5.2, `stay_cable` outscoring `tower` and
+`foundation`, immediately visible without reading Table 2 closely.
+
 ![Figure 3: Per-class IoU on the 60-view holdout](figures/fig3_per_class_iou.png)
 
-**Figure 3: Per-class IoU on the 60-view holdout**, sorted by class, colored by the official
+**Figure 3.** Per-class IoU on the 60-view holdout, sorted by class and colored by the official
 class-color legend (Section 3.1), with the overall structural mIoU (91.47%) marked for reference.
-The counter-intuitive result discussed in Section 5.2 — `stay_cable` outscoring `tower` and
-`foundation` — is immediately visible without reading Table 2 closely.
 
-The four structural classes all clear 87% IoU despite substantial differences in physical scale,
-surface texture, and viewpoint coverage, and background — by far the easiest class, since it
-occupies most of every frame's pixels — reaches 99.24%, confirming the model is not achieving a
-high structural mIoU merely by defaulting to the dominant class. The ranking among the four
-structural classes, and in particular why the thin, sparsely-sampled `stay_cable` class outscores
-the geometrically simpler `tower` and `foundation`, is discussed next.
+As Figure 3 shows, the four structural classes all clear 87% IoU despite substantial differences
+in physical scale, surface texture, and viewpoint coverage, and background — by far the easiest
+class, since it occupies most of every frame's pixels — reaches 99.24%, confirming the model is
+not achieving a high structural mIoU merely by defaulting to the dominant class. The ranking
+among the four structural classes, and in particular why the thin, sparsely-sampled `stay_cable`
+class outscores the geometrically simpler `tower` and `foundation`, is discussed next.
 
 ### 5.2 Discussion — Per-Class Behavior
 
@@ -555,75 +557,90 @@ The metrics in Section 5.1 summarize error over the full holdout set as a single
 metric, but do not show where the model succeeds or fails, or what a rendered view actually looks
 like. We complement them with three qualitative figures.
 
+Figure 4 shows four held-out views (005, 050, 250, 300), each as rendered RGB, the real
+photograph, the rendered semantic map, and the ground-truth mask. Views 005 and 250 are
+representative strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the
+foreground deck region; 300 is the weakest RGB reconstruction in this set, with color artifacts
+across the distant background. Notably, the semantic map for 300 remains close to the ground
+truth despite the degraded RGB quality in the same view. A plausible explanation is that
+per-pixel classification is a coarser, lower-precision target than exact color reconstruction —
+an appearance error large enough to visibly corrupt RGB may still leave the arg-max class
+unchanged — but we present this as an illustrative observation from this set of views rather than
+a claim established over the full holdout.
+
 ![Figure 4: RGB and semantic renders vs. ground truth on held-out views](figures/fig4_qualitative_grid.png)
 
-**Figure 4: RGB and semantic renders vs. ground truth on four held-out views** (005, 050, 250,
-300), each shown as rendered RGB, the real photograph, the rendered semantic map, and the
-ground-truth mask, all colored by the official class legend. Views 005 and 250 are representative
-strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the foreground deck
-region; 300 is the weakest RGB reconstruction in this set, with color artifacts across the distant
-background. Notably, the semantic map for 300 remains close to the ground truth despite the
-degraded RGB quality in the same view. A plausible explanation is that per-pixel classification
-is a coarser, lower-precision target than exact color reconstruction — an appearance error large
-enough to visibly corrupt RGB may still leave the arg-max class unchanged — but we present this
-as an illustrative observation from this set of views rather than a claim established over the
-full holdout.
+**Figure 4.** RGB and semantic renders vs. ground truth on four held-out views (005, 050, 250,
+300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
+the official class legend.
+
+Because the held-out views in Table 1 still lie on the UAV's original flight line, Figure 5
+additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
+quaternion SLERP for rotation, linear interpolation for translation) at five evenly spaced steps
+$t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating the property the contest brief actually asks
+for: rendering from a genuinely arbitrary viewpoint, not merely one selected from the acquisition
+trajectory. The two endpoints ($t=0, 1$) are real flown poses and render cleanly; RGB quality
+degrades visibly in the intermediate frames, where the interpolated pose departs furthest from
+any training view — but the semantic map remains largely stable and structurally coherent across
+all five frames despite this RGB degradation, a second, independent illustration of the pattern
+noted in Figure 4. RGB and semantic outputs remain pixel-aligned at every step, including the
+degraded ones.
 
 ![Figure 5: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
 
-**Figure 5: A camera path interpolated between two real flown poses** (images 280 and 300;
+**Figure 5.** A camera path interpolated between two real flown poses (images 280 and 300;
 quaternion SLERP for rotation, linear interpolation for translation), rendered at five evenly
-spaced steps $t \in \{0, 0.25, 0.5, 0.75, 1\}$, top row RGB and bottom row the corresponding
-semantic map. Because the held-out views in Table 1 still lie on the UAV's original flight line,
-this figure is what demonstrates the property the contest brief actually asks for: rendering from
-a genuinely arbitrary viewpoint, not merely one selected from the acquisition trajectory. The two
-endpoints ($t=0, 1$) are real flown poses and render cleanly; RGB quality degrades visibly in the
-intermediate frames, where the interpolated pose departs furthest from any training view — but
-the semantic map remains largely stable and structurally coherent across all five frames despite
-this RGB degradation, a second, independent illustration of the pattern noted in Figure 4. RGB
-and semantic outputs remain pixel-aligned at every step, including the degraded ones.
+spaced steps $t \in \{0, 0.25, 0.5, 0.75, 1\}$; top row RGB, bottom row the corresponding semantic
+map.
+
+Finally, Figure 6 (optional) views the trained Gaussians directly in an interactive splat viewer
+([SuperSplat](https://superspl.at/editor)) rather than through one camera pose at a time. Unlike
+the arbitrary-viewpoint renders in Figures 4-5, this alpha-blended splat render exposes the full
+learned 3D structure simultaneously: both towers, the cable fan, the deck, and the foundation
+piers are all visible at once in the semantic panel and clearly spatially coherent with the
+true-color reconstruction beside it, confirming that the semantic warm-start and training loss
+converge to a structurally sensible 3D segmentation rather than scattered, inconsistent
+per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can be dropped if space is
+limited.
 
 ![Figure 6: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
 
-**Figure 6 (optional): The trained Gaussians viewed in an interactive splat viewer**
-([SuperSplat](https://superspl.at/editor)), from the same viewpoint. **(a)** Rendered in true
-RGB color, showing the reconstructed appearance of the whole bridge at once rather than one
-camera pose at a time. **(b)** The same Gaussians, each recolored by its predicted semantic
-class rather than its true RGB color (deck red, stay_cable cyan, tower green, foundation yellow,
-background gray). Unlike the
-arbitrary-viewpoint renders in Figures 4-5, which each cover only what a single camera pose sees,
-this alpha-blended splat render exposes the full learned 3D structure simultaneously: both towers,
-the cable fan, the deck, and the foundation piers are all visible at once in panel (b) and clearly
-spatially coherent with the true-color reconstruction in panel (a), confirming that the semantic
-warm-start and training loss converge to a structurally sensible 3D segmentation rather than
-scattered, inconsistent per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can
-be dropped if space is limited.
+**Figure 6 (optional).** The trained Gaussians viewed in an interactive splat viewer, from the
+same viewpoint. **(a)** Rendered in true RGB color. **(b)** The same Gaussians, each recolored by
+its predicted semantic class rather than its true RGB color (deck red, stay_cable cyan, tower
+green, foundation yellow, background gray).
 
 ### 5.4 Training Convergence
 
 The results in Sections 5.1-5.3 characterize the final trained models but say nothing about how
 they got there — whether the reported numbers reflect a stably converged optimum or an early,
 possibly fragile checkpoint. We check this directly against the real training logs for both
-tasks.
+tasks, plotted in Figures 7 and 8.
+
+Figure 7 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
+curves plateau well before epoch 80 (final validation mIoU 81.27%), indicating the fine-tuned
+model has converged rather than still improving or overfitting when its pseudo-labels are handed
+to Task B.
 
 ![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
 
-**Figure 7: Task A (SegFormer) training convergence.** Training loss (red, left axis) and
+**Figure 7.** Task A (SegFormer) training convergence: training loss (red, left axis) and
 validation mIoU on the 60-image holdout (blue, right axis) over 80 epochs on the 240-image
-labeled training split. Both curves plateau well before epoch 80 (final validation mIoU
-81.27%), indicating the fine-tuned model has converged rather than still improving or
-overfitting when its pseudo-labels are handed to Task B.
+labeled training split.
+
+Figure 8 plots the corresponding curve for Task B (light gray: raw per-step loss; green: a
+15-step trailing moving average). Unlike Task A's per-epoch average, each step's raw loss is
+computed on a single rendered view and fluctuates accordingly, with occasional spikes that
+persist even after the Gaussian count stabilizes around step 8,700 — consistent with per-view
+difficulty variance (e.g. grazing viewing angles or motion-blurred training photos) rather than
+an optimization instability. The moving average nonetheless shows steady convergence with no
+divergence, settling to a stable plateau by roughly step 20,000.
 
 ![Figure 8: Task B (semantic Gaussian Splatting) training convergence over 40,000 steps](figures/fig8_task_b_training.png)
 
-**Figure 8: Task B (semantic Gaussian Splatting) training convergence.** Training loss over
+**Figure 8.** Task B (semantic Gaussian Splatting) training convergence: training loss over
 40,000 steps for the full-resolution model reported throughout this paper (light gray: raw
-per-step loss; green: a 15-step trailing moving average). Unlike Task A's per-epoch average,
-each step's raw loss is computed on a single rendered view and fluctuates accordingly, with
-occasional spikes that persist even after the Gaussian count stabilizes around step 8,700 —
-consistent with per-view difficulty variance (e.g. grazing viewing angles or motion-blurred
-training photos) rather than an optimization instability. The moving average nonetheless shows
-steady convergence with no divergence, settling to a stable plateau by roughly step 20,000.
+per-step loss; green: a 15-step trailing moving average).
 
 Task A's clean, monotonic curves and Task B's noisier but still clearly convergent one differ
 because Task A's loss is a per-epoch average over the full 240-image training set, while Task
