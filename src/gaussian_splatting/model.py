@@ -96,11 +96,14 @@ class SemanticGaussianModel:
         point_colors: Dict[int, np.ndarray],
         num_classes: int = NUM_CLASSES,
         device: str = "cuda",
+        warm_start_semantics: bool = True,
     ) -> "SemanticGaussianModel":
         """
         Warm-starts Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse
-        cloud and semantic logits from `SemanticProjector`'s per-point voted class, instead of
-        random initialization.
+        cloud always, and semantic logits from `SemanticProjector`'s per-point voted class when
+        `warm_start_semantics` is True (default). When False, semantic logits start at a neutral
+        zero vector (uniform belief over classes) instead - used by the Section 5.2 ablation to
+        measure the semantic warm-start's own contribution, independent of the geometric one.
         """
         from scipy.spatial import cKDTree
 
@@ -123,9 +126,12 @@ class SemanticGaussianModel:
 
         opacity_init = np.full((n,), _inv_sigmoid(np.array(0.3)), dtype=np.float32)
 
-        sem_init = np.full((n, num_classes), -2.0, dtype=np.float32)
-        for row, pid in enumerate(ids):
-            sem_init[row, point_classes.get(pid, 0)] = 2.0
+        if warm_start_semantics:
+            sem_init = np.full((n, num_classes), -2.0, dtype=np.float32)
+            for row, pid in enumerate(ids):
+                sem_init[row, point_classes.get(pid, 0)] = 2.0
+        else:
+            sem_init = np.zeros((n, num_classes), dtype=np.float32)
 
         color_logits_init = _inv_sigmoid(colors_arr)
 

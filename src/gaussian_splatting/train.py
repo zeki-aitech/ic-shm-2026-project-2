@@ -118,6 +118,7 @@ def prepare_training_data(
     pseudo_masks_dir: Optional[str],
     undistorted_dir: str,
     holdout_ratio: float = 0.2,
+    strict_cable_majority: bool = True,
 ):
     """Loads camera/points/votes, builds the train (labeled+unlabeled) and holdout camera lists.
     Returns (camera_intrinsics, pts3d, point_classes, point_colors, train_cameras, holdout_cameras,
@@ -146,7 +147,7 @@ def prepare_training_data(
         mask_path = os.path.join(gt_masks_dir, f"{stem}.png")
         if os.path.exists(mask_path):
             projector.mask_cache[mask_path] = np.array(Image.open(mask_path), dtype=np.uint8)
-    point_classes, point_colors = projector.project()
+    point_classes, point_colors = projector.project(strict_cable_majority=strict_cable_majority)
 
     # `mask_lookup` covers train (GT), holdout (GT - eval-only, never used by `train_cameras`
     # since those are additionally filtered on `not is_holdout`) and pseudo-labeled unlabeled ids.
@@ -186,6 +187,8 @@ def train(
     seed: int = 42,
     optimize_poses: bool = False,
     pose_lr: float = 1e-3,
+    strict_cable_majority: bool = True,
+    warm_start_semantics: bool = True,
 ):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(output_dir, exist_ok=True)
@@ -193,11 +196,14 @@ def train(
     torch.manual_seed(seed)
 
     camera_intr, pts3d, point_classes, point_colors, train_cameras, holdout_cameras, train_ids = prepare_training_data(
-        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, holdout_ratio
+        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, holdout_ratio,
+        strict_cable_majority=strict_cable_majority,
     )
     print(f"[gaussian_splatting] train views={len(train_cameras)} holdout views={len(holdout_cameras)}")
 
-    model = SemanticGaussianModel.init_from_sparse(pts3d, point_classes, point_colors, device=device)
+    model = SemanticGaussianModel.init_from_sparse(
+        pts3d, point_classes, point_colors, device=device, warm_start_semantics=warm_start_semantics
+    )
     print(f"[gaussian_splatting] initial Gaussians: {model.num_points}")
 
     optimizers = {k: torch.optim.Adam([v], lr=PARAM_LRS[k], eps=1e-15) for k, v in model.params.items()}
@@ -317,6 +323,12 @@ def main():
     parser.add_argument("--optimize-poses", action="store_true",
                          help="Jointly refine the reference SfM train-view poses alongside the Gaussians")
     parser.add_argument("--pose-lr", type=float, default=1e-3)
+    parser.add_argument("--plain-plurality", action="store_true",
+                         help="Ablation: disable the strict absolute-majority rule for cable "
+                              "votes, falling back to plain plurality for every class")
+    parser.add_argument("--no-semantic-warmstart", action="store_true",
+                         help="Ablation: initialize semantic logits to a neutral zero vector "
+                              "instead of warm-starting from the voted class")
     args = parser.parse_args()
 
     dataset_dir = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
@@ -332,6 +344,8 @@ def main():
         colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, output_dir,
         holdout_ratio=args.holdout_ratio, iters=args.iters, downsample=args.downsample, lambda_sem=args.lambda_sem,
         optimize_poses=args.optimize_poses, pose_lr=args.pose_lr,
+        strict_cable_majority=not args.plain_plurality,
+        warm_start_semantics=not args.no_semantic_warmstart,
     )
 
 

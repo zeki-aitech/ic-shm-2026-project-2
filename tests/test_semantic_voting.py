@@ -40,6 +40,16 @@ class TestSemanticVoting(unittest.TestCase):
         # Empty fallback
         self.assertEqual(vote_majority_class([]), 0)
 
+    def test_vote_majority_class_plain_plurality_ablation(self):
+        # With strict_cable_majority=False, cable competes on equal footing via plain plurality
+        # (the Section 5.2 ablation) - [2, 1] has no absolute cable majority but cable is still
+        # the plurality winner, so it should now win (unlike the strict-rule default above).
+        self.assertEqual(vote_majority_class([2, 1], strict_cable_majority=False), 2)
+        self.assertEqual(vote_majority_class([2, 2, 0, 0], strict_cable_majority=False), 2)
+        # Non-cable cases are unaffected by the flag.
+        self.assertEqual(vote_majority_class([1, 1, 0], strict_cable_majority=False), 1)
+        self.assertEqual(vote_majority_class([], strict_cable_majority=False), 0)
+
     @unittest.skipIf(
         not os.path.exists(os.path.join(PROJECT_ROOT, "outputs", "gt_masks")),
         "Dataset outputs directory not mounted on current environment"

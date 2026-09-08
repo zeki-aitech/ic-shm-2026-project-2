@@ -59,17 +59,24 @@ def _plurality_with_tiebreak(counts: Counter) -> int:
     return candidates[0]
 
 
-def vote_majority_class(labels: List[int]) -> int:
+def vote_majority_class(labels: List[int], strict_cable_majority: bool = True) -> int:
     """
     Determines the semantic class from multi-view 2D mask observations.
 
-    stay_cable (2) is assigned only with absolute majority (>50%). Otherwise
-    cable votes are ignored and plurality + tie-break applies among remaining classes.
+    When `strict_cable_majority` is True (default), stay_cable (2) is assigned only with
+    absolute majority (>50%); otherwise cable votes are ignored and plurality + tie-break
+    applies among remaining classes. When False, cable is treated like any other class in a
+    single plain plurality vote - used by the Section 5.2 ablation to measure this rule's
+    contribution to the final cable IoU.
     """
     if not labels:
         return 0
 
     counts = Counter(labels)
+
+    if not strict_cable_majority:
+        return _plurality_with_tiebreak(counts)
+
     n = len(labels)
     cable_count = counts.get(STAY_CABLE_CLASS_ID, 0)
 
@@ -161,8 +168,10 @@ class SemanticProjector:
             observations[p3d_id] = observed_labels
         return observations
 
-    def project(self) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
-        """Executes 2D-to-3D back-projection using multi-view majority voting."""
+    def project(self, strict_cable_majority: bool = True) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
+        """Executes 2D-to-3D back-projection using multi-view majority voting. See
+        `vote_majority_class` for what `strict_cable_majority=False` (plain plurality ablation)
+        changes."""
         t0 = time.time()
         print("🔄 Executing 2D-to-3D Semantic Back-Projection...")
         observations = self.gather_observations()
@@ -173,7 +182,7 @@ class SemanticProjector:
         class_counts = Counter()
 
         for p3d_id, observed_labels in observations.items():
-            final_class = vote_majority_class(observed_labels)
+            final_class = vote_majority_class(observed_labels, strict_cable_majority=strict_cable_majority)
             color = CLASS_COLORS.get(final_class, CLASS_COLORS[0])
 
             self.point_classes[p3d_id] = final_class
