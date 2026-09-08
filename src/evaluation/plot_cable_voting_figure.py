@@ -55,23 +55,23 @@ def _draw_camera(ax, xy, target, label, vote_color, vote_text):
     vote annotated below it."""
     x, y = xy
     angle_deg = _camera_marker_angle_deg(xy, target)
-    ax.plot(x, y, marker=(3, 0, angle_deg), markersize=16, color="dimgray", zorder=4)
-    ax.text(x, y - 0.55, label, ha="center", va="top", fontsize=8, color="dimgray")
+    ax.plot(x, y, marker=(3, 0, angle_deg), markersize=20, color="dimgray", zorder=4)
+    ax.text(x, y - 0.6, label, ha="center", va="top", fontsize=11.5, color="dimgray")
     ax.text(
-        x, y - 0.95, vote_text, ha="center", va="top", fontsize=8.5, fontweight="bold",
+        x, y - 1.05, vote_text, ha="center", va="top", fontsize=12.5, fontweight="bold",
         color=vote_color,
     )
 
 
 def draw_voting_schematic(ax):
     ax.set_xlim(-4.2, 4.2)
-    ax.set_ylim(-5.6, 4.2)
+    ax.set_ylim(-6.3, 4.2)
     ax.axis("off")
-    ax.set_title("Illustrative example: multi-view vote for one 3D point", fontsize=10, pad=8)
+    ax.set_title("Illustrative example: multi-view vote for one 3D point", fontsize=13.5, pad=10)
 
     origin = (0.0, 0.5)
-    ax.plot(*origin, marker="o", markersize=9, color="black", zorder=5)
-    ax.text(0, 1.0, "3D point", ha="center", fontsize=9, fontweight="bold")
+    ax.plot(*origin, marker="o", markersize=11, color="black", zorder=5)
+    ax.text(0, 1.05, "3D point", ha="center", fontsize=12.5, fontweight="bold")
 
     cable_rgb = tuple(_LUT[2] / 255.0)
     bg_rgb = tuple(_LUT[0] / 255.0)
@@ -93,27 +93,27 @@ def draw_voting_schematic(ax):
         _draw_camera(ax, (x, y), origin, label, color, cls_text)
 
     ax.text(
-        0, -4.4,
+        0, -4.5,
         "2/5 cable votes (40%) < 50% threshold\n"
         "→ cable votes discarded → plurality among remaining: background (2) vs. deck (1)\n"
         "→ point labeled background",
-        ha="center", va="top", fontsize=8.3, color="black",
-        bbox=dict(boxstyle="round,pad=0.4", facecolor="#f5f5f5", edgecolor="gray"),
+        ha="center", va="top", fontsize=11.5, color="black",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#f5f5f5", edgecolor="gray"),
     )
 
 
 def build_cable_voting_figure(image_path: str, mask_path: str, crop_box, output_path: str) -> str:
     overlay = render_overlay_crop(image_path, mask_path, crop_box)
 
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11, 5.2), dpi=200, gridspec_kw={"width_ratios": [1.1, 1]})
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(14, 6.4), dpi=200, gridspec_kw={"width_ratios": [1.1, 1]})
 
     axA.imshow(overlay)
     axA.set_xticks([])
     axA.set_yticks([])
-    axA.set_title("Real example: GT mask overlaid on an undistorted UAV image", fontsize=10, pad=8)
+    axA.set_title("Real example: GT mask overlaid on an undistorted UAV image", fontsize=13.5, pad=10)
     axA.set_xlabel(
-        "cyan = stay_cable; note the polygon covers sky and river far beyond the cable strands",
-        fontsize=8.5, color="dimgray",
+        "cyan = stay_cable; note the polygon covers sky\nand river far beyond the cable strands",
+        fontsize=11.5, color="dimgray",
     )
 
     draw_voting_schematic(axB)
