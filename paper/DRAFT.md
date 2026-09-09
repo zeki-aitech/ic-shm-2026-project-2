@@ -544,7 +544,10 @@ consistently-labeled regions like `deck`, not by correcting per-view noise towar
 because there is little cross-view noise to correct. Cable's strong IoU therefore does not
 indicate the model recovers cable geometry more precisely than the annotations do; it indicates
 the model reproduces the annotation convention - background-bleeding included - consistently
-across viewpoints.
+across viewpoints. This is not a compromise: the evaluation protocol (Section 3.6) scores
+semantic mIoU directly against these same masks, so accurately reproducing their convention, at
+whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
+some finer-grained cable delineation that the evaluation does not actually ask for.
 
 ![Figure 9: Cable IoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
 
