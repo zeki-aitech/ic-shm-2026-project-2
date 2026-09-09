@@ -143,10 +143,12 @@ ties the semantic initialization directly to the contest's own annotated classes
 **Structure-aware bridge segmentation.** Lin et al. [13] propose a structure-oriented loss
 function for automated semantic segmentation of bridge *point clouds*, explicitly weighting the
 loss to reflect each structural component's spatial role rather than treating all classes
-uniformly — a motivation that parallels our own asymmetric, cable-specific treatment of vote
-noise in Section 3.4, though applied to a different stage (a training-time loss on 3D point
-clouds vs. our warm-start label initialization) and a different data modality (point clouds vs.
-the 2D images our pipeline is built on). Our own 2D pseudo-labeling stage (Section 3.3) fine-tunes
+uniformly — a motivation we tested an analogous, class-specific version of for our own
+cable-vote initialization (Section 5.2), applied to a different stage (a training-time loss on
+3D point clouds vs. our warm-start label initialization) and a different data modality (point
+clouds vs. the 2D images our pipeline is built on); unlike Lin et al., our ablation found the
+uniform, class-agnostic treatment sufficient in our setting (Section 5.2). Our own 2D
+pseudo-labeling stage (Section 3.3) fine-tunes
 SegFormer [14], a transformer-based semantic segmentation architecture chosen for its strong
 accuracy-to-compute ratio on a single consumer GPU.
 
