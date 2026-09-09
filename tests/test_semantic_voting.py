@@ -19,36 +19,39 @@ class TestSemanticVoting(unittest.TestCase):
         self.gt_masks_dir = os.path.join(PROJECT_ROOT, "outputs", "gt_masks")
         self.projector = SemanticProjector(self.colmap_dir, self.gt_masks_dir)
 
-    def test_vote_majority_class(self):
-        # Clear majority (non-cable)
+    def test_vote_majority_class_default_plain_plurality(self):
+        # Default (strict_cable_majority=False): plain plurality, cable competing on equal
+        # footing with every other class, ties broken by fixed priority (thin/rare structures,
+        # cable included, favored over background/deck).
         self.assertEqual(vote_majority_class([1, 1, 0]), 1)
         self.assertEqual(vote_majority_class([3, 3, 2]), 3)
-
-        # stay_cable: absolute majority only
         self.assertEqual(vote_majority_class([2, 2, 2, 0]), 2)
         self.assertEqual(vote_majority_class([2, 2, 0]), 2)
-        self.assertNotEqual(vote_majority_class([2, 2, 0, 0]), 2)  # exactly 50% fails
-        self.assertEqual(vote_majority_class([2, 1]), 1)  # no absolute majority for cable
+        # Cable/background tie (2 each): cable wins the tie-break under plain plurality.
+        self.assertEqual(vote_majority_class([2, 2, 0, 0]), 2)
+        # Cable/deck tie (1 each): cable wins the tie-break.
+        self.assertEqual(vote_majority_class([2, 1]), 2)
+        self.assertEqual(vote_majority_class([1, 2]), 2)
 
-        # Cable cannot win via tie-break alone
-        self.assertEqual(vote_majority_class([1, 2]), 1)
-
-        # Non-cable tie-break unchanged
+        # Non-cable tie-break unchanged.
         self.assertEqual(vote_majority_class([1, 3]), 3)
         self.assertEqual(vote_majority_class([0, 1]), 1)
 
-        # Empty fallback
+        # Empty fallback.
         self.assertEqual(vote_majority_class([]), 0)
 
-    def test_vote_majority_class_plain_plurality_ablation(self):
-        # With strict_cable_majority=False, cable competes on equal footing via plain plurality
-        # (the Section 5.2 ablation) - [2, 1] has no absolute cable majority but cable is still
-        # the plurality winner, so it should now win (unlike the strict-rule default above).
-        self.assertEqual(vote_majority_class([2, 1], strict_cable_majority=False), 2)
-        self.assertEqual(vote_majority_class([2, 2, 0, 0], strict_cable_majority=False), 2)
+    def test_vote_majority_class_strict_cable_majority_alternative(self):
+        # strict_cable_majority=True: the tested-but-not-adopted alternative (Section 5.2) -
+        # cable is assigned only with an absolute majority (>50%); otherwise cable votes are
+        # excluded and the remaining classes compete by plurality.
+        self.assertEqual(vote_majority_class([2, 2, 2, 0], strict_cable_majority=True), 2)
+        self.assertEqual(vote_majority_class([2, 2, 0], strict_cable_majority=True), 2)
+        self.assertNotEqual(vote_majority_class([2, 2, 0, 0], strict_cable_majority=True), 2)  # exactly 50% fails
+        self.assertEqual(vote_majority_class([2, 1], strict_cable_majority=True), 1)  # no absolute majority for cable
+        self.assertEqual(vote_majority_class([1, 2], strict_cable_majority=True), 1)
         # Non-cable cases are unaffected by the flag.
-        self.assertEqual(vote_majority_class([1, 1, 0], strict_cable_majority=False), 1)
-        self.assertEqual(vote_majority_class([], strict_cable_majority=False), 0)
+        self.assertEqual(vote_majority_class([1, 1, 0], strict_cable_majority=True), 1)
+        self.assertEqual(vote_majority_class([], strict_cable_majority=True), 0)
 
     @unittest.skipIf(
         not os.path.exists(os.path.join(PROJECT_ROOT, "outputs", "gt_masks")),

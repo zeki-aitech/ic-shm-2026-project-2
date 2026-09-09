@@ -59,15 +59,16 @@ def _plurality_with_tiebreak(counts: Counter) -> int:
     return candidates[0]
 
 
-def vote_majority_class(labels: List[int], strict_cable_majority: bool = True) -> int:
+def vote_majority_class(labels: List[int], strict_cable_majority: bool = False) -> int:
     """
-    Determines the semantic class from multi-view 2D mask observations.
+    Determines the semantic class from multi-view 2D mask observations by plain plurality vote
+    (with a fixed tie-break priority favoring thin/rare structural classes over background).
 
-    When `strict_cable_majority` is True (default), stay_cable (2) is assigned only with
-    absolute majority (>50%); otherwise cable votes are ignored and plurality + tie-break
-    applies among remaining classes. When False, cable is treated like any other class in a
-    single plain plurality vote - used by the Section 5.2 ablation to measure this rule's
-    contribution to the final cable IoU.
+    Setting `strict_cable_majority=True` instead requires stay_cable (2) to clear an absolute
+    majority (>50%) before it can be assigned, falling back to plurality among the other classes
+    otherwise. This was evaluated as a candidate refinement targeting cable's background-bleeding
+    annotation noise (Section 3.4/5.2 of the paper): it measurably cleans the warm-start data but
+    has no effect on final holdout IoU once training converges, so it is not the default.
     """
     if not labels:
         return 0
@@ -168,10 +169,10 @@ class SemanticProjector:
             observations[p3d_id] = observed_labels
         return observations
 
-    def project(self, strict_cable_majority: bool = True) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
-        """Executes 2D-to-3D back-projection using multi-view majority voting. See
-        `vote_majority_class` for what `strict_cable_majority=False` (plain plurality ablation)
-        changes."""
+    def project(self, strict_cable_majority: bool = False) -> Tuple[Dict[int, int], Dict[int, np.ndarray]]:
+        """Executes 2D-to-3D back-projection using multi-view plurality voting. See
+        `vote_majority_class` for what `strict_cable_majority=True` (the tested, not-adopted
+        cable-specific alternative) changes."""
         t0 = time.time()
         print("🔄 Executing 2D-to-3D Semantic Back-Projection...")
         observations = self.gather_observations()

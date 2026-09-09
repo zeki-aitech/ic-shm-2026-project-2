@@ -3,11 +3,13 @@ Analyzes the raw multi-view semantic vote distributions behind the Gaussian Spla
 warm-start (`src.colmap_io.semantic_voting`), quantifying:
 1. How consistent each class's plurality-winning vote is (mean/median vote share, fraction
    clearing an absolute majority).
-2. How much `vote_majority_class`'s strict-majority rule for `stay_cable` actually changes
-   relative to plain plurality voting, and where the reclassified points go.
+2. How much `vote_majority_class`'s strict-majority rule for `stay_cable` - a candidate
+   refinement tested but not adopted as the default - actually changes relative to the default
+   plain plurality voting, and where the reclassified points go.
 
-These are the numbers the paper's Method section (3.4) cites to justify applying the
-strict-majority rule only to `stay_cable` rather than to all five classes.
+These are the numbers the paper's Section 3.4/5.2 cite to characterize that rule's real,
+measured effect on the warm-start data, ahead of the Section 5.2 ablation showing it does not
+translate into a final-IoU benefit.
 """
 from collections import Counter
 from dataclasses import dataclass
@@ -96,7 +98,7 @@ def analyze_vote_consistency(observations: Dict[int, List[int]]) -> VoteConsiste
         vote_shares_by_class.setdefault(winner, []).append(share)
         over_majority_by_class.setdefault(winner, []).append(share > 0.5)
         plurality_result[p3d_id] = winner
-        strict_result[p3d_id] = vote_majority_class(labels)
+        strict_result[p3d_id] = vote_majority_class(labels, strict_cable_majority=True)
 
     per_class: Dict[int, ClassVoteConsistency] = {}
     for cid, shares in vote_shares_by_class.items():

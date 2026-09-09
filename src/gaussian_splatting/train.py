@@ -118,7 +118,7 @@ def prepare_training_data(
     pseudo_masks_dir: Optional[str],
     undistorted_dir: str,
     holdout_ratio: float = 0.2,
-    strict_cable_majority: bool = True,
+    strict_cable_majority: bool = False,
 ):
     """Loads camera/points/votes, builds the train (labeled+unlabeled) and holdout camera lists.
     Returns (camera_intrinsics, pts3d, point_classes, point_colors, train_cameras, holdout_cameras,
@@ -187,7 +187,7 @@ def train(
     seed: int = 42,
     optimize_poses: bool = False,
     pose_lr: float = 1e-3,
-    strict_cable_majority: bool = True,
+    strict_cable_majority: bool = False,
     warm_start_semantics: bool = True,
 ):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -323,9 +323,10 @@ def main():
     parser.add_argument("--optimize-poses", action="store_true",
                          help="Jointly refine the reference SfM train-view poses alongside the Gaussians")
     parser.add_argument("--pose-lr", type=float, default=1e-3)
-    parser.add_argument("--plain-plurality", action="store_true",
-                         help="Ablation: disable the strict absolute-majority rule for cable "
-                              "votes, falling back to plain plurality for every class")
+    parser.add_argument("--strict-cable-majority", action="store_true",
+                         help="Tested-but-not-adopted alternative (Section 5.2): require an "
+                              "absolute majority for the cable class specifically, instead of "
+                              "the default plain plurality used for every class")
     parser.add_argument("--no-semantic-warmstart", action="store_true",
                          help="Ablation: initialize semantic logits to a neutral zero vector "
                               "instead of warm-starting from the voted class")
@@ -344,7 +345,7 @@ def main():
         colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, output_dir,
         holdout_ratio=args.holdout_ratio, iters=args.iters, downsample=args.downsample, lambda_sem=args.lambda_sem,
         optimize_poses=args.optimize_poses, pose_lr=args.pose_lr,
-        strict_cable_majority=not args.plain_plurality,
+        strict_cable_majority=args.strict_cable_majority,
         warm_start_semantics=not args.no_semantic_warmstart,
     )
 
