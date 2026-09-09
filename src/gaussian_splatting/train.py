@@ -330,6 +330,10 @@ def main():
     parser.add_argument("--no-semantic-warmstart", action="store_true",
                          help="Ablation: initialize semantic logits to a neutral zero vector "
                               "instead of warm-starting from the voted class")
+    parser.add_argument("--seed", type=int, default=42,
+                         help="Random seed for view-order shuffling and densification "
+                              "stochasticity - vary this to measure run-to-run noise for a "
+                              "fixed configuration")
     args = parser.parse_args()
 
     dataset_dir = os.getenv("CONTEST_DATASET_DIR", os.path.join(PROJECT_ROOT, "data", "Contest Dataset"))
@@ -347,6 +351,7 @@ def main():
         optimize_poses=args.optimize_poses, pose_lr=args.pose_lr,
         strict_cable_majority=args.strict_cable_majority,
         warm_start_semantics=not args.no_semantic_warmstart,
+        seed=args.seed,
     )
 
 
