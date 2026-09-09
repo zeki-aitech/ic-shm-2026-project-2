@@ -264,9 +264,10 @@ Stay cables are slender, and, because a 2D polygon annotation necessarily traces
 a whole cable rather than its individual pixels, are disproportionately prone to background
 bleeding (Figure 2) — sky and water pixels absorbed into the cable label. We use the same plain
 plurality rule for every class, including cable, rather than adding a class-specific exception
-for this; Section 5.2 discusses how cable's final IoU holds up despite this noise.
+for this; Section 5.2 examines what this means for cable's final IoU and what the model actually
+learns from it.
 
-![Figure 2: Background-bleeding in cable annotations and the multi-view voting rule](figures/fig2_cable_voting.png)
+![Figure 2: Background-bleeding in cable annotations and the multi-view plurality vote](figures/fig2_cable_voting.png)
 
 **Figure 2.** Background-bleeding in cable annotations and the multi-view plurality vote. Left: a
 real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
