@@ -293,13 +293,14 @@ outputs it produces on the right.
 
 ![Figure 3: Semantic Gaussian representation and fused single-pass rasterization](figures/fig3_gaussian_representation.png)
 
-**Figure 3.** The semantic Gaussian representation and fused rasterization. Left: each
-Gaussian's standard 3D Gaussian Splatting parameters (position, scale, rotation, opacity - which
-determine projection and depth order - and RGB color) alongside this paper's addition, a
-per-Gaussian semantic logit vector. Color and semantic logits are concatenated into one
-8-channel tensor and rasterized in a single `gsplat` pass, producing a rendered RGB image and a
-rendered semantic logit map that are pixel-aligned by construction, since both come from the
-same projection, depth order, and per-Gaussian compositing weights.
+**Figure 3.** The semantic Gaussian representation and fused rasterization, drawn as a
+shared-trunk, dual-head architecture. Left: each Gaussian's standard 3D Gaussian Splatting
+parameters (position, scale, rotation, opacity - which determine projection and depth order -
+and RGB color) alongside this paper's addition, a per-Gaussian semantic logit vector. Color and
+semantic logits are concatenated into one 8-channel tensor; together with the geometric
+parameters, this feeds a single shared `gsplat` rasterization pass that fans out into two heads
+- a rendered RGB image and a rendered semantic logit map - pixel-aligned by construction, since
+both come from the same projection, depth order, and per-Gaussian compositing weights.
 
 Crucially, the semantic channels are composited by the *same* alpha-blending rule as color: a
 rendered pixel's logit vector is an opacity- and depth-weighted combination of the semantic

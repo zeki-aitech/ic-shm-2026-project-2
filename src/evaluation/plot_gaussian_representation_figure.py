@@ -1,16 +1,16 @@
 """
-Renders Figure 3 (Section 3.4): a schematic of the semantic Gaussian representation and the
-fused single-pass RGB+semantic rasterization that is this paper's central design choice - not
-tied to one specific real Gaussian or checkpoint, purely illustrative of the mechanism described
-in the "Representation" and "Fused rendering" paragraphs.
+Renders Figure 3 (Section 3.4): a left-to-right "model architecture" style diagram of the
+semantic Gaussian representation and fused single-pass rasterization - this paper's central
+design choice - not tied to one specific real Gaussian or checkpoint, purely illustrative of the
+mechanism described in the "Representation" and "Fused rendering" paragraphs.
 
-Shows: (1) a single Gaussian's parameters, split into the standard 3DGS set (mean, scale,
-rotation, opacity - which determine projection and depth order) and this paper's addition (a
-per-Gaussian semantic logit vector, concatenated with RGB color into the 8-channel tensor that is
-actually composited), (2) many such Gaussians projected, depth-sorted, and alpha-composited in a
-single rasterization pass with shared weights, and (3) that one pass's output split into a
-rendered RGB image and a rendered semantic logit map (resolved to a class map by arg max at
-read-out time).
+Drawn as a shared-trunk, dual-head architecture (a familiar convention for multi-task/multi-output
+models): every Gaussian's appearance (RGB) and semantic-logit vectors are shown as channel bars
+that concatenate into one 8-channel tensor; the geometric parameters bypass this concatenation and
+feed the rasterizer directly (they determine projection/depth order, not what gets composited);
+the shared `gsplat` rasterization trunk in the middle fans out right into two heads - a rendered
+RGB image and a rendered semantic logit map - that are pixel-aligned by construction since both
+come from the same trunk.
 """
 import os
 
@@ -18,25 +18,27 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
 
-STANDARD_COLOR = "#e8eef7"
 STANDARD_EDGE = "#2a4d7a"
-OURS_COLOR = "#fdeee0"
+STANDARD_FACE = "#e8eef7"
 OURS_EDGE = "#b5570f"
-MERGE_COLOR = "#fdf1d6"
-MERGE_EDGE = "#8a6d1a"
-OUTPUT_COLOR = "#e6f4ea"
-OUTPUT_EDGE = "#2f6b3d"
-GAUSSIAN_COLOR = "#d8e6f9"
-GAUSSIAN_EDGE = "#3a3a3a"
+OURS_FACE = "#fdeee0"
+RGB_CELL_COLORS = ["#e05a4e", "#4caf6d", "#4a7fd6"]
+SEM_CELL_COLOR = "#f0b35a"
+TRUNK_FACE = "#d8e6f9"
+TRUNK_EDGE = "#3a3a3a"
+HEAD_RGB_FACE = "#fde8e6"
+HEAD_RGB_EDGE = "#a83a2e"
+HEAD_SEM_FACE = "#e6f4ea"
+HEAD_SEM_EDGE = "#2f6b3d"
 ARROW_COLOR = "#333333"
 
 
-def _box(ax, cx, cy, w, h, text, face=STANDARD_COLOR, edge=STANDARD_EDGE, fontsize=13, fontweight="normal"):
+def _box(ax, cx, cy, w, h, text, face, edge, fontsize=12, fontweight="normal"):
     box = FancyBboxPatch(
         (cx - w / 2, cy - h / 2), w, h,
-        boxstyle="round,pad=0.07,rounding_size=0.1",
+        boxstyle="round,pad=0.06,rounding_size=0.09",
         facecolor=face, edgecolor=edge, linewidth=1.8, zorder=2,
     )
     ax.add_patch(box)
@@ -44,88 +46,100 @@ def _box(ax, cx, cy, w, h, text, face=STANDARD_COLOR, edge=STANDARD_EDGE, fontsi
     return (cx, cy - h / 2), (cx, cy + h / 2), (cx - w / 2, cy), (cx + w / 2, cy)
 
 
-def _arrow(ax, p_from, p_to):
-    arrow = FancyArrowPatch(
-        p_from, p_to, arrowstyle="-|>", mutation_scale=22,
-        color=ARROW_COLOR, linewidth=2.0, zorder=1, shrinkA=2, shrinkB=2,
-    )
-    ax.add_patch(arrow)
+def _channel_bar(ax, cx, cy, cell_w, cell_h, colors, edge="#333333"):
+    """A horizontal register of `len(colors)` colored unit cells - the "tensor as a bar of
+    channels" visual used throughout: RGB's 3 cells, the semantic logits' 5 cells, and their
+    8-cell concatenation."""
+    n = len(colors)
+    x0 = cx - n * cell_w / 2
+    for i, col in enumerate(colors):
+        ax.add_patch(Rectangle((x0 + i * cell_w, cy - cell_h / 2), cell_w, cell_h,
+                                facecolor=col, edgecolor=edge, linewidth=1.3, zorder=2))
+    return (x0, cy), (x0 + n * cell_w, cy)  # left mid, right mid
 
 
-def _zigzag_arrow(ax, p_from, x_bend, p_to, label=None, fontsize=10.5):
-    """Horizontal-vertical-horizontal connector bending at `x_bend`, so a long feed (e.g. the
-    geometric params reaching all the way down to the rasterization box) stays clear of the
+def _arrow(ax, p_from, p_to, lw=2.0, mutation_scale=20):
+    ax.add_patch(FancyArrowPatch(
+        p_from, p_to, arrowstyle="-|>", mutation_scale=mutation_scale,
+        color=ARROW_COLOR, linewidth=lw, zorder=1, shrinkA=2, shrinkB=2,
+    ))
+
+
+def _elbow_arrow(ax, p_from, x_bend, p_to, lw=1.8):
+    """Horizontal-vertical-horizontal connector bending at `x_bend` - keeps a long feed clear of
     boxes in between instead of cutting a diagonal line through them."""
-    ax.plot([p_from[0], x_bend], [p_from[1], p_from[1]], color=ARROW_COLOR, linewidth=2.0, zorder=1)
-    ax.plot([x_bend, x_bend], [p_from[1], p_to[1]], color=ARROW_COLOR, linewidth=2.0, zorder=1)
-    _arrow(ax, (x_bend, p_to[1]), p_to)
-    if label:
-        mid_y = (p_from[1] + p_to[1]) / 2
-        ax.text(x_bend - 0.15, mid_y, label, rotation=90, ha="right", va="center",
-                fontsize=fontsize, style="italic", color="dimgray", zorder=3)
+    ax.plot([p_from[0], x_bend], [p_from[1], p_from[1]], color=ARROW_COLOR, linewidth=lw, zorder=1)
+    ax.plot([x_bend, x_bend], [p_from[1], p_to[1]], color=ARROW_COLOR, linewidth=lw, zorder=1)
+    _arrow(ax, (x_bend, p_to[1]), p_to, lw=lw)
 
 
 def plot_gaussian_representation_figure(output_path: str) -> str:
-    fig, ax = plt.subplots(figsize=(13, 9.7), dpi=200)
-    ax.set_xlim(0, 13)
-    ax.set_ylim(0.5, 11)
+    fig, ax = plt.subplots(figsize=(17.2, 7.2), dpi=200)
+    ax.set_xlim(0, 17.2)
+    ax.set_ylim(0, 7.2)
     ax.axis("off")
 
-    # Row 1: per-Gaussian parameters, split standard vs. this paper's addition.
-    ax.text(3.6, 10.55, "Standard 3D Gaussian Splatting [6]", ha="center", fontsize=12.5,
-             fontweight="bold", color=STANDARD_EDGE)
-    std_b, std_t, std_l, std_r = _box(
-        ax, 3.6, 9.5, 6.0, 1.5,
-        r"$\mu_k \in \mathbb{R}^3$   $s_k \in \mathbb{R}^3$   $q_k \in \mathbb{R}^4$   $\alpha_k \in \mathbb{R}$"
-        "\n(mean, scale, rotation, opacity)",
-        fontsize=12.5,
-    )
-    c_b, c_t, c_l, c_r = _box(ax, 3.6, 7.7, 3.2, 1.1, r"RGB color $c_k \in \mathbb{R}^3$", fontsize=13)
+    # ---- Column 1: a single Gaussian and its parameters (left) ----
+    ax.text(1.7, 6.75, r"Every Gaussian $g_k$", ha="center", fontsize=13, fontweight="bold")
 
-    ax.text(10.3, 10.55, "This paper's addition", ha="center", fontsize=12.5,
-             fontweight="bold", color=OURS_EDGE)
-    ell_b, ell_t, ell_l, ell_r = _box(
-        ax, 10.3, 9.15, 4.6, 1.9,
-        r"Semantic logit vector"
-        "\n" r"$\ell_k \in \mathbb{R}^5$"
-        "\n(one entry per structural class)",
-        face=OURS_COLOR, edge=OURS_EDGE, fontsize=12.5,
+    geo_b, geo_t, geo_l, geo_r = _box(
+        ax, 1.7, 5.55, 3.0, 1.3,
+        r"Geometry (3DGS [6])" "\n" r"$\mu_k, s_k, q_k, \alpha_k$",
+        face=STANDARD_FACE, edge=STANDARD_EDGE, fontsize=11.5,
     )
-
-    ax.text(6.95, 8.45, "every\nGaussian $g_k$", ha="center", va="center", fontsize=11,
+    ax.text(1.7, 4.75, "position, scale, rotation, opacity", ha="center", fontsize=9,
             style="italic", color="dimgray")
 
-    # Concatenation into the 8-channel tensor rasterized as one.
-    cat_b, cat_t, cat_l, cat_r = _box(
-        ax, 6.95, 6.0, 6.4, 1.2,
-        r"Concatenate: $[c_k \,;\, \ell_k] \in \mathbb{R}^8$ — one 8-channel tensor per Gaussian",
-        face=MERGE_COLOR, edge=MERGE_EDGE, fontweight="bold", fontsize=13,
+    ax.text(1.7, 3.55, r"RGB color $c_k$", ha="center", fontsize=11.5, color=STANDARD_EDGE, fontweight="bold")
+    rgb_l, rgb_r = _channel_bar(ax, 1.7, 3.0, 0.55, 0.55, RGB_CELL_COLORS, edge=STANDARD_EDGE)
+
+    ax.text(1.7, 1.85, r"Semantic logits $\ell_k$" "\n(this paper's addition)",
+            ha="center", fontsize=11.5, color=OURS_EDGE, fontweight="bold")
+    sem_l, sem_r = _channel_bar(ax, 1.7, 1.05, 0.42, 0.42, [SEM_CELL_COLOR] * 5, edge=OURS_EDGE)
+
+    # ---- Column 2: concatenation into the 8-channel tensor ----
+    cat_x = 4.75
+    ax.text(cat_x, 3.85, "concatenate\n" r"$[c_k \,;\, \ell_k] \in \mathbb{R}^8$",
+            ha="center", fontsize=11, style="italic", color="dimgray")
+    cat_colors = RGB_CELL_COLORS + [SEM_CELL_COLOR] * 5
+    cat_l, cat_r = _channel_bar(ax, cat_x, 3.0, 0.42, 0.5, cat_colors, edge="#333333")
+    _arrow(ax, rgb_r, (cat_l[0] - 0.15, 3.0 + 0.35))
+    _arrow(ax, sem_r, (cat_l[0] - 0.15, 3.0 - 0.35))
+
+    # ---- Column 3: shared rasterization trunk ----
+    trunk_cx = 8.9
+    trunk_b, trunk_t, trunk_l, trunk_r = _box(
+        ax, trunk_cx, 3.0, 3.7, 3.6,
+        "gsplat [16]\n\nproject\n↓\ndepth-sort\n↓\nalpha-composite\n\n(shared trunk,\none pass)",
+        face=TRUNK_FACE, edge=TRUNK_EDGE, fontsize=12, fontweight="bold",
     )
-    _arrow(ax, (c_r[0] + 0.05, c_r[1]), (cat_l[0] - 1.6, cat_t[1] + 0.5))
-    _arrow(ax, (ell_l[0] - 0.05, ell_b[1] - 0.05), (cat_l[0] + 1.6, cat_t[1] + 0.5))
+    _arrow(ax, (cat_r[0] + 0.1, 3.0), (trunk_l[0] - 0.05, 3.0))
+    _elbow_arrow(ax, (geo_r[0] + 0.05, geo_r[1]), 6.55, (trunk_l[0] - 0.05, trunk_t[1] - 0.3))
 
-    # Single fused rasterization pass.
-    ras_b, ras_t, ras_l, ras_r = _box(
-        ax, 6.95, 4.05, 10.4, 1.4,
-        "gsplat [16]: project → depth-sort → alpha-composite\n"
-        "(single pass, shared weights for every channel)",
-        face=GAUSSIAN_COLOR, edge=GAUSSIAN_EDGE, fontweight="bold", fontsize=13,
+    # ---- Column 4: two output heads, fanning out right ----
+    head_x = 14.8
+    head_w = 4.4
+    head_l_edge = head_x - head_w / 2  # 12.6
+
+    rgb_head_b, rgb_head_t, rgb_head_l, rgb_head_r = _box(
+        ax, head_x, 5.15, head_w, 1.65,
+        "RGB head\nRendered RGB image (3 ch.)",
+        face=HEAD_RGB_FACE, edge=HEAD_RGB_EDGE, fontsize=12, fontweight="bold",
     )
-    _arrow(ax, cat_b, ras_t)
+    sem_head_b, sem_head_t, sem_head_l, sem_head_r = _box(
+        ax, head_x, 0.85, head_w, 1.65,
+        "Semantic head\nRendered logit map (5 ch.)\n→ arg max → class map",
+        face=HEAD_SEM_FACE, edge=HEAD_SEM_EDGE, fontsize=12, fontweight="bold",
+    )
 
-    # Geometric params bypass the concatenation and feed the rasterizer directly - they
-    # determine projection/depth order, not which channels get composited.
-    _zigzag_arrow(ax, (std_l[0] - 0.05, std_l[1]), 0.9, (ras_l[0] + 0.15, ras_t[1] - 0.15),
-                  label="position, scale, rotation, opacity\n(determine projection & depth order)")
+    bend_x = (trunk_r[0] + head_l_edge) / 2  # midpoint of the trunk-to-head gap
+    _elbow_arrow(ax, (trunk_r[0] + 0.05, trunk_t[1] - 0.5), bend_x, (head_l_edge - 0.05, 5.15))
+    _elbow_arrow(ax, (trunk_r[0] + 0.05, trunk_b[1] + 0.5), bend_x, (head_l_edge - 0.05, 0.85))
 
-    # Split outputs, pixel-aligned by construction (explained in the external figure caption).
-    o1_b, o1_t, o1_l, o1_r = _box(ax, 4.15, 1.85, 3.6, 1.1, "Rendered RGB image\n(3 channels)",
-                                   face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=12)
-    o2_b, o2_t, o2_l, o2_r = _box(ax, 9.55, 1.85, 5.6, 1.1,
-                                   "Rendered semantic logit map (5 ch.)\n→ arg max → class map",
-                                   face=OUTPUT_COLOR, edge=OUTPUT_EDGE, fontsize=12)
-    _arrow(ax, (ras_b[0] - 0.15, ras_b[1]), (4.15, o1_t[1] + 0.05))
-    _arrow(ax, (ras_b[0] + 0.15, ras_b[1]), (9.55, o2_t[1] + 0.05))
+    ax.annotate("", xy=(head_l_edge - 0.7, 3.5), xytext=(head_l_edge - 0.7, 2.5),
+                arrowprops=dict(arrowstyle="<->", color="dimgray", linewidth=1.4))
+    ax.text(head_l_edge - 0.5, 3.0, "pixel-aligned\nby construction", ha="left", va="center",
+            fontsize=9.5, style="italic", color="dimgray")
 
     fig.tight_layout()
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
