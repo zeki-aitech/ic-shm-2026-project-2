@@ -624,22 +624,29 @@ converged model rather than a lucky snapshot.
 
 ### 5.5 Ablation: Training Resolution
 
-**Table 3: Effect of training resolution on holdout performance.** The "Full" row here predates
-the semantic warm-start configuration (Section 3.4) used for Table 1's final numbers, so its
-exact values differ slightly; the resolution and warm-start choices are independent design axes,
-so the direction and size of the resolution effect itself is expected to be unaffected.
+**Table 3: Effect of training resolution on holdout performance,** both rows trained for the
+same 40,000-iteration budget, differing only in image resolution. Both rows also predate the
+semantic warm-start configuration (Section 3.4) used for Table 1's final numbers, so their
+exact values differ slightly from Table 1; the resolution and warm-start choices are independent
+design axes, so the direction and size of the resolution effect itself is expected to be
+unaffected.
 
 | Training resolution | PSNR | SSIM | LPIPS | mIoU |
 | :--- | :---: | :---: | :---: | :---: |
-| Half (660x494) | 21.99 | 0.834 | 0.348 | 87.96% |
+| Half (660x494) | 21.79 | 0.831 | 0.355 | 85.77% |
 | **Full (1320x989)** | **22.18** | **0.849** | **0.334** | **91.47%** |
 
 As Table 3 shows, training at native image resolution improves every metric, most notably mIoU
-(+3.5 points), consistent with the intuition that thin structures (cable) and fine boundaries
-benefit from
-sharper photometric/semantic gradients during optimization. The cost is proportionally longer
-training time (≈47 min vs. ≈14 min for a comparable iteration budget on the same GPU); given
-the modest absolute training time either way, full resolution is the recommended default.
+(+5.7 points), consistent with the intuition that thin structures (cable) and fine boundaries
+benefit from sharper photometric/semantic gradients during optimization. The cost is
+proportionally longer training time (≈47 min vs. ≈19 min for the same 40,000-iteration budget on
+the same GPU); given the modest absolute training time either way, full resolution is the
+recommended default. Notably, extending training to 40,000 iterations at half resolution did not
+improve on our own earlier, shorter 30,000-iteration half-resolution run (87.96% mIoU) - it
+scored lower (85.77%) despite the longer schedule, suggesting half-resolution training does not
+straightforwardly benefit from more iterations the way full-resolution training does. We did not
+investigate this further, since it does not change this section's main conclusion (full
+resolution is the better choice) and a deeper investigation is outside this ablation's scope.
 
 ---
 

@@ -24,6 +24,29 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] Full numeric audit of `DRAFT.md` (every reported number re-traced to a real checkpoint,
+  eval report, log, or freshly-reproduced script run) - caught and fixed one real methodological
+  bug: Table 3's (resolution ablation, Section 5.5) "Half" row was trained for only 30,000
+  iterations (`gaussians_v1_halfres_noposeopt`, no training log ever saved for it - only
+  recovered via the checkpoint's own `step` field and file timestamps) while the "Full" row used
+  40,000 (`gaussians_v3a_fullres_noposeopt`) - not the "comparable iteration budget" the old text
+  claimed, confounding the resolution-only conclusion. Retrained half-resolution for the full
+  40,000 iterations (`--strict-cable-majority`, matching v3a's setup exactly so resolution is the
+  only remaining difference) -> `outputs/checkpoints/gaussians_halfres_40k/final.pt` (601,144
+  Gaussians, 1115.5s train time), evaluated via `render_metrics.py` ->
+  `outputs/eval/render_eval_report_halfres_40k.md`. Result: half-resolution at 40k iterations
+  scores *lower* (85.77% mIoU) than the old, shorter 30k-iteration run (87.96%) - an unexpected
+  but real finding, disclosed in Table 3's discussion rather than hidden. This widens the
+  measured resolution effect from +3.5 to +5.7 mIoU points and makes the "≈47 min vs ≈X min"
+  training-time comparison literally apples-to-apples for the first time (≈47 min vs ≈19 min,
+  both 40k iterations). Also confirmed via direct re-run/re-derivation that every other number in
+  the paper is accurate: Table 1/2 (`render_eval_report_plain_plurality.md`), 600,958 Gaussians,
+  86,336 raw feature tracks / 84,613 points after IQR filtering / 0.50px mean reprojection error
+  (re-ran `python -m src.colmap_io.reconstructor` fresh), camera intrinsics (f=925.70, k1=0.00899,
+  1320x989), 400 images (300 labeled/100 unlabeled), every Task A/B hyperparameter in Section 4.2
+  against `train.py`/`src/segmentation/train.py` code, Task A's 81.27% final validation mIoU
+  (`segmentation_train.log`), and the Gaussian count stabilizing at step 8,600
+  (`gaussian_train_ablation_plain_plurality.log`).
 - [x] Figure 6 (splat viewer, Section 5.3, optional) re-captured from the official
   plain-plurality checkpoint's PLYs in SuperSplat and recomposed via
   `src/evaluation/compose_splat_screenshots.py` (`paper/figures/fig6_splat_render.png`), replacing
