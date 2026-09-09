@@ -260,11 +260,11 @@ logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable la
 semantic channel begins optimization from an informed prior instead of from noise, while
 remaining free to be corrected by the photometric and semantic losses during training.
 
-Stay cables are slender, and because a 2D polygon annotation necessarily traces a region around a
-whole cable rather than its individual pixels, disproportionately prone to background bleeding
-(Figure 2) — sky and water pixels absorbed into the cable label. We use the same plain plurality
-rule for every class, including cable, rather than adding a class-specific exception for this;
-Section 5.2 discusses how cable's final IoU holds up despite this noise.
+Stay cables are slender, and, because a 2D polygon annotation necessarily traces a region around
+a whole cable rather than its individual pixels, are disproportionately prone to background
+bleeding (Figure 2) — sky and water pixels absorbed into the cable label. We use the same plain
+plurality rule for every class, including cable, rather than adding a class-specific exception
+for this; Section 5.2 discusses how cable's final IoU holds up despite this noise.
 
 ![Figure 2: Background-bleeding in cable annotations and the multi-view voting rule](figures/fig2_cable_voting.png)
 
