@@ -528,14 +528,23 @@ persist once training pulls every visible Gaussian back toward the same per-pixe
 would have converged to regardless of initialization. This is arguably a more fundamental
 explanation for Table 3's null result than the convergence-speed argument above: the
 warm-start's head start is not merely overtaken by training, it is structurally invisible to
-both the training objective and the evaluation metric past initialization. It is consistent
-with — though does not fully substitute for — the fused alpha-compositing correction mechanism
-described in Section 3.4: a floating "cable" Gaussian that is actually sky would receive
-inconsistent semantic gradients across the views that observe it, pushing it toward a corrected
-label over enough training steps; directly attributing the correction to that specific mechanism
-(rather than to the semantic cross-entropy loss more generally) would require tracking
-individual Gaussians' semantic-logit and opacity trajectories over training, which we leave to
-future work.
+both the training objective and the evaluation metric past initialization.
+
+This is not, however, evidence that training corrects the annotation toward truer cable
+geometry - Figure 4's rendered semantic maps (Section 5.3) show the opposite. On views 005, 250,
+and 300, the rendered cable region closely reproduces the same broad, background-bleeding-affected
+shape as the ground-truth mask itself, not a thinner region tracing the actual cable strands. The
+more accurate explanation is that the annotated region, while not tracing individual strands, is
+still 3D-consistent: the fan of stay cables spans a real, roughly planar surface between tower
+and deck, so annotators viewing that structure from different angles trace a similar broad
+boundary around it each time. Multi-view training has no cross-view contradiction to resolve for
+a target that already agrees with itself across views, so it converges confidently to the same
+coarse region the annotations describe - for the same reason it converges confidently on large,
+consistently-labeled regions like `deck`, not by correcting per-view noise toward finer geometry,
+because there is little cross-view noise to correct. Cable's strong IoU therefore does not
+indicate the model recovers cable geometry more precisely than the annotations do; it indicates
+the model reproduces the annotation convention - background-bleeding included - consistently
+across viewpoints.
 
 ![Figure 9: Cable IoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
 
