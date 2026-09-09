@@ -144,16 +144,16 @@ uv run python -m src.evaluation.render_metrics \
 
 ## 📊 6. Results (RTX 3080, 10GB)
 
-Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 602,363 Gaussians.
+Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 600,958 Gaussians.
 Evaluated on the 60-image holdout, never used in training:
 
 | Metric | Value |
 | :--- | :---: |
 | Task A val 2D mIoU (60-image holdout) | 81.27% |
-| PSNR | 22.18 dB |
+| PSNR | 22.19 dB |
 | SSIM | 0.849 |
-| LPIPS | 0.334 |
-| **Semantic mIoU (structural, 4 classes)** | **91.47%** |
-| Accuracy Score (illustrative) | 0.816 |
+| LPIPS | 0.335 |
+| **Semantic mIoU (structural, 4 classes)** | **91.28%** |
+| Accuracy Score (illustrative) | 0.815 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.

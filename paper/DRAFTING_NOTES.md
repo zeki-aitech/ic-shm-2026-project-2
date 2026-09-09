@@ -18,8 +18,38 @@ it once the paper is finalized and submitted — it is not part of the paper its
   (`DRAFT.md` title block, currently `[NEEDS]`).
 - [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
   `[NEEDS]`) once the submission link is finalized.
+- [ ] Figure 6 (splat viewer, Section 5.3, optional) still shows the OLD strict-majority
+  checkpoint's SuperSplat screenshots (`paper/figures/fig6_splat_render.png`). New PLYs from the
+  official plain-plurality checkpoint are already exported
+  (`outputs/renders/bridge_splat_plain_plurality_{rgb,semantic}.ply`, via the new
+  `src/gaussian_splatting/export_ply.py`) - needs manual capture in SuperSplat
+  (https://superspl.at/editor) and re-composing via
+  `src/evaluation/compose_splat_screenshots.py`. Geometry is very close between the two
+  checkpoints (Table 3), so this is a low-urgency accuracy nit, not a correctness bug.
+- [ ] `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `docs/SUBMISSION_CHECKLIST_AND_GUIDELINES.md`
+  still reference the old strict-majority checkpoint's numbers/Gaussian count (602,363) - not
+  updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).
+
 ## Done
 
+- [x] Switched the paper's official model from the strict-majority baseline to the
+  plain-plurality one, since Table 3's ablation showed the strict-majority rule doesn't improve
+  on plain plurality where it matters (cable IoU) despite adding cable-specific complexity.
+  Regenerated Figures 1, 2, 3, 4, 5, 8, 9 and Tables 1/2/3 from the plain-plurality checkpoint
+  (`outputs/checkpoints/gaussians_ablation_plain_plurality/final.pt`, 600,958 Gaussians);
+  Table 3's rows now read as "our approach" (plain plurality) vs. two tested alternatives
+  (strict-majority rule, no semantic warm-start) instead of "baseline" vs. two ablations of
+  itself. Flipped the actual code default too
+  (`vote_majority_class`/`SemanticProjector.project`/`train()`'s `strict_cable_majority` is now
+  `False` by default; CLI flag renamed `--plain-plurality` -> `--strict-cable-majority`,
+  opt-in to the alternative) - this surfaced and fixed a real bug in
+  `src/evaluation/vote_consistency.py`, which called `vote_majority_class()` without
+  `strict_cable_majority=True` and would have silently started comparing plain plurality
+  against itself; re-ran it and confirmed it still reproduces the exact numbers already cited
+  in the paper (416 reclassified, 92.3% to background). Honestly reports that the rejected
+  strict-majority alternative shows a higher tower IoU and marginally higher overall mIoU than
+  our simpler default (Table 3) - flagged as an open, unexplained pattern rather than hidden.
+  Backup of the pre-change state tagged `pre-plurality-simplification` (commit `dc9f8de`).
 - [x] Ablation training without the strict-majority rule (plain plurality only) and without
   the semantic warm-start entirely (`DRAFT.md` Section 5.2, Table 3) - two real 40,000-iteration,
   full-resolution runs (`--plain-plurality` and `--no-semantic-warmstart` flags added to
