@@ -296,9 +296,11 @@ outputs it produces on the right.
 **Figure 3.** The semantic Gaussian representation and fused rasterization, drawn as a
 shared-trunk, dual-head architecture. Left: each Gaussian's standard 3D Gaussian Splatting
 parameters (position, scale, rotation, opacity - which determine projection and depth order -
-and RGB color) alongside this paper's addition, a per-Gaussian semantic logit vector. Color and
-semantic logits are concatenated into one 8-channel tensor; together with the geometric
-parameters, this feeds a single shared `gsplat` rasterization pass that fans out into two heads
+and RGB color) alongside this paper's addition, a per-Gaussian semantic logit vector - its five
+entries shown individually, colored by the same official per-class palette used in every other
+figure in this paper (background, deck, stay_cable, tower, foundation). Color and semantic
+logits are concatenated into one 8-channel tensor; together with the geometric parameters, this
+feeds a single shared `gsplat` rasterization pass that fans out into two heads
 - a rendered RGB image and a rendered semantic logit map - pixel-aligned by construction, since
 both come from the same projection, depth order, and per-Gaussian compositing weights.
 

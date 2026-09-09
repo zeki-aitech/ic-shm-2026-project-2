@@ -18,14 +18,23 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
+
+from src.colmap_io.semantic_voting import CLASS_COLORS, CLASS_NAMES
+
+# Real per-class colors/order (0:background, 1:deck, 2:stay_cable, 3:tower, 4:foundation) - the
+# same palette used in every other figure in this paper - so the 5 semantic-logit cells are
+# visibly 5 distinct, real classes rather than one undifferentiated "semantic" block.
+_SEM_LABELS = ["bg", "dk", "cb", "tw", "fd"]
+_SEM_COLORS = ["#" + "".join(f"{c:02x}" for c in CLASS_COLORS[cid]) for cid in sorted(CLASS_NAMES)]
 
 STANDARD_EDGE = "#2a4d7a"
 STANDARD_FACE = "#e8eef7"
 OURS_EDGE = "#b5570f"
 OURS_FACE = "#fdeee0"
 RGB_CELL_COLORS = ["#e05a4e", "#4caf6d", "#4a7fd6"]
-SEM_CELL_COLOR = "#f0b35a"
+RGB_LABELS = ["R", "G", "B"]
 TRUNK_FACE = "#d8e6f9"
 TRUNK_EDGE = "#3a3a3a"
 HEAD_RGB_FACE = "#fde8e6"
@@ -46,15 +55,18 @@ def _box(ax, cx, cy, w, h, text, face, edge, fontsize=12, fontweight="normal"):
     return (cx, cy - h / 2), (cx, cy + h / 2), (cx - w / 2, cy), (cx + w / 2, cy)
 
 
-def _channel_bar(ax, cx, cy, cell_w, cell_h, colors, edge="#333333"):
-    """A horizontal register of `len(colors)` colored unit cells - the "tensor as a bar of
-    channels" visual used throughout: RGB's 3 cells, the semantic logits' 5 cells, and their
-    8-cell concatenation."""
+def _channel_bar(ax, cx, cy, cell_w, cell_h, colors, edge="#333333", labels=None, fontsize=8.5):
+    """A horizontal register of `len(colors)` colored unit cells, each optionally labeled - the
+    "tensor as a bar of channels" visual used throughout: RGB's 3 cells, the semantic logits' 5
+    cells (one per real structural class), and their 8-cell concatenation."""
     n = len(colors)
     x0 = cx - n * cell_w / 2
     for i, col in enumerate(colors):
         ax.add_patch(Rectangle((x0 + i * cell_w, cy - cell_h / 2), cell_w, cell_h,
                                 facecolor=col, edgecolor=edge, linewidth=1.3, zorder=2))
+        if labels is not None:
+            ax.text(x0 + (i + 0.5) * cell_w, cy, labels[i], ha="center", va="center",
+                    fontsize=fontsize, fontweight="bold", zorder=3)
     return (x0, cy), (x0 + n * cell_w, cy)  # left mid, right mid
 
 
@@ -90,19 +102,26 @@ def plot_gaussian_representation_figure(output_path: str) -> str:
     ax.text(1.7, 4.75, "position, scale, rotation, opacity", ha="center", fontsize=9,
             style="italic", color="dimgray")
 
-    ax.text(1.7, 3.55, r"RGB color $c_k$", ha="center", fontsize=11.5, color=STANDARD_EDGE, fontweight="bold")
-    rgb_l, rgb_r = _channel_bar(ax, 1.7, 3.0, 0.55, 0.55, RGB_CELL_COLORS, edge=STANDARD_EDGE)
+    ax.text(1.7, 3.55, r"RGB color $c_k \in \mathbb{R}^3$", ha="center", fontsize=11.5,
+            color=STANDARD_EDGE, fontweight="bold")
+    rgb_l, rgb_r = _channel_bar(ax, 1.7, 3.0, 0.55, 0.55, RGB_CELL_COLORS, edge=STANDARD_EDGE,
+                                 labels=RGB_LABELS, fontsize=10)
 
-    ax.text(1.7, 1.85, r"Semantic logits $\ell_k$" "\n(this paper's addition)",
+    ax.text(1.7, 1.95, r"Semantic logits $\ell_k \in \mathbb{R}^5$" "\n(this paper's addition - one entry per class)",
             ha="center", fontsize=11.5, color=OURS_EDGE, fontweight="bold")
-    sem_l, sem_r = _channel_bar(ax, 1.7, 1.05, 0.42, 0.42, [SEM_CELL_COLOR] * 5, edge=OURS_EDGE)
+    sem_l, sem_r = _channel_bar(ax, 1.7, 1.05, 0.55, 0.55, _SEM_COLORS, edge=OURS_EDGE,
+                                 labels=_SEM_LABELS, fontsize=8.5)
+    ax.text(1.7, 0.55, "bg=background, dk=deck, cb=stay_cable, tw=tower, fd=foundation",
+            ha="center", fontsize=7.5, style="italic", color="dimgray")
 
     # ---- Column 2: concatenation into the 8-channel tensor ----
     cat_x = 4.75
     ax.text(cat_x, 3.85, "concatenate\n" r"$[c_k \,;\, \ell_k] \in \mathbb{R}^8$",
             ha="center", fontsize=11, style="italic", color="dimgray")
-    cat_colors = RGB_CELL_COLORS + [SEM_CELL_COLOR] * 5
-    cat_l, cat_r = _channel_bar(ax, cat_x, 3.0, 0.42, 0.5, cat_colors, edge="#333333")
+    cat_colors = RGB_CELL_COLORS + _SEM_COLORS
+    cat_labels = RGB_LABELS + _SEM_LABELS
+    cat_l, cat_r = _channel_bar(ax, cat_x, 3.0, 0.42, 0.5, cat_colors, edge="#333333",
+                                 labels=cat_labels, fontsize=7.5)
     _arrow(ax, rgb_r, (cat_l[0] - 0.15, 3.0 + 0.35))
     _arrow(ax, sem_r, (cat_l[0] - 0.15, 3.0 - 0.35))
 
