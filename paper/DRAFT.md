@@ -566,6 +566,19 @@ PSNR/SSIM/LPIPS are omitted as they are nearly identical across both rows (22.17
 | **Our approach: semantic warm-start** | 91.28% | 95.72% | **92.36%** | **89.71%** | 87.34% |
 | No semantic warm-start (ablation) | **91.45%** | **95.91%** | 92.02% | 89.62% | **88.25%** |
 
+Table 3's per-class breakdown is worth stating plainly rather than leaving to the reader: cable
+and `tower` are (marginally) higher with the warm-start, but `deck` and, more noticeably,
+`foundation` are higher *without* it (88.25% vs. 87.34%, the largest single-class gap in the
+table), so the overall mIoU ends up 0.17 points lower with the warm-start than without (91.28%
+vs. 91.45%). We do not have a verified explanation for the foundation gap specifically, and did
+not design this ablation to isolate per-class effects beyond cable. Given every one of these
+per-class and mIoU deltas is comparable in size to the run-to-run noise established above, and
+none of them changes which configuration is preferable for the class this ablation was designed
+to study (cable, where the two are statistically indistinguishable), we do not read this as
+evidence that the warm-start is actively harmful to the other classes - only as a reminder that
+"no effect" claims from a single run should be read at the resolution the noise floor allows,
+not compared point-for-point.
+
 `foundation` is the weakest of the four structural classes. The most likely explanation is
 viewpoint coverage rather than any class-specific representational difficulty: foundations sit
 at the low-lying, often partially water-adjacent base of the bridge, and are visible from a
