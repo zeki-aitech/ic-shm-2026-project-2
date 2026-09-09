@@ -84,7 +84,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
     b1_b, b1_t, b1_l, b1_r = _box(ax, right_x, 14.0, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)")
 
     # Row 2
-    a2_b, a2_t, a2_l, a2_r = _box(ax, left_x, 11.6, bw, bh, "Multi-view semantic voting\n(majority vote per point)")
+    a2_b, a2_t, a2_l, a2_r = _box(ax, left_x, 11.6, bw, bh, "Multi-view semantic voting\n(plurality vote per point)")
     b2_b, b2_t, b2_l, b2_r = _box(ax, right_x, 11.6, bw, bh, "Predict pseudo-masks for\n100 unlabeled images")
 
     # Row 3
@@ -186,7 +186,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)",
                                    face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15.5, fontweight="bold")
 
-    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(majority vote per point)", fontsize=15.5)
+    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(plurality vote per point)", fontsize=15.5)
     b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=15.5)
 
     a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=15.5)

@@ -1,5 +1,5 @@
 """
-Renders Figures 7-8 (Section 5.5): training convergence curves for Task A (SegFormer
+Renders Figures 7-8 (Section 5.4): training convergence curves for Task A (SegFormer
 fine-tuning) and Task B (semantic Gaussian Splatting), parsed directly from the real training
 logs saved to `outputs/logs/` during the actual runs used elsewhere in the paper - not
 regenerated or simulated.

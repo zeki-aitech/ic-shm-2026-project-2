@@ -324,9 +324,9 @@ def main():
                          help="Jointly refine the reference SfM train-view poses alongside the Gaussians")
     parser.add_argument("--pose-lr", type=float, default=1e-3)
     parser.add_argument("--strict-cable-majority", action="store_true",
-                         help="Tested-but-not-adopted alternative (Section 5.2): require an "
-                              "absolute majority for the cable class specifically, instead of "
-                              "the default plain plurality used for every class")
+                         help="Tested-but-not-adopted alternative: require an absolute majority "
+                              "for the cable class specifically, instead of the default plain "
+                              "plurality used for every class")
     parser.add_argument("--no-semantic-warmstart", action="store_true",
                          help="Ablation: initialize semantic logits to a neutral zero vector "
                               "instead of warm-starting from the voted class")

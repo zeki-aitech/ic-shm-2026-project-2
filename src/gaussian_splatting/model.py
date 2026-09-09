@@ -102,8 +102,9 @@ class SemanticGaussianModel:
         Warm-starts Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse
         cloud always, and semantic logits from `SemanticProjector`'s per-point voted class when
         `warm_start_semantics` is True (default). When False, semantic logits start at a neutral
-        zero vector (uniform belief over classes) instead - used by the Section 5.2 ablation to
-        measure the semantic warm-start's own contribution, independent of the geometric one.
+        zero vector (uniform belief over classes) instead - not used by the paper's reported
+        results, kept as a standalone `--no-semantic-warmstart` flag for anyone who wants to
+        measure the semantic warm-start's own contribution independent of the geometric one.
         """
         from scipy.spatial import cKDTree
 

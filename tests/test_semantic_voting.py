@@ -41,9 +41,9 @@ class TestSemanticVoting(unittest.TestCase):
         self.assertEqual(vote_majority_class([]), 0)
 
     def test_vote_majority_class_strict_cable_majority_alternative(self):
-        # strict_cable_majority=True: the tested-but-not-adopted alternative (Section 5.2) -
-        # cable is assigned only with an absolute majority (>50%); otherwise cable votes are
-        # excluded and the remaining classes compete by plurality.
+        # strict_cable_majority=True: a tested-but-not-adopted alternative - cable is assigned
+        # only with an absolute majority (>50%); otherwise cable votes are excluded and the
+        # remaining classes compete by plurality.
         self.assertEqual(vote_majority_class([2, 2, 2, 0], strict_cable_majority=True), 2)
         self.assertEqual(vote_majority_class([2, 2, 0], strict_cable_majority=True), 2)
         self.assertNotEqual(vote_majority_class([2, 2, 0, 0], strict_cable_majority=True), 2)  # exactly 50% fails

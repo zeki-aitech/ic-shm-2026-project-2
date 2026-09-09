@@ -533,8 +533,9 @@ like. We complement them with three qualitative figures.
 Figure 4 shows four held-out views (005, 050, 250, 300), each as rendered RGB, the real
 photograph, the rendered semantic map, and the ground-truth mask. Views 005 and 250 are
 representative strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the
-foreground deck region; 300 is the weakest RGB reconstruction in this set, with color artifacts
-across the distant background. Notably, the semantic map for 300 remains close to the ground
+foreground deck region; 300 is the weakest RGB reconstruction in this set, with visible color
+fringing and rainbow-like artifacts around the tower and cable structure. Notably, the semantic
+map for 300 remains close to the ground
 truth despite the degraded RGB quality in the same view. A plausible explanation is that
 per-pixel classification is a coarser, lower-precision target than exact color reconstruction —
 an appearance error large enough to visibly corrupt RGB may still leave the arg-max class
@@ -554,10 +555,12 @@ $t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating the property the contest bri
 for: rendering from a genuinely arbitrary viewpoint, not merely one selected from the acquisition
 trajectory. The two endpoints ($t=0, 1$) are real flown poses and render cleanly; RGB quality
 degrades visibly in the intermediate frames, where the interpolated pose departs furthest from
-any training view — but the semantic map remains largely stable and structurally coherent across
-all five frames despite this RGB degradation, a second, independent illustration of the pattern
-noted in Figure 4. RGB and semantic outputs remain pixel-aligned at every step, including the
-degraded ones.
+any training view. The semantic map degrades far less severely over the same frames — the
+overall deck/stay_cable layout stays recognizable throughout, though at $t=0.25$-$0.75$ the
+boundary between them grows visibly ragged, with small blobs of the wrong class breaking off
+into the other region — a second, independent illustration of the pattern noted in Figure 4,
+though a less clean one than the near-perfect stability seen there. RGB and semantic outputs
+remain pixel-aligned at every step, including the degraded ones.
 
 ![Figure 5: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
 
