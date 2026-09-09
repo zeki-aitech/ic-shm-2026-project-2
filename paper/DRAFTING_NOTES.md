@@ -18,23 +18,17 @@ it once the paper is finalized and submitted — it is not part of the paper its
   (`DRAFT.md` title block, currently `[NEEDS]`).
 - [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
   `[NEEDS]`) once the submission link is finalized.
-- [ ] Figure 6 (splat viewer, Section 5.3, optional - renumbered again after the no-warmstart
-  ablation figure was removed entirely, see below) still shows the OLD
-  strict-majority checkpoint's SuperSplat screenshots (`paper/figures/fig6_splat_render.png` -
-  filename unchanged, only its in-paper figure number moved). New PLYs from the
-  official plain-plurality checkpoint are already exported
-  (`outputs/renders/bridge_splat_plain_plurality_{rgb,semantic}.ply`, via the new
-  `src/gaussian_splatting/export_ply.py`) - needs manual capture in SuperSplat
-  (https://superspl.at/editor) and re-composing via
-  `src/evaluation/compose_splat_screenshots.py`. The two checkpoints' final holdout numbers were
-  very close (see the "removed the strict-majority ablation" entry below), so this is a
-  low-urgency accuracy nit, not a correctness bug.
 - [ ] `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `docs/SUBMISSION_CHECKLIST_AND_GUIDELINES.md`
   still reference the old strict-majority checkpoint's numbers/Gaussian count (602,363) - not
   updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).
 
 ## Done
 
+- [x] Figure 6 (splat viewer, Section 5.3, optional) re-captured from the official
+  plain-plurality checkpoint's PLYs in SuperSplat and recomposed via
+  `src/evaluation/compose_splat_screenshots.py` (`paper/figures/fig6_splat_render.png`), replacing
+  the stale strict-majority-checkpoint screenshots. Source screenshots
+  (`paper/figures/bridge_splat_{rgb,semantic}_v2.png`) kept alongside the composed figure.
 - [x] Removed the no-warmstart ablation (Section 5.2, old Table 3, old Figure 4/9) from the
   paper entirely — reverted to reporting the single seed=42 run (`gaussians_ablation_plain_plurality`
   checkpoint, 600,958 Gaussians) throughout, with the semantic warm-start now presented as a
