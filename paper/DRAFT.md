@@ -463,15 +463,17 @@ described in Section 3.5 — the literal function the contest evaluates a submis
 | foundation | 87.34% |
 | (background, reported for completeness, excluded from structural mIoU) | 99.26% |
 
-Figure 3 visualizes this per-class breakdown, sorted by class and colored by the official
-class-color legend (Section 3.1), with the overall structural mIoU marked for reference — making
+Figure 3 visualizes this per-class breakdown, sorted by class and colored by the fixed per-class
+palette used consistently across every figure in this paper, with the overall structural mIoU
+marked for reference — making
 the counter-intuitive result discussed in Section 5.2, `stay_cable` outscoring `tower` and
 `foundation`, immediately visible without reading Table 2 closely.
 
 ![Figure 3: Per-class IoU on the 60-view holdout](figures/fig3_per_class_iou.png)
 
-**Figure 3.** Per-class IoU on the 60-view holdout, sorted by class and colored by the official
-class-color legend (Section 3.1), with the overall structural mIoU (91.28%) marked for reference.
+**Figure 3.** Per-class IoU on the 60-view holdout, sorted by class and colored by the same
+per-class palette used consistently across every figure in this paper, with the overall
+structural mIoU (91.28%) marked for reference.
 
 As Figure 3 shows, the four structural classes all clear 87% IoU despite substantial differences
 in physical scale, surface texture, and viewpoint coverage, and background — by far the easiest
@@ -543,7 +545,7 @@ a claim established over the full holdout.
 
 **Figure 4.** RGB and semantic renders vs. ground truth on four held-out views (005, 050, 250,
 300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
-the official class legend.
+the same per-class palette used throughout this paper.
 
 Because the held-out views in Table 1 still lie on the UAV's original flight line, Figure 5
 additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
