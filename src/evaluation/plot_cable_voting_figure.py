@@ -1,15 +1,16 @@
 """
 Renders Figure 2 (Section 3.4): a two-panel illustration of the background-bleeding problem in
-cable annotations and the strict-majority voting rule that counteracts it.
+cable annotations and the multi-view plurality voting mechanism used to initialize each
+Gaussian's semantic logits from it.
 
 Panel A is real data: a crop of an actual undistorted UAV image with its ground-truth mask
 overlaid (official per-class colors), showing that the `stay_cable` polygon covers large regions
 of sky/water rather than just the thin cable strands - not a staged example.
 
-Panel B is a schematic (not tied to one specific real 3D point) illustrating the multi-view
-voting mechanism: several cameras observe a 3D point, a minority of them see it as cable, and
-because that falls short of an absolute majority, the strict-majority rule (Section 3.4) falls
-back to plurality among the non-cable votes.
+Panel B is a schematic (not tied to one specific real 3D point) illustrating the voting
+mechanism: several cameras observe a 3D point and vote by simple plurality, with ties broken by
+a fixed priority that favors thin/rare structural classes over background. Section 5.2 discusses
+a stricter, cable-specific alternative rule we tested and did not adopt.
 """
 import os
 
@@ -94,9 +95,9 @@ def draw_voting_schematic(ax):
 
     ax.text(
         0, -4.5,
-        "2/5 cable votes (40%) < 50% threshold\n"
-        "→ cable votes discarded → plurality among remaining: background (2) vs. deck (1)\n"
-        "→ point labeled background",
+        "cable (2) ties background (2), deck (1) trails\n"
+        "→ plurality tie broken by fixed priority (thin/rare structures first)\n"
+        "→ point labeled cable",
         ha="center", va="top", fontsize=11.5, color="black",
         bbox=dict(boxstyle="round,pad=0.5", facecolor="#f5f5f5", edgecolor="gray"),
     )

@@ -17,11 +17,10 @@ semantic logit vector, rendered jointly with color through a single fused raster
 that the two outputs are pixel-aligned by construction. A 2D segmentation model pseudo-labels
 unlabeled frames to widen semantic supervision to every available image, and the Gaussian model
 is warm-started from a multi-view, majority-voted sparse point cloud rather than random
-initialization, using a strict-majority rule that specifically counteracts the background-bleeding
-noise characteristic of thin cable annotations. On a 60-view held-out split drawn from the same
-UAV flight trajectory but excluded from every stage of training, our method achieves PSNR 22.18
-dB, SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47% across the four bridge component classes
-(deck, stay cable, tower, foundation), for an illustrative Accuracy Score of 0.816. Beyond the
+initialization. On a 60-view held-out split drawn from the same UAV flight trajectory but
+excluded from every stage of training, our method achieves PSNR 22.19 dB, SSIM 0.849, LPIPS
+0.335, and structural mIoU 91.28% across the four bridge component classes (deck, stay cable,
+tower, foundation), for an illustrative Accuracy Score of 0.815. Beyond the
 contest's scoring criteria, the resulting model functions as a queryable digital twin of the
 bridge, rendering both appearance and structural identity from viewpoints never captured during
 data acquisition — a basis for downstream structural health monitoring tasks that must be scoped
@@ -73,22 +72,21 @@ We address these challenges with a semantic 3D Gaussian Splatting pipeline whose
    with no separate semantic-segmentation-of-renders post-process, and guaranteeing the two
    outputs are pixel-aligned by construction.
 2. A semantic warm-start strategy that initializes each Gaussian's class logits from multi-view
-   majority-voted labels on a triangulated sparse point cloud instead of random initialization,
-   using a strict-majority voting rule targeted specifically at the cable class to counteract its
-   characteristic background-bleeding noise.
+   majority-voted labels on a triangulated sparse point cloud instead of random initialization.
 3. A 2D pseudo-labeling stage (fine-tuned SegFormer) that extends semantic supervision to the
    100 unlabeled frames, increasing the effective training-view count from 240 to 340 at no
    additional annotation cost.
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
    (Section 5.5).
-5. An ablation isolating the cable voting rule and semantic warm-start's individual
-   contributions to final holdout IoU (Section 5.2), showing that while the voting rule
-   measurably cleans the warm-start data, neither mechanism has a measurable effect on cable's
-   final IoU once training converges - evidence that training dynamics, not initialization
-   quality, explain cable's counter-intuitively strong performance.
-5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.18 dB,
-   SSIM 0.849, LPIPS 0.334, and structural mIoU 91.47%.
+5. An ablation isolating the semantic warm-start's contribution to final holdout IoU
+   (Section 5.2), including a stricter, cable-specific voting rule we tested as a candidate
+   refinement: it measurably cleans the warm-start data itself but, like the warm-start
+   mechanism more broadly, has no measurable effect on cable's final IoU once training
+   converges - evidence that training dynamics, not initialization quality, explain cable's
+   counter-intuitively strong performance at the iteration budget used here.
+6. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 22.19 dB,
+   SSIM 0.849, LPIPS 0.335, and structural mIoU 91.28%.
 
 Our full implementation, including the scripts used to reproduce every number reported in this
 paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
@@ -255,46 +253,32 @@ Gaussian into a carrier of both appearance and structural identity.
 practice, we exploit the sparse point cloud from Section 3.2 as a geometric and semantic prior.
 Each Gaussian's initial position and color are taken directly from a corresponding triangulated
 point, and its semantic logits are warm-started from that point's class, determined by a
-multi-view majority vote over the 2D masks of every training view that observes it. Because
-stay cables are slender and prone to background bleeding (Figure 2) — sky and water pixels are
-easily misclassified as cable in coarse 2D polygon annotations — the vote enforces a strict absolute
-majority (greater than 50% of observing views) before assigning the cable class; if no class
-reaches this majority among cable votes, cable votes are discarded and the remaining classes
-compete by plurality with a fixed tie-break priority. This asymmetric rule is applied only to
-the cable class, not to all five classes uniformly. Requiring an absolute majority for every
-class would be counterproductive: with five competing classes, votes for an ambiguous point
-(e.g., one partially occluded in a subset of views) split naturally, so failing to reach 50% is
-the common case rather than a useful signal, and a blanket majority requirement would simply
-discard many genuinely structural points into an uninformative fallback. We verified this
-asymmetry directly on the training-view vote data rather than assuming it: among the 75,963
-sparse points with at least one train-view observation, computing each point's plurality-winning
-class and the vote share that
-winner received shows deck, tower, foundation, and background winning with high, consistent
-margins (mean winning-class vote share 97.6–99.5%; the winner exceeds an absolute majority for
-98.1–99.3% of points won by that class), while stay_cable's plurality wins are markedly less
-consistent (mean vote share 92.0%; only 94.6% clear an absolute majority). Applying the strict
-majority rule to the raw vote counts reclassifies 416 of the 7,673 points that plain plurality
-would have labeled cable (5.4%) to a different class — and 384 of those 416 (92.3%) move
-specifically to background, not to deck or tower, which is precisely the pattern predicted by
-the background-bleeding hypothesis rather than one consistent with generic vote noise. Cable is
-the exception precisely because its label noise is systematic rather than random: it stems from
-the annotation process itself (a polygon necessarily traces a region around a thin cable, not
-the cable pixels alone), not merely from cable occupying few pixels, so only cable benefits from
-— and needs — this stricter threshold.
+multi-view plurality vote over the 2D masks of every training view that observes it: each
+observing view casts one vote for the class it sees at that point's projected pixel, and the
+class with the most votes wins, with a fixed tie-break priority (favoring thin/rare structural
+classes over background) resolving exact ties. The winning class is encoded as a scaled one-hot
+logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
+semantic channel begins optimization from an informed prior instead of from noise, while
+remaining free to be corrected by the photometric and semantic losses during training.
+
+Stay cables are slender, and because a 2D polygon annotation necessarily traces a region around a
+whole cable rather than its individual pixels, disproportionately prone to background bleeding
+(Figure 2) — sky and water pixels absorbed into the cable label. This raises an obvious design
+question: should the vote require a stricter margin specifically for the cable class, to guard
+against this bleeding contaminating its warm-start? Section 5.2 reports an ablation testing
+exactly this — a stricter, cable-specific absolute-majority rule — and finds it unnecessary: it
+measurably cleans the warm-start data but has no effect on cable's final holdout IoU once
+training converges, so we use the same plain plurality rule for every class rather than adding a
+cable-specific exception.
 
 ![Figure 2: Background-bleeding in cable annotations and the multi-view voting rule](figures/fig2_cable_voting.png)
 
-**Figure 2.** Background-bleeding in cable annotations and the multi-view voting rule. Left: a
+**Figure 2.** Background-bleeding in cable annotations and the multi-view plurality vote. Left: a
 real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
 covers a large triangular region of sky and river far beyond the cable strands themselves. Right:
 an illustrative (not one specific real point) schematic of the voting mechanism — each triangle
 is a camera, oriented to face the 3D point being voted on, labeled with the class it observes
 there.
-
-The winning class is encoded as a scaled one-hot
-logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
-semantic channel begins optimization from an informed prior instead of from noise, while
-remaining free to be corrected by the photometric and semantic losses during training.
 
 **Fused rendering.** A central design choice of our method is that RGB and semantic outputs
 share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
