@@ -35,6 +35,20 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Fixed a real submission-blocking bug**: `outputs/checkpoints/gaussians/final.pt` - the
+  canonical default path `train.py` writes to with no `--output-dir` flag, and what
+  `README.md`'s documented Quickstart commands (`render.py`, `render_metrics.py`) point at - was
+  still the OLD strict-majority checkpoint (602,363 Gaussians, step 40,000, dated Sep 4), not the
+  current official plain-plurality one. Anyone (including the organizers) following the
+  README's exact documented commands would have evaluated/submitted the wrong model. Fixed by
+  renaming the stale folder to
+  `outputs/checkpoints/gaussians_stale_strict_majority_pre_20250908/` (kept, not deleted) and
+  copying `gaussians_ablation_plain_plurality/` into `gaussians/` so the canonical path now holds
+  the real official checkpoint (600,958 Gaussians). Re-ran `render_metrics.py` against the new
+  `gaussians/final.pt` and confirmed it reproduces Table 1/2 exactly (mIoU 91.28%, cable 92.36%,
+  deck 95.72%, tower 89.71%, foundation 87.34%). This is purely an `outputs/` (gitignored)
+  filesystem fix - no paper or source-code changes.
+
 - [x] Changed Figure 4 (Section 5.2) from plotting `stay_cable`-only IoU to structural mIoU
   convergence, since the surrounding discussion had broadened from cable specifically to the
   full per-class/mIoU picture (the earlier "explicitly state mIoU is lower with warm-start"
