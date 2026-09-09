@@ -526,12 +526,30 @@ at the data level, independent of its effect on final IoU: of the 7,673 sparse p
 plurality voting alone would have labeled cable, the strict rule reclassifies 416 (5.4%), and
 92.3% of those move specifically to background rather than to another structural class —
 confirming the rule does remove background-bleeding contamination from the warm-start data
-rather than discarding votes at random. This data-level effect is real, but to find out whether
-it - or the semantic warm-start mechanism more broadly - actually explains cable's final IoU
-margin, we retrained Task B twice with one mechanism disabled at a time (Table 3): once with
-plain plurality voting instead of the strict-majority rule, and once with semantic logits
-initialized to a neutral zero vector instead of the voted-class warm-start, holding every other
-setting (including the full 40,000-iteration, full-resolution schedule) fixed.
+rather than discarding votes at random.
+
+This 92.3%-to-background statistic is consistent with the background-bleeding hypothesis, but
+does not rule out an alternative explanation for the same underlying vote disagreement: `stay_cable`
+is a thin structure, often only a few pixels wide, so sub-pixel to few-pixel reprojection error in
+projecting a triangulated 3D point back into each 2D view - from imperfect COLMAP poses, not from
+annotation quality - could by itself cause a genuinely well-annotated cable pixel to be sampled
+just off the cable, onto adjacent background. Background is the dominant class immediately
+surrounding cable along nearly its entire length (a stay cable is otherwise viewed against open
+sky or water), so this kind of purely geometric noise would also land overwhelmingly on
+background regardless of whether the underlying cause is annotation bleeding or reprojection
+imprecision; the two hypotheses are not distinguishable from this statistic alone. The distinction
+matters for how the Table 3 null result (below) should be read: if cable's vote disagreement is
+dominated by genuine per-point geometric noise rather than a systematic, removable annotation
+artifact, no voting rule - however carefully designed - would be expected to meaningfully clean
+it, which would explain why the strict-majority rule's real, measured effect on the warm-start
+data does not translate into a final-IoU benefit.
+
+To find out whether the vote-cleaning effect - or the semantic warm-start mechanism more broadly -
+actually explains cable's final IoU margin, we retrained Task B twice with one mechanism disabled
+at a time (Table 3): once with plain plurality voting instead of the strict-majority rule, and
+once with semantic logits initialized to a neutral zero vector instead of the voted-class
+warm-start, holding every other setting (including the full 40,000-iteration, full-resolution
+schedule) fixed.
 
 If the strict-majority rule's data-cleaning effect (established above) were the primary driver
 of cable's strong IoU, disabling it should measurably hurt cable's final performance. Table 3
