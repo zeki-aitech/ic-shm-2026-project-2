@@ -703,7 +703,7 @@ the text, matching this list's order.
    Engineering, 36(1), 89–108.
 3. Li, H., Chen, Y., Liu, J., Che, C., Meng, Z., & Zhu, H. (2024) — High-resolution model
    reconstruction and bridge damage detection based on data fusion of unmanned aerial vehicle
-   LiDAR and imagery. Computer-Aided Civil and Infrastructure Engineering.
+   LiDAR and imagery. Computer-Aided Civil and Infrastructure Engineering, 39, 1197–1217.
 4. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
 5. Mildenhall, B., Srinivasan, P. P., Tancik, M., Barron, J. T., Ramamoorthi, R., & Ng, R. (2020)
    — NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis. ECCV, 405–421.
