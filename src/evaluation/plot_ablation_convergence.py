@@ -1,8 +1,9 @@
 """
-Figure 9 (Section 5.2, optional): tracks stay_cable IoU on the 60-view holdout across training
+Figure 4 (Section 5.2, optional): tracks structural mIoU on the 60-view holdout across training
 steps for two real checkpoints - our approach (semantic warm-start) and a no-semantic-warmstart
-ablation - to check whether the Table 3 result (no measurable *final*-IoU difference between the
-two) holds throughout training or only appears once training has converged.
+ablation - to check whether the Table 3 result (no measurable *final*-mIoU difference between the
+two, and in fact a slightly *lower* mIoU with the warm-start) holds throughout training or only
+appears once training has converged.
 
 Deliberately skips PSNR/SSIM/LPIPS (unlike `render_metrics.py`): this figure only tracks
 semantic IoU across many checkpoints per run, and skipping the LPIPS forward pass makes that
@@ -18,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.evaluation.metrics import CLASS_NAMES, compute_confusion_matrix, compute_iou_per_class
+from src.evaluation.metrics import CLASS_NAMES, compute_confusion_matrix, compute_iou_per_class, compute_miou
 
 
 def evaluate_semantic_iou(checkpoint_path: str, holdout_cameras: List, device: str = "cuda") -> Dict[int, float]:
@@ -58,9 +59,10 @@ def collect_convergence_curves(
 
 
 def plot_ablation_convergence(
-    curves: Dict[str, Dict[int, Dict[int, float]]], class_id: int, output_path: str
+    curves: Dict[str, Dict[int, Dict[int, float]]], output_path: str
 ) -> str:
-    """Plots `class_id`'s IoU vs. training step, one line per label in `curves`."""
+    """Plots structural mIoU (background excluded) vs. training step, one line per label in
+    `curves`, computed from each checkpoint's per-class IoU dict via `compute_miou`."""
     fig, ax = plt.subplots(figsize=(7.5, 5), dpi=200)
     colors = {"ours": "#1a1a1a", "no_warmstart": "#2166ac"}
     labels_display = {
@@ -70,15 +72,15 @@ def plot_ablation_convergence(
 
     for label, per_step in curves.items():
         steps = sorted(per_step.keys())
-        ious = [per_step[s][class_id] * 100 for s in steps]
+        mious = [compute_miou(per_step[s], include_background=False) * 100 for s in steps]
         ax.plot(
-            steps, ious, marker="o", markersize=4, linewidth=2.2,
+            steps, mious, marker="o", markersize=4, linewidth=2.2,
             color=colors.get(label), label=labels_display.get(label, label),
         )
 
     ax.set_xlabel("Training step", fontsize=13)
-    ax.set_ylabel(f"{CLASS_NAMES.get(class_id, class_id)} IoU (%)", fontsize=13)
-    ax.set_title("Cable IoU convergence with vs. without warm-start", fontsize=14.5, fontweight="bold")
+    ax.set_ylabel("Structural mIoU (%)", fontsize=13)
+    ax.set_title("mIoU convergence with vs. without warm-start", fontsize=14.5, fontweight="bold")
     ax.legend(fontsize=10.5, loc="lower right")
 
     fig.tight_layout()
@@ -92,7 +94,7 @@ def main():
     import argparse
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    parser = argparse.ArgumentParser(description="Track cable IoU vs. training step across ablation runs")
+    parser = argparse.ArgumentParser(description="Track structural mIoU vs. training step across ablation runs")
     parser.add_argument("--ours-dir", required=True, help="Checkpoint dir for our approach (semantic warm-start)")
     parser.add_argument("--no-warmstart-dir", required=True)
     parser.add_argument("--steps", nargs="+", type=int, default=[2000, 4000, 6000, 8000, 10000, 16000, 24000, 32000, 40000])
@@ -129,12 +131,12 @@ def main():
     }
     curves = collect_convergence_curves(checkpoint_dirs, args.steps, holdout_cameras, device=device)
 
-    STAY_CABLE_CLASS_ID = 2
-    out = plot_ablation_convergence(curves, STAY_CABLE_CLASS_ID, args.output)
+    out = plot_ablation_convergence(curves, args.output)
     print(f"[plot_ablation_convergence] wrote {out}")
     for label, per_step in curves.items():
         for step in sorted(per_step.keys()):
-            print(f"  {label:16s} step={step:6d} cable_iou={per_step[step][STAY_CABLE_CLASS_ID]*100:.2f}%")
+            miou = compute_miou(per_step[step], include_background=False)
+            print(f"  {label:16s} step={step:6d} mIoU={miou*100:.2f}%")
 
 
 if __name__ == "__main__":

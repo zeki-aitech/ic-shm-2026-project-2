@@ -505,19 +505,21 @@ retrained Task B with semantic logits initialized to a neutral zero vector inste
 voted-class warm-start, holding every other setting (including the full 40,000-iteration,
 full-resolution schedule) fixed (Table 3).
 
-Table 3 shows removing the warm-start entirely changes cable's final IoU by only -0.34 points
-(92.02% vs. 92.36%), comfortably within the run-to-run noise we would expect from stochastic
-densification and view-order shuffling. Before concluding the warm-start simply does not
-matter, we checked whether this null result was an artifact of evaluating only the
-fully-converged, 40,000-iteration checkpoint rather than a genuine property of training — by
-evaluating cable IoU from intermediate checkpoints of both runs (Figure 4). It shows the
-warm-start mechanism clearly does work as intended early in training: at step 2,000, the
-no-warm-start run trails our approach by 1.7 points (80.98% vs. 82.65%), confirming the
-warm-start gives a real head start. But this gap closes rapidly and is essentially gone by step
-24,000 (91.72% vs. 92.28%), well before the 40,000-iteration budget used throughout this paper.
-This resolves the apparent contradiction: the warm-start measurably affects *how fast* cable's
-semantic representation converges, but not *where* it converges to, at least at the iteration
-budget used here.
+Table 3 shows removing the warm-start entirely changes overall mIoU by only +0.17 points (91.45%
+vs. 91.28%) and cable's own IoU by only -0.34 points (92.02% vs. 92.36%), both comfortably
+within the run-to-run noise we would expect from stochastic densification and view-order
+shuffling. Before concluding the warm-start simply does not matter, we checked whether this null
+result was an artifact of evaluating only the fully-converged, 40,000-iteration checkpoint
+rather than a genuine property of training — by evaluating mIoU from intermediate checkpoints of
+both runs (Figure 4). It shows the warm-start mechanism clearly does work as intended early in
+training: at step 2,000, the no-warm-start run trails our approach by 1.8 mIoU points (78.68%
+vs. 80.46%), confirming the warm-start gives a real head start. This gap narrows steadily and
+the two curves are within 0.1 points of each other by step 24,000 (91.21% vs. 91.27%), well
+before the 40,000-iteration budget used throughout this paper — after which they interleave
+within noise rather than one consistently leading, with no-warm-start ending marginally ahead at
+step 40,000. This resolves the apparent contradiction: the warm-start measurably affects *how
+fast* the model's semantic representation converges, but not *where* it converges to, at least
+at the iteration budget used here.
 
 There is also a more direct, structural reason to expect this: the semantic warm-start only
 affects each Gaussian's initial logit value, but the per-pixel semantic cross-entropy loss
@@ -550,9 +552,9 @@ semantic mIoU directly against these same masks, so accurately reproducing their
 whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
 some finer-grained cable delineation that the evaluation does not actually ask for.
 
-![Figure 4: Cable IoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
+![Figure 4: Structural mIoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
 
-**Figure 4 (optional).** `stay_cable` IoU on the 60-view holdout evaluated from intermediate
+**Figure 4 (optional).** Structural mIoU on the 60-view holdout evaluated from intermediate
 checkpoints (every 2,000-8,000 steps) of both Table 3 configurations, showing the training-step
 budget at which their curves converge to within noise of each other.
 

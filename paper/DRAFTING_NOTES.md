@@ -35,6 +35,15 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] Changed Figure 4 (Section 5.2) from plotting `stay_cable`-only IoU to structural mIoU
+  convergence, since the surrounding discussion had broadened from cable specifically to the
+  full per-class/mIoU picture (the earlier "explicitly state mIoU is lower with warm-start"
+  entry below). `plot_ablation_convergence.py`'s `plot_ablation_convergence()` no longer takes a
+  `class_id` param - it always computes mIoU via `compute_miou` from each checkpoint's per-class
+  IoU dict. The real re-rendered curve confirms the text: warm-start leads by 1.8 mIoU points at
+  step 2,000, the two curves are within 0.1 points by step 24,000, then interleave within noise
+  through 40,000 (no-warmstart ending marginally ahead) - matches Table 3 exactly.
+
 - [x] Fixed figure numbering out of reading order: the training-convergence ablation figure had
   been added to Section 5.2 as "Figure 9" (since it was the 8th figure chronologically added to
   the paper), but Section 5.2 appears *before* Section 5.3's Figures 4-6 and Section 5.4's
