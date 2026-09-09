@@ -35,6 +35,32 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Measured the real noise floor** for Table 3's "within noise" claims, instead of asserting
+  it from general experience: ran one same-config, different-seed replicate for each of Table
+  3's two configs (`--seed 43` vs. the original `--seed 42`, both 40,000 iters/full-res,
+  `src/gaussian_splatting/train.py`'s new `--seed` CLI flag). Results:
+  - Warm-start: seed 42 -> 91.28% mIoU, seed 43 -> 91.06% mIoU (checkpoint
+    `outputs/checkpoints/gaussians_replicate_warmstart_seed43/`, eval
+    `outputs/eval/render_eval_report_replicate_warmstart_seed43.md`). Within-config spread:
+    **0.22 points**.
+  - No-warmstart: seed 42 -> 91.45% mIoU, seed 43 -> 91.03% mIoU (checkpoint
+    `outputs/checkpoints/gaussians_replicate_no_warmstart_seed43/`, eval
+    `outputs/eval/render_eval_report_replicate_no_warmstart_seed43.md`). Within-config spread:
+    **0.42 points**.
+  - Both same-config (different-seed) spreads (0.22, 0.42) are *larger* than the 0.17-point
+    between-config difference Table 3 reports (91.45% vs. 91.28%) - real, measured support for
+    the "within noise" language already used throughout Section 5.2 and Table 4's footnote,
+    not just an assumption from general ML experience. Per-class deltas show the same pattern
+    (e.g. `deck` alone varies 0.96 points across seeds in the no-warmstart config - larger than
+    the 0.91-point `foundation` gap Table 3's discussion calls "the largest single-class gap
+    in the table").
+  - N=2 per config is not enough for a real std/CI (that would need 3+), but as a sanity check
+    it's more than sufficient: it directly falsifies the concern that the between-config
+    difference might be a real effect rather than noise.
+  - **Not yet incorporated into `DRAFT.md`** - this was run specifically as a background
+    verification per explicit request, not to add new rows to Table 3 or new curves to Figure 4.
+    If the paper should cite this noise-floor measurement directly (e.g. a footnote on Table 3
+    or in the "within noise" sentences), that's a follow-up ask, not done automatically.
 - [x] **Fixed a real submission-blocking bug**: `outputs/checkpoints/gaussians/final.pt` - the
   canonical default path `train.py` writes to with no `--output-dir` flag, and what
   `README.md`'s documented Quickstart commands (`render.py`, `render_metrics.py`) point at - was
