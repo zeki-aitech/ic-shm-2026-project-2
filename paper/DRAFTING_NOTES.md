@@ -24,6 +24,18 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] New Figure 3 (Section 3.4, "Fused rendering"): a schematic of the semantic Gaussian
+  representation and fused single-pass rasterization - the paper's own central contribution
+  (per-Gaussian semantic logits + fused RGB/semantic rasterization), unlike NeRF/3DGS/SegFormer
+  which are third-party architectures described in text only (Related Work), not diagrammed.
+  Illustrative, not tied to one real Gaussian/checkpoint, in the same spirit as Figure 2's
+  right-side voting schematic. Built with
+  `src/evaluation/plot_gaussian_representation_figure.py` ->
+  `paper/figures/fig3_gaussian_representation.png`. Figures 3-8 renumbered to 4-9 throughout
+  (same placeholder-token regex technique as earlier renumbering passes) - caught and fixed two
+  places the regex missed because the old number wasn't a plain "Figure N" match: "Figure\n4's"
+  (a mid-sentence line-wrap put a newline where the regex expected a space) and three plural
+  "Figures N and M" / "Figures N-M" references, all now correct after a manual pass.
 - [x] Full numeric audit of `DRAFT.md` (every reported number re-traced to a real checkpoint,
   eval report, log, or freshly-reproduced script run) - caught and fixed one real methodological
   bug: Table 3's (resolution ablation, Section 5.5) "Half" row was trained for only 30,000
