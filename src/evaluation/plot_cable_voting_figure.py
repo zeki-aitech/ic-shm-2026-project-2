@@ -1,7 +1,7 @@
 """
-Renders Figure 2 (Section 3.4): a two-panel illustration of the background-bleeding problem in
-cable annotations and the multi-view plurality voting mechanism used to initialize each
-Gaussian's semantic logits from it.
+Renders Figure 2 (Section 3.4): a two-panel illustration of the coarse `stay_cable` annotation
+region and the multi-view plurality voting mechanism used to initialize each Gaussian's semantic
+logits from it.
 
 Panel A is real data: a crop of an actual undistorted UAV image with its ground-truth mask
 overlaid (official per-class colors), showing that the `stay_cable` polygon covers large regions
@@ -9,8 +9,7 @@ of sky/water rather than just the thin cable strands - not a staged example.
 
 Panel B is a schematic (not tied to one specific real 3D point) illustrating the voting
 mechanism: several cameras observe a 3D point and vote by simple plurality, with ties broken by
-a fixed priority that favors thin/rare structural classes over background. Section 5.2 discusses
-a stricter, cable-specific alternative rule we tested and did not adopt.
+a fixed priority that favors thin/rare structural classes over background.
 """
 import os
 
@@ -130,7 +129,7 @@ def main():
     import argparse
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    parser = argparse.ArgumentParser(description="Render Figure 2 (cable background-bleeding + voting)")
+    parser = argparse.ArgumentParser(description="Render Figure 2 (stay_cable annotation region + voting)")
     parser.add_argument(
         "--image", default=os.path.join(project_root, "outputs", "undistorted_images", "300.png")
     )

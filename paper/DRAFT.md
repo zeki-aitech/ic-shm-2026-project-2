@@ -56,9 +56,10 @@ Three properties of this specific dataset and task make it non-trivial. First, t
 structural components differ sharply in geometry and visibility: the deck is a large, well-textured
 horizontal plane visible from most of the flight trajectory, towers are tall vertical columns seen
 from a narrower range of angles, and stay cables are slender linear features spanning only a
-handful of pixels per view — and, because a 2D polygon annotation necessarily traces a region
-around a whole cable rather than its individual pixels, cable masks are also disproportionately
-prone to background bleeding, where sky or water pixels are absorbed into the cable label. Second,
+handful of pixels per view — and, because a 2D polygon annotation traces a region enclosing a
+whole cable rather than its individual pixels, the `stay_cable` class is itself annotated
+coarsely, with sky or water pixels falling inside the cable label alongside the cable strands
+themselves. Second,
 only 300 of the 400 available images carry manual annotations; the remaining 100 must be exploited
 without any ground truth if they are to contribute useful supervision at all. Third, the provided
 camera poses are Structure-from-Motion estimates — documented by the organizers as "reference
@@ -260,16 +261,16 @@ logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable la
 semantic channel begins optimization from an informed prior instead of from noise, while
 remaining free to be corrected by the photometric and semantic losses during training.
 
-Stay cables are slender, and, because a 2D polygon annotation necessarily traces a region around
-a whole cable rather than its individual pixels, are disproportionately prone to background
-bleeding (Figure 2) — sky and water pixels absorbed into the cable label. We use the same plain
-plurality rule for every class, including cable, rather than adding a class-specific exception
-for this; Section 5.2 examines what this means for cable's final IoU and what the model actually
+Stay cables are slender, and the `stay_cable` class is annotated as a coarse polygon enclosing
+the whole cable fan rather than tracing individual strands (Figure 2), so sky and water pixels
+fall inside the cable label alongside the strands themselves. We use the same plain plurality
+rule for every class, including cable, rather than adding a class-specific exception for this;
+Section 5.2 examines what this means for cable's final IoU and what the model actually
 learns from it.
 
-![Figure 2: Background-bleeding in cable annotations and the multi-view plurality vote](figures/fig2_cable_voting.png)
+![Figure 2: The coarse stay_cable annotation region and the multi-view plurality vote](figures/fig2_cable_voting.png)
 
-**Figure 2.** Background-bleeding in cable annotations and the multi-view plurality vote. Left: a
+**Figure 2.** The `stay_cable` annotation region and the multi-view plurality vote. Left: a
 real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
 covers a large triangular region of sky and river far beyond the cable strands themselves. Right:
 an illustrative (not one specific real point) schematic of the voting mechanism — each triangle
@@ -493,12 +494,11 @@ supervision to converge on.
 
 `stay_cable` is the more interesting case. In the broader bridge-segmentation literature, thin
 cable-like structures are consistently reported as the hardest class: a cable spans only a
-handful of pixels per view, and because manual 2D polygon annotations necessarily draw a
-bounding region around a whole cable rather than tracing individual strands, a large fraction of
-each cable polygon is actually sky or water background — the "background-bleeding" problem
-discussed in Section 3.4. Under this framing, one would expect `stay_cable` to trail behind the
-other three structural classes. Our results show the opposite: at 92.36% IoU, cable outperforms
-both `tower` (89.71%) and `foundation` (87.34%), second only to `deck`.
+handful of pixels per view, and, as Section 3.4 describes, the `stay_cable` class itself is
+annotated as a coarse region enclosing sky or water background rather than tracing individual
+strands. Under this framing, one would expect `stay_cable` to trail behind the other three
+structural classes. Our results show the opposite: at 92.36% IoU, cable outperforms both `tower`
+(89.71%) and `foundation` (87.34%), second only to `deck`.
 
 To understand whether this result depends on the semantic warm-start (Section 3.4) at all, we
 retrained Task B with semantic logits initialized to a neutral zero vector instead of the
@@ -521,7 +521,7 @@ budget used here.
 
 There is also a more direct, structural reason to expect this: the semantic warm-start only
 affects each Gaussian's initial logit value, but the per-pixel semantic cross-entropy loss
-compares against the same raw, annotation-bleeding-affected 2D masks (`outputs/gt_masks/`) at
+compares against the same raw, coarsely-annotated 2D masks (`outputs/gt_masks/`) at
 every one of the 340 supervised views, on every one of the 40,000 training steps. Nothing in the
 training objective ever rewards matching the warm-start's voted label over the raw mask; the raw
 mask is the loss target, unconditionally. A cleaner starting point therefore has no mechanism to
@@ -533,8 +533,8 @@ both the training objective and the evaluation metric past initialization.
 
 This is not, however, evidence that training corrects the annotation toward truer cable
 geometry - Figure 4's rendered semantic maps (Section 5.3) show the opposite. On views 005, 250,
-and 300, the rendered cable region closely reproduces the same broad, background-bleeding-affected
-shape as the ground-truth mask itself, not a thinner region tracing the actual cable strands. The
+and 300, the rendered cable region closely reproduces the same broad, coarsely-annotated shape
+as the ground-truth mask itself, not a thinner region tracing the actual cable strands. The
 more accurate explanation is that the annotated region, while not tracing individual strands, is
 still 3D-consistent: the fan of stay cables spans a real, roughly planar surface between tower
 and deck, so annotators viewing that structure from different angles trace a similar broad
@@ -544,7 +544,7 @@ coarse region the annotations describe - for the same reason it converges confid
 consistently-labeled regions like `deck`, not by correcting per-view noise toward finer geometry,
 because there is little cross-view noise to correct. Cable's strong IoU therefore does not
 indicate the model recovers cable geometry more precisely than the annotations do; it indicates
-the model reproduces the annotation convention - background-bleeding included - consistently
+the model reproduces the annotation convention - coarse enclosing polygon included - consistently
 across viewpoints. This is not a compromise: the evaluation protocol (Section 3.6) scores
 semantic mIoU directly against these same masks, so accurately reproducing their convention, at
 whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
