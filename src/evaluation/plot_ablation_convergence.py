@@ -1,9 +1,9 @@
 """
 Figure 9 (Section 5.2, optional): tracks stay_cable IoU on the 60-view holdout across training
-steps for three real checkpoints - the baseline (strict-majority cable voting + semantic
-warm-start), the plain-plurality ablation, and the no-semantic-warmstart ablation - to check
-whether the Table 3 result (no measurable *final*-IoU difference between the three) holds
-throughout training or only appears once training has converged.
+steps for three real checkpoints - our approach (plain plurality voting + semantic warm-start),
+the strict-majority cable voting rule tested as an alternative, and a no-semantic-warmstart
+ablation - to check whether the Table 3 result (no measurable *final*-IoU difference between the
+three) holds throughout training or only appears once training has converged.
 
 Deliberately skips PSNR/SSIM/LPIPS (unlike `render_metrics.py`): this figure only tracks
 semantic IoU across many checkpoints per run, and skipping the LPIPS forward pass makes that
@@ -63,10 +63,10 @@ def plot_ablation_convergence(
 ) -> str:
     """Plots `class_id`'s IoU vs. training step, one line per label in `curves`."""
     fig, ax = plt.subplots(figsize=(7.5, 5), dpi=200)
-    colors = {"baseline": "#1a1a1a", "plain_plurality": "#c0392b", "no_warmstart": "#2166ac"}
+    colors = {"plain_plurality": "#1a1a1a", "strict_majority": "#c0392b", "no_warmstart": "#2166ac"}
     labels_display = {
-        "baseline": "Baseline (strict-majority + warm-start)",
-        "plain_plurality": "Plain plurality (no strict-majority rule)",
+        "plain_plurality": "Our approach (plain plurality + warm-start)",
+        "strict_majority": "Strict-majority rule (tested alternative)",
         "no_warmstart": "No semantic warm-start (neutral init)",
     }
 
@@ -80,7 +80,7 @@ def plot_ablation_convergence(
 
     ax.set_xlabel("Training step", fontsize=13)
     ax.set_ylabel(f"{CLASS_NAMES.get(class_id, class_id)} IoU (%)", fontsize=13)
-    ax.set_title("Cable IoU convergence: ablation vs. baseline", fontsize=14.5, fontweight="bold")
+    ax.set_title("Cable IoU convergence across voting/warm-start variants", fontsize=14.5, fontweight="bold")
     ax.legend(fontsize=10.5, loc="lower right")
 
     fig.tight_layout()
@@ -95,8 +95,8 @@ def main():
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     parser = argparse.ArgumentParser(description="Track cable IoU vs. training step across ablation runs")
-    parser.add_argument("--baseline-dir", required=True)
     parser.add_argument("--plain-plurality-dir", required=True)
+    parser.add_argument("--strict-majority-dir", required=True)
     parser.add_argument("--no-warmstart-dir", required=True)
     parser.add_argument("--steps", nargs="+", type=int, default=[2000, 4000, 6000, 8000, 10000, 16000, 24000, 32000, 40000])
     parser.add_argument("--colmap-dir", default=None)
@@ -127,8 +127,8 @@ def main():
     )
 
     checkpoint_dirs = {
-        "baseline": args.baseline_dir,
         "plain_plurality": args.plain_plurality_dir,
+        "strict_majority": args.strict_majority_dir,
         "no_warmstart": args.no_warmstart_dir,
     }
     curves = collect_convergence_curves(checkpoint_dirs, args.steps, holdout_cameras, device=device)

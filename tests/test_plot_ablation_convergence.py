@@ -13,7 +13,7 @@ STAY_CABLE_CLASS_ID = 2
 class TestPlotAblationConvergence(unittest.TestCase):
     def test_writes_a_nonempty_png(self):
         curves = {
-            "baseline": {2000: {STAY_CABLE_CLASS_ID: 0.833}, 40000: {STAY_CABLE_CLASS_ID: 0.9213}},
+            "strict_majority": {2000: {STAY_CABLE_CLASS_ID: 0.833}, 40000: {STAY_CABLE_CLASS_ID: 0.9213}},
             "plain_plurality": {2000: {STAY_CABLE_CLASS_ID: 0.8265}, 40000: {STAY_CABLE_CLASS_ID: 0.9236}},
             "no_warmstart": {2000: {STAY_CABLE_CLASS_ID: 0.8098}, 40000: {STAY_CABLE_CLASS_ID: 0.9202}},
         }
