@@ -142,8 +142,13 @@ uniformly — a training-time loss on 3D point clouds, a different stage and dat
 our own warm-start label initialization from 2D images (Section 3.4), but a related concern with
 component-aware treatment of structurally distinct classes. Our own 2D pseudo-labeling stage
 (Section 3.3) fine-tunes
-SegFormer [14], a transformer-based semantic segmentation architecture chosen for its strong
-accuracy-to-compute ratio on a single consumer GPU.
+SegFormer [14], a semantic segmentation architecture built around a hierarchical Transformer
+encoder that produces multi-scale features without positional encodings - avoiding the
+resolution-dependent interpolation artifacts that encodings introduce - paired with a
+lightweight all-MLP decoder that aggregates the encoder's per-stage features, instead of the
+heavier convolutional decoders typical of earlier segmentation architectures. We use its
+smallest variant, MiT-B0, chosen for its strong accuracy-to-compute ratio on a single consumer
+GPU.
 
 **Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
 models of cable-stayed bridges with a recursive network that predicts both a high-level structural
