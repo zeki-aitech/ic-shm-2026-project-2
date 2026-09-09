@@ -1,9 +1,8 @@
 """
-Figure 4 (Section 5.2, optional): tracks structural mIoU on the 60-view holdout across training
-steps for two real checkpoints - our approach (semantic warm-start) and a no-semantic-warmstart
-ablation - to check whether the Table 3 result (no measurable *final*-mIoU difference between the
-two, and in fact a slightly *lower* mIoU with the warm-start) holds throughout training or only
-appears once training has converged.
+Standalone diagnostic (not currently cited by the paper): tracks structural mIoU on the 60-view
+holdout across training steps for two real checkpoints - a semantic-warm-start run and a
+no-semantic-warmstart run - useful for checking whether a final-mIoU difference between two such
+runs (or the lack of one) holds throughout training or only appears once training has converged.
 
 Deliberately skips PSNR/SSIM/LPIPS (unlike `render_metrics.py`): this figure only tracks
 semantic IoU across many checkpoints per run, and skipping the LPIPS forward pass makes that

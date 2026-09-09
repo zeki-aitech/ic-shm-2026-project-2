@@ -18,8 +18,8 @@ it once the paper is finalized and submitted — it is not part of the paper its
   (`DRAFT.md` title block, currently `[NEEDS]`).
 - [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
   `[NEEDS]`) once the submission link is finalized.
-- [ ] Figure 7 (splat viewer, Section 5.3, optional - renumbered from Figure 6 when the
-  training-convergence ablation figure was moved earlier in reading order) still shows the OLD
+- [ ] Figure 6 (splat viewer, Section 5.3, optional - renumbered again after the no-warmstart
+  ablation figure was removed entirely, see below) still shows the OLD
   strict-majority checkpoint's SuperSplat screenshots (`paper/figures/fig6_splat_render.png` -
   filename unchanged, only its in-paper figure number moved). New PLYs from the
   official plain-plurality checkpoint are already exported
@@ -34,6 +34,48 @@ it once the paper is finalized and submitted — it is not part of the paper its
   updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).
 
 ## Done
+
+- [x] Removed the no-warmstart ablation (Section 5.2, old Table 3, old Figure 4/9) from the
+  paper entirely — reverted to reporting the single seed=42 run (`gaussians_ablation_plain_plurality`
+  checkpoint, 600,958 Gaussians) throughout, with the semantic warm-start now presented as a
+  plain design choice (Section 3.4) with no accompanying ablation claim. Between this decision
+  and the previous "removed the strict-majority ablation" entry above, two further attempts were
+  made and abandoned:
+  1. Ran N=2 same-config replicate trainings (`--seed` CLI flag added to
+     `src/gaussian_splatting/train.py`, default 42) to measure the real run-to-run noise floor
+     for warm-start vs. no-warmstart at a second seed (43). Result: 0.22 and 0.42 mIoU-point
+     spreads between same-config seeds, both larger than the 0.17-point between-config
+     difference the original ablation was built on — logged here only, never written into
+     `DRAFT.md`. Checkpoints (`outputs/checkpoints/gaussians_replicate_{warmstart,no_warmstart}_seed43/`)
+     and eval reports (`outputs/eval/render_eval_report_replicate_{warmstart,no_warmstart}_seed43.md`)
+     kept on disk but unused.
+  2. Attempted to fully replace the paper's reported numbers with the seed=43 replicate
+     (requested explicitly), and discovered the mIoU-vs-training-step convergence *pattern*
+     itself reverses between seeds — no-warmstart leads for most of training at seed=43, the
+     opposite of seed=42's curve the original Figure 4/9 discussion was built on. This — combined
+     with the noise-floor measurement in (1) exceeding the effect being discussed — was the
+     deciding evidence for dropping the ablation narrative altogether rather than reporting
+     either seed's ablation result as if it were stable.
+  Concretely, this final change: reverted the Abstract/Table 1/Table 2/Figures 1, 3, 4, 5, 8
+  (old numbering) to the seed=42 checkpoint's real numbers (mIoU 91.28%, deck 95.72%, cable
+  92.36%, tower 89.71%, foundation 87.34%); deleted old Table 3, the old Figure 4 (mIoU
+  convergence) embed/caption, and every "we tested with/without warm-start" paragraph in
+  Section 5.2, Introduction, and the Conclusion; kept and reframed the still-valid,
+  ablation-independent explanation for cable's high IoU (the coarse annotation is 3D-consistent,
+  so the model reproduces the same annotation convention across viewpoints — not evidence of
+  correcting toward truer geometry, verified against the qualitative render grid); renumbered
+  Figures 5-9 -> 4-8 and Table 4 -> Table 3 throughout (single-pass placeholder-token regex, same
+  technique as the earlier reading-order fix); fixed three leftover "majority vote"/"majority-voted"
+  mentions in the Abstract, Introduction, and Related Work to "plurality vote"/"plurality-voted",
+  matching Section 3.4's terminology (a stale leftover from the earlier plain-plurality baseline
+  switch, unrelated to this pivot but caught while auditing the same text).
+  Now-orphaned artifacts kept on disk but unused by the paper: `fig9_ablation_convergence.png`
+  (the old Figure 4 image, seed=43 version — last thing rendered before this pivot),
+  `outputs/checkpoints/gaussians_replicate_{warmstart,no_warmstart}_seed43/`,
+  `outputs/renders/{fig4_holdout,fig5_interp}_seed43/`, `bridge_splat_seed43_{rgb,semantic}.ply`.
+  `src/evaluation/plot_ablation_convergence.py` and `tests/test_plot_ablation_convergence.py` are
+  kept as-is (not deleted) — same precedent as `vote_consistency.py`: a real, tested, standalone
+  tool no longer cited by the paper rather than dead code.
 
 - [x] **Measured the real noise floor** for Table 3's "within noise" claims, instead of asserting
   it from general experience: ran one same-config, different-seed replicate for each of Table
