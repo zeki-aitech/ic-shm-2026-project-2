@@ -3,13 +3,10 @@ Analyzes the raw multi-view semantic vote distributions behind the Gaussian Spla
 warm-start (`src.colmap_io.semantic_voting`), quantifying:
 1. How consistent each class's plurality-winning vote is (mean/median vote share, fraction
    clearing an absolute majority).
-2. How much `vote_majority_class`'s strict-majority rule for `stay_cable` - a candidate
-   refinement tested but not adopted as the default - actually changes relative to the default
-   plain plurality voting, and where the reclassified points go.
-
-These are the numbers the paper's Section 3.4/5.2 cite to characterize that rule's real,
-measured effect on the warm-start data, ahead of the Section 5.2 ablation showing it does not
-translate into a final-IoU benefit.
+2. How much `vote_majority_class`'s optional strict-majority mode for `stay_cable` (not the
+   default) would change relative to the default plain plurality voting, and where the
+   reclassified points go - a standalone diagnostic for anyone evaluating that alternative, not
+   currently cited by the paper.
 """
 from collections import Counter
 from dataclasses import dataclass
@@ -136,7 +133,7 @@ def main():
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     parser = argparse.ArgumentParser(
-        description="Analyze multi-view semantic vote consistency (paper Method Section 3.4)"
+        description="Analyze multi-view semantic vote consistency (plain plurality vs. strict-majority)"
     )
     parser.add_argument("--colmap-dir", default=None)
     parser.add_argument("--images-dir", default=None)
