@@ -18,8 +18,10 @@ it once the paper is finalized and submitted — it is not part of the paper its
   (`DRAFT.md` title block, currently `[NEEDS]`).
 - [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
   `[NEEDS]`) once the submission link is finalized.
-- [ ] Figure 6 (splat viewer, Section 5.3, optional) still shows the OLD strict-majority
-  checkpoint's SuperSplat screenshots (`paper/figures/fig6_splat_render.png`). New PLYs from the
+- [ ] Figure 7 (splat viewer, Section 5.3, optional - renumbered from Figure 6 when the
+  training-convergence ablation figure was moved earlier in reading order) still shows the OLD
+  strict-majority checkpoint's SuperSplat screenshots (`paper/figures/fig6_splat_render.png` -
+  filename unchanged, only its in-paper figure number moved). New PLYs from the
   official plain-plurality checkpoint are already exported
   (`outputs/renders/bridge_splat_plain_plurality_{rgb,semantic}.ply`, via the new
   `src/gaussian_splatting/export_ply.py`) - needs manual capture in SuperSplat
@@ -32,6 +34,19 @@ it once the paper is finalized and submitted — it is not part of the paper its
   updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).
 
 ## Done
+
+- [x] Fixed figure numbering out of reading order: the training-convergence ablation figure had
+  been added to Section 5.2 as "Figure 9" (since it was the 8th figure chronologically added to
+  the paper), but Section 5.2 appears *before* Section 5.3's Figures 4-6 and Section 5.4's
+  Figures 7-8 in reading order - so "Figure 9" was appearing on the page before "Figure 4". Ran
+  a single-pass renumber across all in-text "Figure N" references (old 9 -> 4, old 4-8 -> 5-9)
+  so numbers now strictly increase in reading order; Table numbers (1-4) were already correct.
+  PNG filenames were left as-is (e.g. `fig9_ablation_convergence.png` is now displayed as
+  "Figure 4") - only the in-paper label moved, which is normal and doesn't need to match the
+  filename, but worth knowing if grepping the repo by figure number.
+- [x] Removed a stray code-artifact mention in Section 5.2 body prose (a literal
+  `` `outputs/gt_masks/` `` path reference) - same category of issue as the earlier
+  export_splat_ply/skimage.metrics cleanup, caught on a fresh read-through.
 
 - [x] Removed the strict-majority cable-voting rule from the paper entirely, per explicit
   request, rather than keeping it as a discussed-and-rejected alternative: dropped it from

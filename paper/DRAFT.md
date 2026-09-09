@@ -510,7 +510,7 @@ Table 3 shows removing the warm-start entirely changes cable's final IoU by only
 densification and view-order shuffling. Before concluding the warm-start simply does not
 matter, we checked whether this null result was an artifact of evaluating only the
 fully-converged, 40,000-iteration checkpoint rather than a genuine property of training — by
-evaluating cable IoU from intermediate checkpoints of both runs (Figure 9). It shows the
+evaluating cable IoU from intermediate checkpoints of both runs (Figure 4). It shows the
 warm-start mechanism clearly does work as intended early in training: at step 2,000, the
 no-warm-start run trails our approach by 1.7 points (80.98% vs. 82.65%), confirming the
 warm-start gives a real head start. But this gap closes rapidly and is essentially gone by step
@@ -521,8 +521,8 @@ budget used here.
 
 There is also a more direct, structural reason to expect this: the semantic warm-start only
 affects each Gaussian's initial logit value, but the per-pixel semantic cross-entropy loss
-compares against the same raw, coarsely-annotated 2D masks (`outputs/gt_masks/`) at
-every one of the 340 supervised views, on every one of the 40,000 training steps. Nothing in the
+compares against the same raw, coarsely-annotated 2D masks at every one of the 340 supervised
+views, on every one of the 40,000 training steps. Nothing in the
 training objective ever rewards matching the warm-start's voted label over the raw mask; the raw
 mask is the loss target, unconditionally. A cleaner starting point therefore has no mechanism to
 persist once training pulls every visible Gaussian back toward the same per-pixel target it
@@ -532,7 +532,7 @@ warm-start's head start is not merely overtaken by training, it is structurally 
 both the training objective and the evaluation metric past initialization.
 
 This is not, however, evidence that training corrects the annotation toward truer cable
-geometry - Figure 4's rendered semantic maps (Section 5.3) show the opposite. On views 005, 250,
+geometry - Figure 5's rendered semantic maps (Section 5.3) show the opposite. On views 005, 250,
 and 300, the rendered cable region closely reproduces the same broad, coarsely-annotated shape
 as the ground-truth mask itself, not a thinner region tracing the actual cable strands. The
 more accurate explanation is that the annotated region, while not tracing individual strands, is
@@ -550,9 +550,9 @@ semantic mIoU directly against these same masks, so accurately reproducing their
 whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
 some finer-grained cable delineation that the evaluation does not actually ask for.
 
-![Figure 9: Cable IoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
+![Figure 4: Cable IoU vs. training step, with and without the semantic warm-start](figures/fig9_ablation_convergence.png)
 
-**Figure 9 (optional).** `stay_cable` IoU on the 60-view holdout evaluated from intermediate
+**Figure 4 (optional).** `stay_cable` IoU on the 60-view holdout evaluated from intermediate
 checkpoints (every 2,000-8,000 steps) of both Table 3 configurations, showing the training-step
 budget at which their curves converge to within noise of each other.
 
@@ -580,7 +580,7 @@ The metrics in Section 5.1 summarize error over the full holdout set as a single
 metric, but do not show where the model succeeds or fails, or what a rendered view actually looks
 like. We complement them with three qualitative figures.
 
-Figure 4 shows four held-out views (005, 050, 250, 300), each as rendered RGB, the real
+Figure 5 shows four held-out views (005, 050, 250, 300), each as rendered RGB, the real
 photograph, the rendered semantic map, and the ground-truth mask. Views 005 and 250 are
 representative strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the
 foreground deck region; 300 is the weakest RGB reconstruction in this set, with color artifacts
@@ -591,13 +591,13 @@ an appearance error large enough to visibly corrupt RGB may still leave the arg-
 unchanged — but we present this as an illustrative observation from this set of views rather than
 a claim established over the full holdout.
 
-![Figure 4: RGB and semantic renders vs. ground truth on held-out views](figures/fig4_qualitative_grid.png)
+![Figure 5: RGB and semantic renders vs. ground truth on held-out views](figures/fig4_qualitative_grid.png)
 
-**Figure 4.** RGB and semantic renders vs. ground truth on four held-out views (005, 050, 250,
+**Figure 5.** RGB and semantic renders vs. ground truth on four held-out views (005, 050, 250,
 300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
 the official class legend.
 
-Because the held-out views in Table 1 still lie on the UAV's original flight line, Figure 5
+Because the held-out views in Table 1 still lie on the UAV's original flight line, Figure 6
 additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
 quaternion SLERP for rotation, linear interpolation for translation) at five evenly spaced steps
 $t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating the property the contest brief actually asks
@@ -606,17 +606,17 @@ trajectory. The two endpoints ($t=0, 1$) are real flown poses and render cleanly
 degrades visibly in the intermediate frames, where the interpolated pose departs furthest from
 any training view — but the semantic map remains largely stable and structurally coherent across
 all five frames despite this RGB degradation, a second, independent illustration of the pattern
-noted in Figure 4. RGB and semantic outputs remain pixel-aligned at every step, including the
+noted in Figure 5. RGB and semantic outputs remain pixel-aligned at every step, including the
 degraded ones.
 
-![Figure 5: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
+![Figure 6: Novel-view interpolation between two flown poses](figures/fig5_interpolation.png)
 
-**Figure 5.** A camera path interpolated between two real flown poses (images 280 and 300;
+**Figure 6.** A camera path interpolated between two real flown poses (images 280 and 300;
 quaternion SLERP for rotation, linear interpolation for translation), rendered at five evenly
 spaced steps $t \in \{0, 0.25, 0.5, 0.75, 1\}$; top row RGB, bottom row the corresponding semantic
 map.
 
-Finally, Figure 6 (optional) views the trained Gaussians directly in an interactive splat viewer
+Finally, Figure 7 (optional) views the trained Gaussians directly in an interactive splat viewer
 ([SuperSplat](https://superspl.at/editor)) rather than through one camera pose at a time. Unlike
 the arbitrary-viewpoint renders in Figures 4-5, this alpha-blended splat render exposes the full
 learned 3D structure simultaneously: both towers, the cable fan, the deck, and the foundation
@@ -626,9 +626,9 @@ converge to a structurally sensible 3D segmentation rather than scattered, incon
 per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can be dropped if space is
 limited.
 
-![Figure 6: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
+![Figure 7: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig6_splat_render.png)
 
-**Figure 6 (optional).** The trained Gaussians viewed in an interactive splat viewer, from the
+**Figure 7 (optional).** The trained Gaussians viewed in an interactive splat viewer, from the
 same viewpoint. **(a)** Rendered in true RGB color. **(b)** The same Gaussians, each recolored by
 its predicted semantic class rather than its true RGB color (deck red, stay_cable cyan, tower
 green, foundation yellow, background gray).
@@ -640,18 +640,18 @@ they got there — whether the reported numbers reflect a stably converged optim
 possibly fragile checkpoint. We check this directly against the real training logs for both
 tasks, plotted in Figures 7 and 8.
 
-Figure 7 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
+Figure 8 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
 curves plateau well before epoch 80 (final validation mIoU 81.27%), indicating the fine-tuned
 model has converged rather than still improving or overfitting when its pseudo-labels are handed
 to Task B.
 
-![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
+![Figure 8: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
 
-**Figure 7.** Task A (SegFormer) training convergence: training loss (red, left axis) and
+**Figure 8.** Task A (SegFormer) training convergence: training loss (red, left axis) and
 validation mIoU on the 60-image holdout (blue, right axis) over 80 epochs on the 240-image
 labeled training split.
 
-Figure 8 plots the corresponding curve for Task B (light gray: raw per-step loss; green: a
+Figure 9 plots the corresponding curve for Task B (light gray: raw per-step loss; green: a
 15-step trailing moving average). Unlike Task A's per-epoch average, each step's raw loss is
 computed on a single rendered view and fluctuates accordingly, with occasional spikes that
 persist even after the Gaussian count stabilizes around step 8,600 — consistent with per-view
@@ -659,9 +659,9 @@ difficulty variance (e.g. grazing viewing angles or motion-blurred training phot
 an optimization instability. The moving average nonetheless shows steady convergence with no
 divergence, settling to a stable plateau by roughly step 20,000.
 
-![Figure 8: Task B (semantic Gaussian Splatting) training convergence over 40,000 steps](figures/fig8_task_b_training.png)
+![Figure 9: Task B (semantic Gaussian Splatting) training convergence over 40,000 steps](figures/fig8_task_b_training.png)
 
-**Figure 8.** Task B (semantic Gaussian Splatting) training convergence: training loss over
+**Figure 9.** Task B (semantic Gaussian Splatting) training convergence: training loss over
 40,000 steps for the full-resolution model reported throughout this paper (light gray: raw
 per-step loss; green: a 15-step trailing moving average).
 
