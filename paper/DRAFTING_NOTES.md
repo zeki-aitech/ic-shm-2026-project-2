@@ -10,13 +10,7 @@ it once the paper is finalized and submitted — it is not part of the paper its
 ## Outstanding
 
 - [ ] External-review findings not yet acted on (see the "External review" Done entry below for
-  the full list this was triaged from) - in the reviewer's own priority order:
-  - [ ] **#3 Wrong bridge type/terminology**: this is a suspension bridge (parabolic main cable +
-    vertical hangers, confirmed by inspecting `data/Contest Dataset/images/100.png`), not a
-    cable-stayed bridge - the official brief itself uses "main cable" (p.9), not "stay cable".
-    `DRAFT.md`'s title, abstract, and Section 5.2's "fan of stay cables spans a... planar
-    surface" argument all need rewording; keep `stay_cable` only as the dataset's internal class
-    name.
+  the full list this was triaged from):
   - [ ] **#4 Gaussian color init doesn't match its own description**: `DRAFT.md` Section 3.4 says
     initial RGB comes from the triangulated point's own color, but `SemanticProjector.project()`
     (`src/colmap_io/semantic_voting.py:187`) actually assigns the voted-class palette color
@@ -24,55 +18,7 @@ it once the paper is finalized and submitted — it is not part of the paper its
     all - fix the init to sample real color from an observing image, or fix the paper's
     description (and drop the "unlike standard practice" framing around sparse-point init
     itself, since that part **is** standard 3DGS practice per Kerbl et al. 2023 - only the
-    semantic-logit warm-start is this paper's own addition).
-  - [ ] **#6 Strided-split rationale is backwards**: `trajectory_interleaved_split` (every Nth
-    frame held out - every 10th for the test split and every 9th of the remainder for internal
-    val, since the #1 fix below) guarantees a training frame immediately before and after every
-    holdout frame - the opposite of what Section 3.6's "avoids near-duplicate leakage" argument
-    claims. Reword, and/or add a contiguous-block or leave-block-out split as a stronger secondary
-    evaluation. The ">99% overlap between consecutive frames" claim also has no citation/measurement.
-  - [ ] **#7 Per-class explanation contradicts the data**: the reviewer's original pixel-ratio/
-    observation-count numbers (7.19% `stay_cable` vs. 5.01% `deck`; 2.42 avg observations/Gaussian
-    for `deck` vs. 4.27 for `foundation`) were measured against the old 60-image test split -
-    re-measure against the current 30-image test split before citing exact figures in the paper,
-    but the underlying critique almost certainly still holds (the coarse fan-shaped annotation
-    convention that makes `stay_cable` pixel-heavy, and `deck`'s lower observation count despite
-    its high accuracy, are both properties of the annotation/geometry, not of which 10% vs. 20%
-    of frames happen to be held out). Section 5.2's "thin, sparsely-sampled" framing for cable and
-    "fewer observing viewpoints" explanation for foundation still need rewording/re-verifying.
-  - [ ] **#8 Table 3 footnote is misleading**: both rows' logs show a real voted class
-    distribution (semantic warm-start *was* active in both) - they differ in voting rule
-    (old strict-cable-majority vs. the current plain-plurality default), not in whether
-    warm-start was used at all. Reword "predate the semantic warm-start configuration."
-  - [ ] **#9 Metric presentation nits**: PSNR's MSE formula sums over `(h,w)` only, omitting the
-    color-channel dimension (`skimage`'s actual computation is correct; only the LaTeX is
-    imprecise); SSIM stated as strictly `[0,1]` when it can technically go negative; mIoU is
-    computed from one confusion matrix pooled over all 30 test images (standard practice, e.g.
-    Cityscapes-style, but currently unstated - worth one clarifying sentence); the LPIPS
-    "blurred cable strands" example is illustrative, not literally from Zhang et al. 2018 -
-    fine as an example but could say so.
-  - [ ] **#10 Convergence description inaccuracies**: `train.py` logs every 100 steps
-    (`log_every=100`), so Figure 8's "raw per-step loss" and "15-step moving average" are really
-    a 1-in-100 subsample and a ~1,500-iteration window respectively - reword. Task A's curve
-    should be re-checked for monotonicity against the new 80/10/10-split log
-    (`outputs/logs/segmentation_train_80_10_10.log`) before citing an exact decrease count, but
-    was already not literally monotonic under the old split (21 of 79 epoch-to-epoch val-mIoU
-    changes were decreases) - soften to e.g. "smoother, less noisy" regardless. Densification is
-    a soft threshold (`if model.num_points < max_gaussians` checked once per step, so one refine
-    step can overshoot it - final count 600,404 vs. the "capped at 600,000" text), not a hard cap.
-  - [ ] **#11 Rhetoric overreach**: "arbitrary camera viewpoint" is only demonstrated via
-    interpolation *within* the flown trajectory's envelope (Figure 6), with no ground truth to
-    verify accuracy there - the brief itself only requires rendering at organizer-provided test
-    poses, not unconstrained free-viewpoint navigation. "Digital twin" (Abstract, Conclusion)
-    implies more than this static, non-real-time, non-physics-linked asset delivers - consider
-    "semantic 3D scene representation" or "digital-twin-ready asset" instead, and frame SHM
-    applications (deflection tracking, cable tension inference) explicitly as future work.
-  - [ ] Reference polish: ref [13]'s title is right but missing volume/pages (`40, 801–816`,
-    confirmed against the actual PDF, same fix already applied to ref [3]); ref [3]'s title is a
-    paraphrase, not the verbatim published title (`unmanned aerial vehicles light detection and
-    ranging data imagery`, not `unmanned aerial vehicle LiDAR and imagery`); Semantic-NeRF [7]'s
-    "was the first" claim isn't asserted by the cited paper itself - soften to "an early"/"a
-    seminal approach."
+    semantic-logit warm-start is this paper's own addition). Requires retraining Task B.
   - [ ] Table 3 (resolution ablation) still uses the pre-mask-fix, pre-split-fix checkpoints
     (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image coordinate
     misalignment fixed below, and the old 240/60 split rather than the current 240/30/30. Low
@@ -100,6 +46,74 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **External review text fixes #3, #6, #7, #8, #9, #10, #11, and reference polish - all
+  text-only, no retraining needed** (see the "External review" Done entry below for the original
+  findings list). In the order fixed:
+  - **#3 Bridge type**: title, abstract, Introduction, Section 3.1/3.4/4.1 all changed
+    "cable-stayed bridge" -> "suspension bridge"; every plain-prose "stay cable(s)" (physical
+    structure) -> "main cable and hangers"; kept `stay_cable` (backtick) only where referring to
+    the dataset's own class name/annotation, with one explicit note (Introduction) that this is
+    the dataset's JSON label while the contest brief itself calls it "main cable" (p.9). Section
+    5.2's "fan of stay cables spans a... planar surface" argument rewritten to the geometrically
+    correct suspension-bridge claim: the main cable and its hangers lie within a single
+    near-vertical plane running the length of the span (verified this is still a valid,
+    accurate description of suspension-bridge cable-plane geometry - the underlying "3D-consistent
+    annotation" argument survives, just with the right structure name). Figure 2/6 captions
+    updated too ("cable fan" -> "main cable"). Citations describing *other* papers' cable-stayed
+    bridges (Hu et al. [2]'s actual subject) left unchanged - correctly describes that cited work,
+    not our own bridge.
+  - **#6 Strided-split rationale**: Section 3.6 rewritten to state plainly that the strided split
+    does *not* avoid near-duplicate train/test adjacency (it guarantees a training frame next to
+    almost every held-out frame) - its real, defensible benefit is spreading the holdout uniformly
+    across the whole flight envelope rather than one segment. Added an explicit statement that the
+    reported metrics measure interpolation within a dense trajectory, not extrapolation, and that
+    a contiguous-block/leave-block-out split would be a stronger secondary evaluation (left as
+    future work, not implemented).
+  - **#7 Per-class explanations**: re-measured the reviewer's pixel-ratio and observation-count
+    numbers against the *current* 30-image test split / 270-image training pool (they were
+    originally measured against the old 60-image split) - the critique holds with fresh numbers:
+    `stay_cable` is still the largest structural class by pixel count on the new test split
+    (7.16% vs. `deck`'s 5.02%), and `deck` still has the lowest average observations per Gaussian
+    (2.68 vs. `foundation`'s 4.66) despite scoring highest. Section 5.2 rewritten: cable's
+    "thin, sparsely-sampled" framing now explicitly distinguishes "physically thin strands" from
+    "the coarse, actually-largest-by-pixel-count annotated region" (both stated with numbers);
+    foundation's explanation changed from the unsupported "fewer observing viewpoints" (directly
+    contradicted by deck's own lower count) to a hedged "smallest absolute footprint (0.62% of
+    test pixels) means IoU is more sensitive to fixed-width boundary error" hypothesis, explicitly
+    flagged as unconfirmed (no dedicated ablation run).
+  - **#8 Table 3 footnote**: reworded to say both rows *did* use the semantic warm-start (verified
+    true - both logs show a real voted class distribution), differing only in voting rule
+    (old strict-cable-majority vs. current plain-plurality) - and now also flags the footnote's
+    other two known discrepancies from Table 1 (pre-mask-fix, pre-split-fix), consistent with the
+    still-open "retrain Table 3" item in Outstanding.
+  - **#9 Metric formulas**: PSNR's MSE now explicitly sums over the 3 color channels
+    (`\sum_{c=1}^{3}`, `1/3HW` normalizer) instead of silently treating each pixel as scalar; SSIM
+    range changed from a flat "`[0,1]`" to "in `[-1,1]` in general, close to `[0,1]` in practice
+    here"; mIoU's formula text now states explicitly that `TP`/`FP`/`FN` are pooled from one
+    confusion matrix over all 30 test views at once (pixel-weighted), not averaged per-image
+    (Cityscapes-style, now named as such); LPIPS's "blurred cable strands" example now explicitly
+    flagged as our own illustrative extrapolation, not a finding from Zhang et al. [18].
+  - **#10 Convergence description**: Figure 8's "raw per-step loss"/"15-step moving average" ->
+    "loss logged every 100 steps"/"15-sample... roughly 1,500 training steps"; Gaussian-count
+    stabilization step and plateau-onset step re-verified against the new 80/10/10-split log
+    (8,200 and ~20,000 respectively, both re-measured, not just carried over); Task A's "clean,
+    monotonic curves" -> "smoother, less noisy curve" (re-checked on the new log: still 20/79
+    epoch-to-epoch decreases, not literally monotonic); densification "capped at 600,000" ->
+    explicit "soft cap... a single step can overshoot it" with the real final count as the example.
+  - **#11 Rhetoric**: "digital twin" (Abstract, Conclusion) -> "semantic 3D scene representation" /
+    "digital-twin-ready asset," with an explicit note in the Conclusion that the model lacks a
+    true digital twin's real-time sensor linkage and physical simulation. "Genuinely arbitrary
+    viewpoint" (Figure 5's intro) reworded to state plainly that the interpolated poses are still
+    *within* the flown envelope (interpolation, not extrapolation) and that we have no ground
+    truth to verify accuracy there. Related Work's "our model answers... for any viewpoint an
+    inspector specifies" similarly qualified with where accuracy is/isn't actually verified.
+  - **Reference polish**: ref [3]'s title corrected to the PDF's verbatim wording ("unmanned
+    aerial vehicles light detection and ranging data imagery," not "unmanned aerial vehicle LiDAR
+    and imagery"); ref [13] given its missing volume/pages (`40, 801–816`, same verification
+    already done for ref [3] earlier); Semantic-NeRF [7]'s "was the first" -> "an early,
+    influential approach" (the cited paper doesn't itself claim priority).
+  - Ran the full test suite after each block of edits (still 92 passed throughout, since these
+    are prose-only changes with no code touched).
 - [x] **External review fix #1 (holdout leakage) implemented and retrained.** SegFormer's
   checkpoint selection (`src/segmentation/train.py`) was validating on the same 60 images later
   reserved as the final render-based evaluation holdout - a model-selection step must not touch
