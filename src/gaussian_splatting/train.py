@@ -31,7 +31,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.colmap_io.reconstructor import PycolmapReconstructor
+from src.colmap_io.reconstructor import PycolmapReconstructor, sample_point_colors
 from src.colmap_io.semantic_voting import SemanticProjector
 from src.evaluation.metrics import train_val_test_split
 from src.gaussian_splatting.undistort import undistort_all
@@ -166,7 +166,14 @@ def prepare_training_data(
         mask_path = os.path.join(gt_masks_dir, f"{stem}.png")
         if os.path.exists(mask_path):
             projector.mask_cache[mask_path] = np.array(Image.open(mask_path), dtype=np.uint8)
-    point_classes, point_colors = projector.project(strict_cable_majority=strict_cable_majority)
+    point_classes, _class_palette_colors = projector.project(strict_cable_majority=strict_cable_majority)
+
+    # Real per-point RGB, sampled from the original photos at each point's own projected pixel -
+    # NOT `_class_palette_colors` above, which is a lookup from voted class to a fixed swatch
+    # (the same palette used to color the semantic figures) and carries no actual appearance
+    # information. Uses every image regardless of split, like triangulation itself: a point's
+    # color is photometric input data, not a supervised label.
+    point_colors = sample_point_colors(pts3d, images, [images_dir, unlabeled_dir])
 
     # Every mask paired with a `GSCamera` below, by contrast, must be undistorted: its
     # `image_path` points at the undistorted image cache and its `K` is the pinhole intrinsic

@@ -9,21 +9,11 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Outstanding
 
-- [ ] External-review findings not yet acted on (see the "External review" Done entry below for
-  the full list this was triaged from):
-  - [ ] **#4 Gaussian color init doesn't match its own description**: `DRAFT.md` Section 3.4 says
-    initial RGB comes from the triangulated point's own color, but `SemanticProjector.project()`
-    (`src/colmap_io/semantic_voting.py:187`) actually assigns the voted-class palette color
-    (`CLASS_COLORS`), and `PycolmapReconstructor`'s `Point3D` never stores real point color at
-    all - fix the init to sample real color from an observing image, or fix the paper's
-    description (and drop the "unlike standard practice" framing around sparse-point init
-    itself, since that part **is** standard 3DGS practice per Kerbl et al. 2023 - only the
-    semantic-logit warm-start is this paper's own addition). Requires retraining Task B.
-  - [ ] Table 3 (resolution ablation) still uses the pre-mask-fix, pre-split-fix checkpoints
-    (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image coordinate
-    misalignment fixed below, and the old 240/60 split rather than the current 240/30/30. Low
-    priority (it's a secondary ablation, not the headline numbers) but should eventually be
-    redone for full consistency.
+- [ ] Table 3 (resolution ablation) still uses the pre-mask-fix, pre-split-fix, pre-color-fix
+  checkpoints (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image
+  coordinate misalignment and color-init bug fixed below, and the old 240/60 split rather than
+  the current 240/30/30. Low priority (it's a secondary ablation, not the headline numbers) but
+  should eventually be redone for full consistency.
 - [ ] **Future idea (optional, not required by anything in the paper as currently written):**
   ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
   lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
@@ -58,6 +48,53 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **External review fix #4 (Gaussian color init) implemented and retrained.** `DRAFT.md`
+  Section 3.4 claimed each Gaussian's initial RGB came from the triangulated point's own observed
+  color, but `SemanticProjector.project()` (`src/colmap_io/semantic_voting.py`) actually assigned
+  the voted-class's fixed 5-color legend swatch (`CLASS_COLORS`) as `point_colors`, and
+  `PycolmapReconstructor`'s `Point3D` never stored real pixel color at all - so the paper's
+  description and the code disagreed, and the initial point cloud was effectively colored by
+  semantic class rather than by appearance. Fixed by adding `sample_point_colors()`
+  (`src/colmap_io/reconstructor.py`) - for each 3D point, samples the real RGB pixel value from
+  every observing *original* (pre-undistortion) image at that point's own projected 2D feature
+  location (`ImagePose.points2d`, the same original-image coordinates triangulation and the
+  semantic vote already use), averaged across observations, gray fallback for points with no
+  readable observation. Deliberately not restricted to any train/val/test split - color is
+  photometric input data, not a supervised label, the same treatment position already gets from
+  triangulation (which uses all 400 images regardless of split). `src/gaussian_splatting/train.py`
+  now calls `sample_point_colors` instead of reusing the semantic projector's palette colors.
+  Added `tests/test_sample_point_colors.py` (5 new tests, synthetic solid-color images).
+  - **Also corrected Section 3.4's "unlike standard practice" framing**: sparse-point-cloud color
+    init *is* standard 3DGS practice (Kerbl et al. [6]); only the semantic-logit warm-start is
+    this paper's own addition. Rewritten to state plainly that position and color both follow
+    standard practice, and describe the (now-fixed) real-pixel-averaging color source.
+  - **Retrained Task B once** (`outputs/checkpoints/gaussians_real_color_init/`, installed as
+    canonical; prior palette-color checkpoint preserved as
+    `gaussians_stale_palette_color_init_pre_20260910`) - 604,152 Gaussians (vs. 600,404 before,
+    same 40,000-iteration budget and 80/10/10 split, only the color source changed), Gaussian
+    count stabilizing at step 7,400 (vs. 8,200 before).
+  - **Result on the same 30-image test set**: PSNR 22.13 dB (was 21.83), SSIM 0.853 (was 0.843),
+    LPIPS 0.321 (was 0.349), mIoU 91.04% (was 88.97%; deck 92.59%, stay_cable 91.00%,
+    tower 91.88%, foundation 88.71%, background 98.93%), Accuracy Score 0.816 (was 0.798). Every
+    metric improved - a real photometric-color starting point converges to a better fit within
+    the fixed 40k-iteration budget than the previous class-swatch-colored start, which the
+    photometric loss (L1 + D-SSIM) had to spend part of the training budget correcting away from
+    before it could refine geometry/appearance further; this is a plausible mechanism, not a
+    formally isolated ablation. Per-class ranking changed: tower now edges out stay_cable
+    (previously deck > cable > tower > foundation; now deck > tower > cable > foundation) - Table
+    2 and Section 5.2's discussion were rewritten to describe this specific ranking rather than
+    reusing the prior round's narrative template.
+  - **Updated throughout `DRAFT.md`**: Abstract, Introduction (bullet 5), Section 3.4's
+    warm-start paragraph, Gaussian count in Sections 3.4/4.2, Table 1, Table 2, Figure 3's
+    surrounding text/caption, Section 5.2 (deck/cable/tower discussion), Section 5.4 (Gaussian-
+    count-stabilization step 8,200 -> 7,400), Conclusion (mIoU/Accuracy Score). Regenerated
+    Figures 1, 3, 4, 5, 8. Updated `README.md`'s results table and Gaussian count; while there,
+    also corrected two numbers left stale by the earlier #1 (split) fix - Task B's own training-
+    view count ("240 GT-mask + 100 pseudo-mask = 340 views" -> "270 + 100 = 370", since Task B
+    trains on train+val, not train alone) and the evaluation holdout size ("60 held-out views" ->
+    "30", in two places) - neither was part of review finding #4, just noticed while editing the
+    same file.
+  - Ran the full test suite after all changes.
 - [x] **External review text fixes #3, #6, #7, #8, #9, #10, #11, and reference polish - all
   text-only, no retraining needed** (see the "External review" Done entry below for the original
   findings list). In the order fixed:

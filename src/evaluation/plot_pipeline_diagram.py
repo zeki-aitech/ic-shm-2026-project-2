@@ -98,7 +98,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
     )
 
     # Trained model
-    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.5, 5.4, 1.4, "Trained model\n(600,404 Gaussians)")
+    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.5, 5.4, 1.4, "Trained model\n(604,152 Gaussians)")
 
     # Render
     r_b, r_t, r_l, r_r = _box(ax, 5, 2.4, 7.0, 1.3, "render(pose): arbitrary camera viewpoint",
@@ -201,7 +201,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     tm_top = merge_b[1] - CHAIN_GAP
     tm_h = 1.6
     tm_cy = tm_top - tm_h / 2
-    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.4, tm_h, "Trained model\n(600,404 Gaussians)", fontsize=17)
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.4, tm_h, "Trained model\n(604,152 Gaussians)", fontsize=17)
 
     render_top = tm_b[1] - CHAIN_GAP
     render_h = 1.5

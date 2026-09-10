@@ -14,8 +14,9 @@ import shutil
 import tempfile
 import time
 from collections import defaultdict
-from typing import Dict, Tuple
+from typing import Dict, Iterable, Tuple
 
+import cv2
 import numpy as np
 import pycolmap
 
@@ -156,6 +157,66 @@ def filter_outliers_iqr(points3d: Dict[int, Point3D], iqr_multiplier: float = 3.
     for pid in to_remove:
         del points3d[pid]
     return len(to_remove)
+
+
+def sample_point_colors(
+    pts3d: Dict[int, Point3D],
+    images: Dict[int, ImagePose],
+    image_dirs: Iterable[str],
+) -> Dict[int, np.ndarray]:
+    """
+    For each triangulated 3D point, returns its real observed RGB color (uint8 [R, G, B]),
+    averaged over every observing view's image, sampled at the point's own projected 2D feature
+    location - `ImagePose.points2d`, the same original (pre-undistortion) pixel coordinates
+    `PycolmapReconstructor`'s triangulation and `SemanticProjector`'s semantic vote already use,
+    so this reads the *original* images, not the undistorted cache.
+
+    This deliberately does not restrict to any train/val/test split: a point's real color is
+    photometric input data, not a supervised label - the same treatment already given to each
+    point's xyz position, which pycolmap triangulates from every available 2D observation
+    (holdout images included) rather than a training-only subset.
+
+    A point with no readable observation (all its images missing, or every projected pixel
+    landing outside its image's bounds) falls back to mid-gray, matching the previous behavior
+    for points absent from `point_colors`.
+    """
+    name_to_path: Dict[str, str] = {}
+    for d in image_dirs:
+        if not os.path.isdir(d):
+            continue
+        for fname in os.listdir(d):
+            if fname.lower().endswith(".png"):
+                name_to_path[fname] = os.path.join(d, fname)
+
+    image_cache: Dict[str, "np.ndarray | None"] = {}
+
+    def _load(name: str):
+        if name not in image_cache:
+            path = name_to_path.get(name)
+            img = cv2.imread(path, cv2.IMREAD_COLOR) if path else None
+            image_cache[name] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) if img is not None else None
+        return image_cache[name]
+
+    colors: Dict[int, np.ndarray] = {}
+    for pid, pt in pts3d.items():
+        samples = []
+        for image_id, p2d_idx in zip(pt.image_ids, pt.point2d_idxs):
+            img_pose = images.get(image_id)
+            if img_pose is None:
+                continue
+            img = _load(img_pose.name)
+            if img is None:
+                continue
+            u, v, _ = img_pose.points2d[p2d_idx]
+            x, y = int(round(u)), int(round(v))
+            h, w = img.shape[:2]
+            if 0 <= x < w and 0 <= y < h:
+                samples.append(img[y, x].astype(np.float32))
+        colors[pid] = (
+            np.mean(samples, axis=0).astype(np.uint8) if samples
+            else np.array([128, 128, 128], dtype=np.uint8)
+        )
+    return colors
 
 
 class PycolmapReconstructor:

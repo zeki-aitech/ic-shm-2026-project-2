@@ -92,12 +92,12 @@ its own, so it trains on both the 240 train and 30 internal-val images (270 tota
 2. **Initialize** Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse cloud
    (`src/colmap_io/reconstructor.py`), and semantic logits from `SemanticProjector`'s per-point
    voted class (`src/colmap_io/semantic_voting.py`, train-views only).
-3. **Train** (`train.py`) on the 240 GT-mask + 100 pseudo-mask = 340 views with photometric
+3. **Train** (`train.py`) on the 270 GT-mask + 100 pseudo-mask = 370 views with photometric
    (L1 + D-SSIM) + semantic cross-entropy loss, using `gsplat.strategy.DefaultStrategy` for
    gradient-driven densification/pruning.
 4. **Render** (`render.py`) an RGB image + semantic map (official class IDs) from any camera
    pose — this is the literal contest submission artifact.
-5. **Evaluate** (`src/evaluation/render_metrics.py`) on the 60 never-trained holdout views:
+5. **Evaluate** (`src/evaluation/render_metrics.py`) on the 30 never-trained holdout views:
    PSNR/SSIM/LPIPS (visual fidelity) + mIoU (semantic accuracy).
 
 ---
@@ -140,7 +140,7 @@ uv run python -m src.gaussian_splatting.render \
     --pose-line "$(sed -n '5p' 'data/Contest Dataset/camera_parameters/images.txt')" \
     --out-rgb rgb.png --out-sem sem.png
 
-# 5. Evaluate on the 60 held-out (never trained on) views
+# 5. Evaluate on the 30 held-out (never trained on) test views
 uv run python -m src.evaluation.render_metrics \
     --checkpoint outputs/checkpoints/gaussians/final.pt \
     --output outputs/eval/render_eval_report.md
@@ -150,16 +150,16 @@ uv run python -m src.evaluation.render_metrics \
 
 ## 📊 6. Results (RTX 3080, 10GB)
 
-Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 600,404 Gaussians.
+Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 604,152 Gaussians.
 Evaluated on the 30-image test split, never used in training or in Task A's own validation:
 
 | Metric | Value |
 | :--- | :---: |
 | Task A val 2D mIoU (30-image internal validation split) | 81.67% |
-| PSNR | 21.83 dB |
-| SSIM | 0.843 |
-| LPIPS | 0.349 |
-| **Semantic mIoU (structural, 4 classes)** | **88.97%** |
-| Accuracy Score (illustrative) | 0.798 |
+| PSNR | 22.13 dB |
+| SSIM | 0.853 |
+| LPIPS | 0.321 |
+| **Semantic mIoU (structural, 4 classes)** | **91.04%** |
+| Accuracy Score (illustrative) | 0.816 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.
