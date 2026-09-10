@@ -499,15 +499,15 @@ Tables 2-4.
 | (background, reported for completeness, excluded from structural mIoU) | 98.64% |
 | **Structural mIoU (4 classes)** | **81.67%** |
 
-We report our final model's performance on the 30-view held-out test split defined in Section
-3.6 — views that contribute to neither Task A fine-tuning or internal validation, nor Task B's
-semantic warm-start, nor its photometric/semantic training loss. Table 2 summarizes the four
-metrics from Section 4.3 together with the illustrative Accuracy Score; Table 3 breaks semantic
-accuracy down by class. All numbers are produced by rendering each holdout pose through the same
-arbitrary-viewpoint entry point described in Section 3.5 — the literal function the contest
-evaluates a submission against.
+We report Task B's performance — the pipeline's final, scored model — on the 30-view held-out
+test split defined in Section 3.6 — views that contribute to neither Task A fine-tuning or
+internal validation, nor Task B's semantic warm-start, nor its photometric/semantic training
+loss. Table 2 summarizes the four metrics from Section 4.3 together with the illustrative
+Accuracy Score; Table 3 breaks semantic accuracy down by class. All numbers are produced by
+rendering each holdout pose through the same arbitrary-viewpoint entry point described in
+Section 3.5 — the literal function the contest evaluates a submission against.
 
-**Table 2: Overall holdout performance.**
+**Table 2: Task B (semantic Gaussian Splatting) overall holdout performance.**
 
 | Metric | Value |
 | :--- | :---: |
@@ -517,7 +517,7 @@ evaluates a submission against.
 | Structural mIoU (4 classes) | **91.04%** |
 | Illustrative Accuracy Score | 0.816 |
 
-**Table 3: Per-class IoU.**
+**Table 3: Task B per-class IoU**, on the same 30-image test holdout as Table 2.
 
 | Class | IoU |
 | :--- | :---: |
