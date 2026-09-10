@@ -24,6 +24,18 @@ it once the paper is finalized and submitted — it is not part of the paper its
     misalignment fixed below, and the old 240/60 split rather than the current 240/30/30. Low
     priority (it's a secondary ablation, not the headline numbers) but should eventually be
     redone for full consistency.
+- [ ] **Future idea (optional, not required by anything in the paper as currently written):**
+  ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
+  lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
+  formula on record). Came up when the user asked "why 2 and not 1.5/2.5/3" - answered informally
+  in conversation (softmax(±m) gives P(voted class) = 65%/83%/93%/97%/99% for m=1/1.5/2/2.5/3,
+  with gradient scale `P(1-P)` shrinking fast past m~2.5-3, so there's a broad, not sharply
+  peaked, "reasonable zone" rather than one optimal value) but never verified empirically. If
+  ever worth doing: train a few short (few-thousand-iteration) runs at m in {1, 2, 4} and compare
+  either final mIoU or, more informatively, how much each is displaced from its own initial
+  per-Gaussian class vote after training - would also double as indirect evidence for the
+  "informed prior, not unbreakable label" claim Section 3.4 already makes about this design.
+  Not blocking anything; only do this if there's spare time/compute and the user asks for it.
 - [ ] Confirm exact page/formatting requirements once the official template is downloaded from
   the IC-SHM website and available locally.
 - [ ] Reformat citations into the official template's required style once available
