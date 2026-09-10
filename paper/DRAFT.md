@@ -697,9 +697,6 @@ identification to quantitative structural response over a bridge's full inspecti
 
 ## References
 
-In-text citations use numbered brackets (e.g. `[1]`), numbered in order of first appearance in
-the text, matching this list's order.
-
 1. Zhang, C., Zou, Y., Wang, F., del Rey Castillo, E., Dimyadi, J., & Chen, L. (2022) — Towards
    fully automated unmanned aerial vehicle-enabled bridge inspection: Where are we at?
    Construction and Building Materials, 347, 128543.
