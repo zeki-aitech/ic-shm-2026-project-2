@@ -48,6 +48,17 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Refreshed Figure 6 (splat viewer render, Section 5.3, optional) for the fix #4 (color
+  init) retrain.** The PLYs and composed figure on disk were all from before the fix #4 retrain
+  (dated 04-09 Sep, checkpoint completed 10 Sep 17:49-17:53) - re-exported both
+  `export_splat_ply`/`export_semantic_splat_ply` via `src/gaussian_splatting/export_ply.py` from
+  the current canonical checkpoint (`outputs/checkpoints/gaussians/final.pt`,
+  `bridge_splat_real_color_{rgb,semantic}.ply`), user captured true-color and semantic
+  screenshots in SuperSplat, composed via `src/evaluation/compose_splat_screenshots.py` into
+  `fig6_splat_render.png`. Deleted 9 stale `.ply` exports from `outputs/renders/` (~270MB,
+  gitignored local artifacts, all reproducible from preserved checkpoints if ever needed again)
+  and replaced the old `bridge_splat_{rgb,semantic}_v2.png` source screenshots in git with the
+  new `bridge_splat_real_color_{rgb,semantic}.png` pair.
 - [x] **Added a dedicated Task A (SegFormer) results table**, at the user's request after a
   back-and-forth about which "mIoU" Table 2 (formerly Table 1) actually reports. Section 5.1 was
   previously silent on Task A's own validation performance except for one number folded into
