@@ -140,3 +140,27 @@ def trajectory_interleaved_split(
     holdout_set = set(holdout_ids)
     train_ids = [i for i in sorted_ids if i not in holdout_set]
     return train_ids, holdout_ids
+
+
+def train_val_test_split(
+    sorted_ids: List,
+    val_ratio: float = 0.10,
+    test_ratio: float = 0.10,
+) -> Tuple[List, List, List]:
+    """
+    Three-way trajectory-interleaved split (80/10/10 by default): `test_ids` is held out first,
+    by strided sampling over the full `sorted_ids` (same mechanism/rationale as
+    `trajectory_interleaved_split`); `val_ids` is then held out the same way from whatever
+    remains, leaving `train_ids`.
+
+    This is the single source of truth for keeping `test_ids` - the final, never-touched
+    evaluation set shared by Task B training and `render_metrics.py` - identical to the set
+    Task A's own training (`src/segmentation/train.py`) excludes even from its per-epoch
+    validation/checkpoint-selection step. `val_ids` exists only for that Task A model-selection
+    step; nothing downstream of Task A treats it as held out (Task B is free to train on it as
+    a real, GT-labeled view, since Task B never does its own holdout-based checkpoint selection).
+    """
+    train_and_val_ids, test_ids = trajectory_interleaved_split(sorted_ids, test_ratio)
+    inner_val_ratio = val_ratio / (1.0 - test_ratio)
+    train_ids, val_ids = trajectory_interleaved_split(train_and_val_ids, inner_val_ratio)
+    return train_ids, val_ids, test_ids

@@ -17,10 +17,11 @@ semantic logit vector, rendered jointly with color through a single fused raster
 that the two outputs are pixel-aligned by construction. A 2D segmentation model pseudo-labels
 unlabeled frames to widen semantic supervision to every available image, and the Gaussian model
 is warm-started from a multi-view, plurality-voted sparse point cloud rather than random
-initialization. On a 60-view held-out split drawn from the same UAV flight trajectory but
-excluded from every stage of training, our method achieves PSNR 21.86 dB, SSIM 0.846, LPIPS
-0.340, and structural mIoU 89.81% across the four bridge component classes (deck, stay cable,
-tower, foundation), for an illustrative Accuracy Score of 0.804. Beyond the
+initialization. On a 30-view held-out test split drawn from the same UAV flight trajectory but
+excluded from every stage of training - including the internal validation step that selects the
+2D segmentation model's checkpoint - our method achieves PSNR 21.83 dB, SSIM 0.843, LPIPS
+0.349, and structural mIoU 88.97% across the four bridge component classes (deck, stay cable,
+tower, foundation), for an illustrative Accuracy Score of 0.798. Beyond the
 contest's scoring criteria, the resulting model functions as a queryable digital twin of the
 bridge, rendering both appearance and structural identity from viewpoints never captured during
 data acquisition — a basis for downstream structural health monitoring tasks that must be scoped
@@ -75,13 +76,13 @@ We address these challenges with a semantic 3D Gaussian Splatting pipeline whose
 2. A semantic warm-start strategy that initializes each Gaussian's class logits from multi-view
    plurality-voted labels on a triangulated sparse point cloud instead of random initialization.
 3. A 2D pseudo-labeling stage (fine-tuned SegFormer) that extends semantic supervision to the
-   100 unlabeled frames, increasing the effective training-view count from 240 to 340 at no
+   100 unlabeled frames, increasing the effective training-view count from 270 to 370 at no
    additional annotation cost.
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
    (Section 5.5).
-5. End-to-end results on the contest's trajectory-interleaved 60-view holdout: PSNR 21.86 dB,
-   SSIM 0.846, LPIPS 0.340, and structural mIoU 89.81%.
+5. End-to-end results on the contest's trajectory-interleaved 30-view test holdout: PSNR 21.83 dB,
+   SSIM 0.843, LPIPS 0.349, and structural mIoU 88.97%.
 
 Our full implementation, including the scripts used to reproduce every number reported in this
 paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
@@ -182,7 +183,7 @@ function that answers the contest's core requirement: given any camera pose, pro
 photorealistic RGB image and a per-pixel structural-class map. Posed UAV images feed two parallel
 branches — sparse triangulation and multi-view semantic voting produce a semantic warm-start for
 the Gaussians, while Task A's fine-tuned SegFormer pseudo-labels the 100 unlabeled images to
-widen Task B's supervision to 340 views — before Task B trains the semantically-augmented
+widen Task B's supervision to 370 views — before Task B trains the semantically-augmented
 Gaussians with fused single-pass RGB+semantic rasterization and exposes a single `render(pose)`
 entry point producing both an RGB image and a semantic map for any camera viewpoint. The rest of
 this section formalizes the task, then describes each stage in turn.
@@ -225,20 +226,30 @@ interquartile range of each point's distance to the cloud centroid) removes resi
 leaving 84,613 triangulated points. Because the shared camera carries non-negligible radial
 distortion ($k_1 \approx 0.009$), and Gaussian rasterization assumes an ideal pinhole projection,
 we undistort all 400 images once, up front, to a consistent pinhole convention; every subsequent
-training, evaluation, and rendering step operates in this undistorted space.
+training, evaluation, and rendering step operates in this undistorted space. The semantic
+masks (both real and pseudo-labeled) are rasterized/predicted on the *original* distorted photos
+(Sections 3.3-3.4), so we undistort each with the identical per-pixel remap - nearest-neighbor,
+so class ids stay discrete - before pairing it with an undistorted image; without this, a mask
+would be systematically offset from the pixel it is meant to label by several pixels at frame
+edges.
 
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
 Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
 unlabeled. To make use of them, we fine-tune a SegFormer [14] semantic segmentation model (MiT-B0
-backbone) on the 240 labeled training images obtained from our trajectory-interleaved split
-(Section 3.6), validating 2D mIoU on the 60-image holdout after every epoch and retaining the
-checkpoint with the best validation score. The fine-tuned model is then applied to the 100
-unlabeled images to produce pseudo-masks, which widen the pool of semantically-supervised
-training viewpoints available to Task B from 240 to 340 — a 42% increase in viewpoint coverage
-for the semantic loss described in Section 3.4, at no additional annotation cost. The 60
-held-out images are never touched by this stage, whether as training data or as prediction
-targets: they are reserved exclusively for the final evaluation in Section 5.
+backbone) on the 240-image labeled training split (Section 3.6), validating 2D mIoU each epoch on
+a separate 30-image *internal* validation split and retaining the checkpoint with the best score
+there. This internal validation split exists specifically so Task A's own checkpoint selection
+never touches the 30-image test split reserved for Section 5's final evaluation - validating
+against the same images used for final evaluation would let that evaluation set influence which
+checkpoint gets chosen, undermining its role as a genuinely held-out test. The fine-tuned model is
+then applied to the 100 unlabeled images to produce pseudo-masks, which widen the pool of
+semantically-supervised training viewpoints available to Task B from 270 (240 train + 30 internal
+val - Task B has no checkpoint-selection step of its own, so it trains on both) to 370 - a 37%
+increase in viewpoint coverage for the semantic loss described in Section 3.4, at no additional
+annotation cost. The 30 test images are never touched by this stage, whether as training data,
+internal validation data, or prediction targets: they are reserved exclusively for the final
+evaluation in Section 5.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
@@ -318,7 +329,7 @@ training. Gaussians whose positional gradients are large — an indication that 
 is being stretched to cover detail it cannot adequately represent — are split or duplicated,
 while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [16] built-in
 density-control strategy. This process grows the representation from the 84,613-point sparse
-initialization to 603,757 Gaussians by the end of training, allowing the model to allocate
+initialization to 600,404 Gaussians by the end of training, allowing the model to allocate
 additional capacity to structurally intricate regions, such as individual cable strands, that
 the initial sparse cloud under-represents.
 
@@ -335,16 +346,20 @@ test poses, and we use the same function throughout this paper to render the res
 ### 3.6 Evaluation Protocol
 
 We adopt a held-out evaluation protocol that mirrors the contest's own blind-test philosophy as
-closely as possible without access to the organizers' actual test poses. Sixty of the 300
-labeled images — every fifth frame along the UAV's flight trajectory — are withheld from every
-stage of the pipeline: they contribute to neither Task A's fine-tuning nor validation-only use,
-nor Task B's semantic warm-start voting, nor its photometric/semantic training loss. We choose
+closely as possible without access to the organizers' actual test poses. Thirty of the 300
+labeled images — every tenth frame along the UAV's flight trajectory - are withheld as a test
+split from every stage of the pipeline: they contribute to neither Task A's fine-tuning nor its
+internal validation, nor Task B's semantic warm-start voting, nor its photometric/semantic
+training loss. A further 30 images (every ninth of the remaining 270, by the same
+trajectory-interleaved strided mechanism) form a separate internal validation split used only by
+Task A's own checkpoint selection (Section 3.3); Task B treats these as ordinary labeled training
+views, since it has no checkpoint-selection step of its own to protect from leakage. We choose
 this trajectory-interleaved, strided split over a random split because consecutive UAV frames
 overlap by more than 99% visually; a random split would risk placing near-duplicate frames on
-both sides of the train/holdout boundary, artificially inflating the measured score by rewarding
+both sides of the train/test boundary, artificially inflating the measured score by rewarding
 memorization of nearly identical training views rather than genuine novel-view generalization.
-For each of the 60 held-out views, we render RGB and semantic outputs from the trained model and
-compare them against the real photograph and ground-truth mask using the metrics described in
+For each of the 30 held-out test views, we render RGB and semantic outputs from the trained model
+and compare them against the real photograph and ground-truth mask using the metrics described in
 Section 4.3.
 
 ---
@@ -361,18 +376,19 @@ are used only through Task A's pseudo-labeling (Section 3.3). Annotations were p
 Labelme and rasterized to per-pixel class masks; because the `stay_cable` polygons are thin and
 frequently nested inside or adjacent to broader `deck` and `tower` regions, they are rasterized
 last so that a cable's mask pixels are never silently overwritten by a coarser structural class
-drawn on top of it. All 400 images share the same 240/60 trajectory-interleaved split defined in
-Section 3.6 — the 60 held-out images are identical across Task A validation, Task B training, and
-final evaluation, so that no stage of the pipeline ever trains on a view another stage reports
-results on.
+drawn on top of it. All 400 images share the same 240/30/30 (train/internal-val/test)
+trajectory-interleaved split defined in Section 3.6 - the 30 test images are identical across
+Task A, Task B training, and final evaluation, so that no stage of the pipeline ever trains, or
+selects a checkpoint, on a view another stage reports results on.
 
 ### 4.2 Implementation Details
 
 All experiments run on a single NVIDIA RTX 3080 (10 GB). Task A fine-tunes SegFormer (MiT-B0
 backbone) for 80 epochs with AdamW (learning rate $6\times10^{-5}$, weight decay
 $1\times10^{-4}$, cosine-annealed over training), batch size 8, at a downsampled resolution of
-$512\times384$; the checkpoint with the highest validation mIoU on the 60-image holdout is kept
-for pseudo-labeling. Task B optimizes each Gaussian parameter group with its own Adam optimizer
+$512\times384$; the checkpoint with the highest validation mIoU on the 30-image internal
+validation split (Section 3.3) is kept for pseudo-labeling. Task B optimizes each Gaussian
+parameter group with its own Adam optimizer
 and learning rate — means $1.6\times10^{-4}$ (exponentially decayed to 1% of its initial value
 over training), scales $5\times10^{-3}$, rotation quaternions $1\times10^{-3}$, opacities
 $5\times10^{-2}$, and both color and semantic logits $2.5\times10^{-3}$ — for 40,000 iterations
@@ -425,7 +441,7 @@ $$\text{IoU}_c = \frac{TP_c}{TP_c + FP_c + FN_c}, \qquad
 \mathcal{C} = \{\text{deck}, \text{stay\_cable}, \text{tower}, \text{foundation}\},$$
 where $TP_c$, $FP_c$, and $FN_c$ are the true-positive, false-positive, and false-negative pixel
 counts for class $c$, obtained from a standard confusion matrix between the rendered semantic
-map's per-pixel argmax class and the ground-truth mask over the same 60 holdout views. Background
+map's per-pixel argmax class and the ground-truth mask over the same 30 holdout test views. Background
 is excluded from the mean because it occupies the large majority of most frames and, being the
 least structurally informative class, would otherwise dominate the average and mask errors on the
 four classes the contest actually cares about. Because the
@@ -441,67 +457,70 @@ combination explicit here rather than presenting it as an authoritative formula.
 
 ### 5.1 Main Results
 
-We report our final model's performance on the 60-view held-out split defined in Section 3.6 —
-views that contribute to neither Task A fine-tuning, Task B's semantic warm-start, nor its
-photometric/semantic training loss. Table 1 summarizes the four metrics from Section 4.3 together
-with the illustrative Accuracy Score; Table 2 breaks semantic accuracy down by class. All numbers
-are produced by rendering each holdout pose through the same arbitrary-viewpoint entry point
-described in Section 3.5 — the literal function the contest evaluates a submission against.
+We report our final model's performance on the 30-view held-out test split defined in Section
+3.6 — views that contribute to neither Task A fine-tuning or internal validation, nor Task B's
+semantic warm-start, nor its photometric/semantic training loss. Table 1 summarizes the four
+metrics from Section 4.3 together with the illustrative Accuracy Score; Table 2 breaks semantic
+accuracy down by class. All numbers are produced by rendering each holdout pose through the same
+arbitrary-viewpoint entry point described in Section 3.5 — the literal function the contest
+evaluates a submission against.
 
 **Table 1: Overall holdout performance.**
 
 | Metric | Value |
 | :--- | :---: |
-| PSNR | 21.86 dB |
-| SSIM | 0.846 |
-| LPIPS | 0.340 |
-| Structural mIoU (4 classes) | **89.81%** |
-| Illustrative Accuracy Score | 0.804 |
+| PSNR | 21.83 dB |
+| SSIM | 0.843 |
+| LPIPS | 0.349 |
+| Structural mIoU (4 classes) | **88.97%** |
+| Illustrative Accuracy Score | 0.798 |
 
 **Table 2: Per-class IoU.**
 
 | Class | IoU |
 | :--- | :---: |
-| deck | 91.19% |
-| stay_cable | 91.33% |
-| tower | 89.53% |
-| foundation | 87.17% |
-| (background, reported for completeness, excluded from structural mIoU) | 98.93% |
+| deck | 92.31% |
+| stay_cable | 89.98% |
+| tower | 87.69% |
+| foundation | 85.92% |
+| (background, reported for completeness, excluded from structural mIoU) | 98.75% |
 
 Figure 3 visualizes this per-class breakdown, sorted by class and colored by the fixed per-class
 palette used consistently across every figure in this paper, with the overall structural mIoU
 marked for reference — making
-the counter-intuitive result discussed in Section 5.2, `stay_cable` outscoring every other
-structural class including `deck`, immediately visible without reading Table 2 closely.
+the counter-intuitive result discussed in Section 5.2, `stay_cable` outscoring both `tower` and
+`foundation`, immediately visible without reading Table 2 closely.
 
-![Figure 3: Per-class IoU on the 60-view holdout](figures/fig3_per_class_iou.png)
+![Figure 3: Per-class IoU on the 30-view holdout](figures/fig3_per_class_iou.png)
 
-**Figure 3.** Per-class IoU on the 60-view holdout, sorted by class and colored by the same
+**Figure 3.** Per-class IoU on the 30-view holdout, sorted by class and colored by the same
 per-class palette used consistently across every figure in this paper, with the overall
-structural mIoU (89.81%) marked for reference.
+structural mIoU (88.97%) marked for reference.
 
-As Figure 3 shows, the four structural classes all clear 87% IoU despite substantial differences
+As Figure 3 shows, the four structural classes all clear 85% IoU despite substantial differences
 in physical scale, surface texture, and viewpoint coverage, and background — by far the easiest
-class, since it occupies most of every frame's pixels — reaches 98.93%, confirming the model is
+class, since it occupies most of every frame's pixels — reaches 98.75%, confirming the model is
 not achieving a high structural mIoU merely by defaulting to the dominant class. The ranking
 among the four structural classes, and in particular why the thin, sparsely-sampled `stay_cable`
-class outscores every other structural class, including the large, simple `deck` surface, is
-discussed next.
+class outscores the geometrically simpler `tower` and `foundation`, is discussed next.
 
 ### 5.2 Discussion — Per-Class Behavior
 
-`stay_cable` achieves the highest structural IoU of all four classes (91.33%), narrowly ahead of
-`deck` (91.19%). In the broader bridge-segmentation literature, thin cable-like structures are
-consistently reported as the hardest class: a cable spans only a handful of pixels per view, and,
-as Section 3.4 describes, the `stay_cable` class itself is annotated as a coarse region enclosing
-sky or water background rather than tracing individual strands. Under this framing, one would
-expect `stay_cable` to trail behind the other three structural classes, not lead them. Our
-results show the opposite: cable outperforms `deck` (91.19%), `tower` (89.53%), and `foundation`
-(87.17%) alike, despite `deck` being the large, well-textured, planar surface one would ordinarily
-expect to be easiest.
+The `deck` class achieves the highest structural IoU (92.31%), which is expected: it is a
+large, well-textured, planar surface observed from a wide range of overlapping viewpoints
+throughout the flight, giving both the photometric and semantic losses abundant, consistent
+supervision to converge on.
+
+`stay_cable` is the more interesting case. In the broader bridge-segmentation literature, thin
+cable-like structures are consistently reported as the hardest class: a cable spans only a
+handful of pixels per view, and, as Section 3.4 describes, the `stay_cable` class itself is
+annotated as a coarse region enclosing sky or water background rather than tracing individual
+strands. Under this framing, one would expect `stay_cable` to trail behind the other three
+structural classes. Our results show the opposite: at 89.98% IoU, cable outperforms both `tower`
+(87.69%) and `foundation` (85.92%), second only to `deck`.
 
 This is not evidence that training corrects the annotation toward truer cable geometry - Figure
-4's rendered semantic maps (Section 5.3) show the opposite. On views 005, 250, and 300, the
+4's rendered semantic maps (Section 5.3) show the opposite. On views 010, 250, and 300, the
 rendered cable region closely reproduces the same broad, coarsely-annotated shape as the
 ground-truth mask itself, not a thinner region tracing the actual cable strands. The more
 accurate explanation is that the annotated region, while not tracing individual strands, is
@@ -533,21 +552,22 @@ The metrics in Section 5.1 summarize error over the full holdout set as a single
 metric, but do not show where the model succeeds or fails, or what a rendered view actually looks
 like. We complement them with three qualitative figures.
 
-Figure 4 shows four held-out views (005, 050, 250, 300), each as rendered RGB, the real
-photograph, the rendered semantic map, and the ground-truth mask. Views 005 and 250 are
-representative strong cases; 050 is a wide, low-grazing-angle view with visible RGB noise in the
-foreground deck region; 300 is the weakest RGB reconstruction in this set, with visible color
-fringing and rainbow-like artifacts around the tower and cable structure. Notably, the semantic
-map for 300 remains close to the ground
-truth despite the degraded RGB quality in the same view. A plausible explanation is that
-per-pixel classification is a coarser, lower-precision target than exact color reconstruction —
-an appearance error large enough to visibly corrupt RGB may still leave the arg-max class
-unchanged — but we present this as an illustrative observation from this set of views rather than
-a claim established over the full holdout.
+Figure 4 shows four held-out views (010, 050, 250, 300), each as rendered RGB, the real
+photograph, the rendered semantic map, and the ground-truth mask. 050 is the cleanest RGB
+reconstruction of the four, a wide, low-grazing-angle view; 250 is close behind, with only a
+faint streaking artifact visible over the river. 010 and 300 both show visible RGB degradation -
+soft directional blur across the background for 010, and more pronounced color fringing and
+rainbow-like artifacts around the tower and cable structure for 300, the weakest RGB
+reconstruction in this set. Notably, the rendered semantic map stays close to the ground truth in
+all four views, including 010 and 300, despite their degraded RGB quality. A plausible
+explanation is that per-pixel classification is a coarser, lower-precision target than exact
+color reconstruction — an appearance error large enough to visibly corrupt RGB may still leave
+the arg-max class unchanged — but we present this as an illustrative observation from this set of
+views rather than a claim established over the full holdout.
 
 ![Figure 4: RGB and semantic renders vs. ground truth on held-out views](figures/fig4_qualitative_grid.png)
 
-**Figure 4.** RGB and semantic renders vs. ground truth on four held-out views (005, 050, 250,
+**Figure 4.** RGB and semantic renders vs. ground truth on four held-out views (010, 050, 250,
 300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
 the same per-class palette used throughout this paper.
 
@@ -597,15 +617,16 @@ possibly fragile checkpoint. We check this directly against the real training lo
 tasks, plotted in Figures 7 and 8.
 
 Figure 7 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
-curves plateau well before epoch 80 (final validation mIoU 81.27%), indicating the fine-tuned
-model has converged rather than still improving or overfitting when its pseudo-labels are handed
-to Task B.
+curves plateau well before epoch 80 (best validation mIoU 81.67%, reached at epoch 69 and kept as
+the checkpoint used for pseudo-labeling), indicating the fine-tuned model has converged rather
+than still improving or overfitting when its pseudo-labels are handed to Task B.
 
 ![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
 
 **Figure 7.** Task A (SegFormer) training convergence: training loss (red, left axis) and
-validation mIoU on the 60-image holdout (blue, right axis) over 80 epochs on the 240-image
-labeled training split.
+validation mIoU on the 30-image internal validation split (blue, right axis, Section 3.3 - not
+the final 30-image test holdout Section 5.1 reports on) over 80 epochs on the 240-image labeled
+training split.
 
 Figure 8 plots the corresponding curve for Task B (light gray: raw per-step loss; green: a
 15-step trailing moving average). Unlike Task A's per-epoch average, each step's raw loss is
@@ -664,8 +685,8 @@ structural-class map from any camera viewpoint, using a fused single-pass raster
 which the two outputs are pixel-aligned by construction rather than reconciled after the fact. A
 point-cloud-informed semantic warm-start from a simple multi-view plurality vote, together with a
 pseudo-labeling stage that extends supervision to every available image regardless of annotation
-status, let this representation reach 89.81% structural mIoU and an illustrative Accuracy Score
-of 0.804 on a held-out evaluation protocol built to mirror the organizers' own blind-test
+status, let this representation reach 88.97% structural mIoU and an illustrative Accuracy Score
+of 0.798 on a held-out evaluation protocol built to mirror the organizers' own blind-test
 methodology as closely as possible.
 
 Beyond the contest's scoring criteria, a trained model of this kind functions as a queryable

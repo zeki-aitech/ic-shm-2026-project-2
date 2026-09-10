@@ -29,6 +29,7 @@ def plot_per_class_iou(
     iou_per_class: Dict[int, float],
     output_path: str,
     structural_miou: Optional[float] = None,
+    n_holdout_views: int = 30,
 ) -> str:
     """
     `iou_per_class`: class_id -> IoU in [0, 1] (as returned by `compute_iou_per_class`).
@@ -46,23 +47,28 @@ def plot_per_class_iou(
     fig, ax = plt.subplots(figsize=(6, 4.2), dpi=200)
     bars = ax.bar(names, values, color=colors, edgecolor="black", linewidth=0.8, width=0.6, zorder=3)
 
+    miou_pct = structural_miou * 100.0
+
     for bar, val in zip(bars, values):
+        # Nudge a value label further above its bar when it would otherwise sit right on top
+        # of the mIoU dashed line (close enough in height that the bold label text and the line
+        # visually collide).
+        offset = 1.3 if abs(val - miou_pct) < 1.5 else 0.6
         ax.text(
-            bar.get_x() + bar.get_width() / 2, val + 0.6, f"{val:.2f}%",
-            ha="center", va="bottom", fontsize=10.5, fontweight="bold", color="black",
+            bar.get_x() + bar.get_width() / 2, val + offset, f"{val:.2f}%",
+            ha="center", va="bottom", fontsize=10.5, fontweight="bold", color="black", zorder=4,
         )
 
-    miou_pct = structural_miou * 100.0
     ax.axhline(miou_pct, color="black", linestyle="--", linewidth=1.0, zorder=2)
     ax.text(
         len(names) - 0.38, miou_pct + 0.6, f"structural mIoU = {miou_pct:.2f}%",
-        ha="right", va="bottom", fontsize=9, style="italic", color="dimgray",
+        ha="right", va="bottom", fontsize=9, style="italic", color="dimgray", zorder=4,
     )
 
     lo = max(0.0, min(values) - 10.0)
     ax.set_ylim(lo, 100)
     ax.set_ylabel("IoU (%)", fontsize=11)
-    ax.set_title("Per-Class IoU on the 60-View Holdout", fontsize=12, fontweight="bold", pad=12)
+    ax.set_title(f"Per-Class IoU on the {n_holdout_views}-View Holdout", fontsize=12, fontweight="bold", pad=12)
     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.6, zorder=0)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -93,7 +99,8 @@ def main():
     parser.add_argument("--unlabeled-dir", default=None)
     parser.add_argument("--gt-masks-dir", default=None)
     parser.add_argument("--undistorted-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10)
+    parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument(
         "--output",
         default=os.path.join(project_root, "paper", "figures", "fig3_per_class_iou.png"),
@@ -109,13 +116,14 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     _, _, _, _, _, holdout_cameras, _ = prepare_training_data(
-        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir, args.holdout_ratio
+        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir,
+        args.val_ratio, args.test_ratio,
     )
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model = SemanticGaussianModel.from_state_dict(ckpt["params"], device=device)
 
     report = evaluate_render_holdout(model, holdout_cameras, device=device)
-    out_path = plot_per_class_iou(report.iou_per_class, args.output)
+    out_path = plot_per_class_iou(report.iou_per_class, args.output, n_holdout_views=len(holdout_cameras))
     print(f"[plot_per_class_iou] wrote {out_path}")
 
 

@@ -1,15 +1,19 @@
 """
 Task B: train the Semantic 3D Gaussian Splatting model.
 
-Trains on the 240 trajectory-interleaved labeled images (GT masks) + the 100 unlabeled images
-(pseudo-masks from Task A, see `src/segmentation/infer.py`) = up to 340 views. The 60 held-out
-labeled images are never used here - reserved entirely for
+Trains on the 240 train + 30 internal-val trajectory-interleaved labeled images (GT masks, 270
+total - see `src.evaluation.metrics.train_val_test_split`) + the 100 unlabeled images
+(pseudo-masks from Task A, see `src/segmentation/infer.py`) = up to 370 views. The 30 held-out
+*test* labeled images are never used here - reserved entirely for
 `src/evaluation/render_metrics.py`'s final novel-view evaluation, mirroring the organizers'
-blind-test protocol.
+blind-test protocol. The 30 internal-val images are folded into Task B's own training pool: they
+only need to stay separate from Task A's own training so Task A's per-epoch checkpoint selection
+isn't validated on data it was trained on, which doesn't apply to Task B (it has no per-epoch
+holdout-based selection step of its own).
 
 Gaussian means/colors are warm-started from `PycolmapReconstructor`'s triangulated sparse cloud,
-and semantic logits from `SemanticProjector`'s per-point voted class (using ONLY the 240 train
-views' masks - the 60 holdout never influences even the initialization).
+and semantic logits from `SemanticProjector`'s per-point voted class (using ONLY the 270
+train+val views' masks - the 30 test images never influence even the initialization).
 """
 import argparse
 import glob
@@ -29,7 +33,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.colmap_io.reconstructor import PycolmapReconstructor
 from src.colmap_io.semantic_voting import SemanticProjector
-from src.evaluation.metrics import trajectory_interleaved_split
+from src.evaluation.metrics import train_val_test_split
 from src.gaussian_splatting.undistort import undistort_all
 from src.gaussian_splatting.dataset import build_camera_list, GSCamera
 from src.gaussian_splatting.model import SemanticGaussianModel, NUM_CLASSES
@@ -117,18 +121,30 @@ def prepare_training_data(
     gt_masks_dir: str,
     pseudo_masks_dir: Optional[str],
     undistorted_dir: str,
-    holdout_ratio: float = 0.2,
+    val_ratio: float = 0.10,
+    test_ratio: float = 0.10,
     strict_cable_majority: bool = False,
 ):
     """Loads camera/points/votes, builds the train (labeled+unlabeled) and holdout camera lists.
     Returns (camera_intrinsics, pts3d, point_classes, point_colors, train_cameras, holdout_cameras,
-    train_ids)."""
+    train_ids).
+
+    Uses the same `train_val_test_split` as Task A (`src/segmentation/train.py`), so `holdout_ids`
+    here is exactly Task A's `test_ids` - the one set nothing, anywhere in the pipeline, ever
+    validates or trains on. Task B itself has no per-epoch checkpoint-selection step, so unlike
+    Task A it has no reason to hold `val_ids` back too: they're real GT-labeled views, and Task B
+    folds them into its own training pool (`train_ids` below = Task A's `train_ids + val_ids`).
+    """
     camera, images, pts3d = PycolmapReconstructor(colmap_dir).load()
 
     labeled_ids = _load_labeled_ids(images_dir)
-    train_ids, holdout_ids = trajectory_interleaved_split(labeled_ids, holdout_ratio)
+    _train_ids, _val_ids, holdout_ids = train_val_test_split(labeled_ids, val_ratio, test_ratio)
+    train_ids = _train_ids + _val_ids
     holdout_set = set(holdout_ids)
-    print(f"[gaussian_splatting] labeled={len(labeled_ids)} train={len(train_ids)} holdout={len(holdout_ids)}")
+    print(
+        f"[gaussian_splatting] labeled={len(labeled_ids)} "
+        f"train={len(_train_ids)}+val={len(_val_ids)}={len(train_ids)} holdout={len(holdout_ids)}"
+    )
 
     if not os.path.isdir(undistorted_dir) or not os.listdir(undistorted_dir):
         print(f"[gaussian_splatting] undistorting images -> {undistorted_dir}")
@@ -197,7 +213,8 @@ def train(
     pseudo_masks_dir: Optional[str],
     undistorted_dir: str,
     output_dir: str,
-    holdout_ratio: float = 0.2,
+    val_ratio: float = 0.10,
+    test_ratio: float = 0.10,
     iters: int = 20000,
     downsample: float = 0.5,
     lambda_sem: float = 0.5,
@@ -218,8 +235,8 @@ def train(
     torch.manual_seed(seed)
 
     camera_intr, pts3d, point_classes, point_colors, train_cameras, holdout_cameras, train_ids = prepare_training_data(
-        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, holdout_ratio,
-        strict_cable_majority=strict_cable_majority,
+        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir,
+        val_ratio, test_ratio, strict_cable_majority=strict_cable_majority,
     )
     print(f"[gaussian_splatting] train views={len(train_cameras)} holdout views={len(holdout_cameras)}")
 
@@ -338,7 +355,13 @@ def main():
     parser.add_argument("--pseudo-masks-dir", default=None)
     parser.add_argument("--undistorted-dir", default=None)
     parser.add_argument("--output-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10,
+                         help="Fraction reserved for Task A's internal validation split - folded "
+                              "into Task B's own training pool, since only Task A does "
+                              "holdout-based checkpoint selection")
+    parser.add_argument("--test-ratio", type=float, default=0.10,
+                         help="Fraction reserved as the final, never-touched evaluation holdout "
+                              "(same set Task A's own training excludes from validation too)")
     parser.add_argument("--iters", type=int, default=20000)
     parser.add_argument("--downsample", type=float, default=0.5)
     parser.add_argument("--lambda-sem", type=float, default=0.5)
@@ -369,7 +392,7 @@ def main():
 
     train(
         colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, pseudo_masks_dir, undistorted_dir, output_dir,
-        holdout_ratio=args.holdout_ratio, iters=args.iters, downsample=args.downsample, lambda_sem=args.lambda_sem,
+        val_ratio=args.val_ratio, test_ratio=args.test_ratio, iters=args.iters, downsample=args.downsample, lambda_sem=args.lambda_sem,
         optimize_poses=args.optimize_poses, pose_lr=args.pose_lr,
         strict_cable_majority=args.strict_cable_majority,
         warm_start_semantics=not args.no_semantic_warmstart,

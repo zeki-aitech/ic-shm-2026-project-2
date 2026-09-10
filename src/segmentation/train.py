@@ -1,12 +1,16 @@
 """
 Task A: fine-tune SegFormer (mit-b0 backbone) for 2D bridge semantic segmentation.
 
-Trains on the trajectory-interleaved 240-image train split (see
-`src.evaluation.metrics.trajectory_interleaved_split`), validates 2D mIoU each epoch on the
-60-image holdout split (reusing `src.evaluation.metrics`'s confusion-matrix / mIoU functions),
-and saves the best checkpoint by validation mIoU. The 60 holdout images are never trained on -
-they are reserved for the final render-based evaluation of Task B (see
-`src/evaluation/render_metrics.py`).
+Trains on the trajectory-interleaved 240-image train split, validates 2D mIoU each epoch on a
+separate 30-image *internal* validation split (reusing `src.evaluation.metrics`'s
+confusion-matrix / mIoU functions) to select the best checkpoint, and never touches the 30-image
+test split at all - not even for validation, unlike an earlier version of this pipeline, which
+picked its checkpoint by validating on the same set later used as the final render-based
+evaluation holdout (see `src/evaluation/render_metrics.py`), an information leak a
+model-selection step must not have. `src.evaluation.metrics.train_val_test_split` is the single
+source of truth for keeping this test split identical to the one Task B and `render_metrics.py`
+use - Task B trains on both the 240 train and 30 internal-val images, since only Task A's own
+checkpoint selection needs val kept separate.
 """
 import argparse
 import os
@@ -26,15 +30,17 @@ from src.evaluation.metrics import (
     compute_confusion_matrix,
     compute_iou_per_class,
     compute_miou,
-    trajectory_interleaved_split,
+    train_val_test_split,
 )
 
 NUM_CLASSES = 5
 
 
-def get_split(labeled_ids: List[str], holdout_ratio: float = 0.2) -> Tuple[List[str], List[str]]:
-    """Trajectory-interleaved 240/60 split over sorted labeled image ids."""
-    return trajectory_interleaved_split(sorted(labeled_ids), holdout_ratio)
+def get_split(
+    labeled_ids: List[str], val_ratio: float = 0.10, test_ratio: float = 0.10
+) -> Tuple[List[str], List[str], List[str]]:
+    """Trajectory-interleaved 240/30/30 (train/val/test) split over sorted labeled image ids."""
+    return train_val_test_split(sorted(labeled_ids), val_ratio, test_ratio)
 
 
 @torch.no_grad()
@@ -71,7 +77,8 @@ def train(
     images_dir: str,
     gt_masks_dir: str,
     output_dir: str,
-    holdout_ratio: float = 0.2,
+    val_ratio: float = 0.10,
+    test_ratio: float = 0.10,
     epochs: int = 80,
     batch_size: int = 8,
     lr: float = 6e-5,
@@ -83,8 +90,11 @@ def train(
     os.makedirs(output_dir, exist_ok=True)
 
     labeled_ids = list_labeled_image_ids(images_dir)
-    train_ids, val_ids = get_split(labeled_ids, holdout_ratio)
-    print(f"[segmentation] {len(labeled_ids)} labeled images -> train={len(train_ids)} val={len(val_ids)}")
+    train_ids, val_ids, test_ids = get_split(labeled_ids, val_ratio, test_ratio)
+    print(
+        f"[segmentation] {len(labeled_ids)} labeled images -> "
+        f"train={len(train_ids)} val={len(val_ids)} test={len(test_ids)} (test never touched here)"
+    )
 
     train_ds = BridgeSegDataset(images_dir, gt_masks_dir, train_ids, image_size=image_size, augment=True)
     val_ds = BridgeSegDataset(images_dir, gt_masks_dir, val_ids, image_size=image_size, augment=False)
@@ -144,7 +154,8 @@ def main():
     parser.add_argument("--images-dir", default=None)
     parser.add_argument("--gt-masks-dir", default=None)
     parser.add_argument("--output-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10)
+    parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=6e-5)
@@ -159,7 +170,8 @@ def main():
         images_dir,
         gt_masks_dir,
         output_dir,
-        holdout_ratio=args.holdout_ratio,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,

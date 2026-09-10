@@ -1,6 +1,6 @@
 """
-Standalone diagnostic (not currently cited by the paper): tracks structural mIoU on the 60-view
-holdout across training steps for two real checkpoints - a semantic-warm-start run and a
+Standalone diagnostic (not currently cited by the paper): tracks structural mIoU on the held-out
+test split across training steps for two real checkpoints - a semantic-warm-start run and a
 no-semantic-warmstart run - useful for checking whether a final-mIoU difference between two such
 runs (or the lack of one) holds throughout training or only appears once training has converged.
 
@@ -102,7 +102,8 @@ def main():
     parser.add_argument("--unlabeled-dir", default=None)
     parser.add_argument("--gt-masks-dir", default=None)
     parser.add_argument("--undistorted-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10)
+    parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument(
         "--output", default=os.path.join(project_root, "paper", "figures", "fig9_ablation_convergence.png")
     )
@@ -121,7 +122,8 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     _, _, _, _, _, holdout_cameras, _ = prepare_training_data(
-        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir, args.holdout_ratio
+        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir,
+        args.val_ratio, args.test_ratio,
     )
 
     checkpoint_dirs = {

@@ -11,10 +11,6 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 - [ ] External-review findings not yet acted on (see the "External review" Done entry below for
   the full list this was triaged from) - in the reviewer's own priority order:
-  - [ ] **#1 Holdout leakage**: SegFormer's checkpoint selection (`src/segmentation/train.py`)
-    validates on the same 60 images reserved as the final holdout, so it isn't a clean
-    independent test set - carve a separate internal validation split out of the 240 training
-    images for Task A model selection instead, keeping the 60 fully untouched.
   - [ ] **#3 Wrong bridge type/terminology**: this is a suspension bridge (parabolic main cable +
     vertical hangers, confirmed by inspecting `data/Contest Dataset/images/100.png`), not a
     cable-stayed bridge - the official brief itself uses "main cable" (p.9), not "stay cable".
@@ -29,17 +25,21 @@ it once the paper is finalized and submitted — it is not part of the paper its
     description (and drop the "unlike standard practice" framing around sparse-point init
     itself, since that part **is** standard 3DGS practice per Kerbl et al. 2023 - only the
     semantic-logit warm-start is this paper's own addition).
-  - [ ] **#6 Strided-split rationale is backwards**: `trajectory_interleaved_split` (every 5th
-    frame held out) guarantees a training frame immediately before and after every holdout
-    frame - the opposite of what Section 3.6's "avoids near-duplicate leakage" argument claims.
-    Reword, and/or add a contiguous-block or leave-block-out split as a stronger secondary
+  - [ ] **#6 Strided-split rationale is backwards**: `trajectory_interleaved_split` (every Nth
+    frame held out - every 10th for the test split and every 9th of the remainder for internal
+    val, since the #1 fix below) guarantees a training frame immediately before and after every
+    holdout frame - the opposite of what Section 3.6's "avoids near-duplicate leakage" argument
+    claims. Reword, and/or add a contiguous-block or leave-block-out split as a stronger secondary
     evaluation. The ">99% overlap between consecutive frames" claim also has no citation/measurement.
-  - [ ] **#7 Per-class explanation contradicts the data**: on the 60-holdout masks, `stay_cable`
-    is actually the *largest* structural class by pixel count (7.19%, vs. deck 5.01%) - not
-    "thin, sparsely-sampled" as Section 5.2 frames it (the coarse fan-shaped annotation is why).
-    `foundation` is not the class with fewest observations per Gaussian either (deck is lowest,
-    2.42 vs. foundation's 4.27) - Section 5.2's "fewer observing viewpoints" explanation for
-    foundation's weak IoU doesn't hold up and needs a different (or explicitly hedged) hypothesis.
+  - [ ] **#7 Per-class explanation contradicts the data**: the reviewer's original pixel-ratio/
+    observation-count numbers (7.19% `stay_cable` vs. 5.01% `deck`; 2.42 avg observations/Gaussian
+    for `deck` vs. 4.27 for `foundation`) were measured against the old 60-image test split -
+    re-measure against the current 30-image test split before citing exact figures in the paper,
+    but the underlying critique almost certainly still holds (the coarse fan-shaped annotation
+    convention that makes `stay_cable` pixel-heavy, and `deck`'s lower observation count despite
+    its high accuracy, are both properties of the annotation/geometry, not of which 10% vs. 20%
+    of frames happen to be held out). Section 5.2's "thin, sparsely-sampled" framing for cable and
+    "fewer observing viewpoints" explanation for foundation still need rewording/re-verifying.
   - [ ] **#8 Table 3 footnote is misleading**: both rows' logs show a real voted class
     distribution (semantic warm-start *was* active in both) - they differ in voting rule
     (old strict-cable-majority vs. the current plain-plurality default), not in whether
@@ -47,18 +47,19 @@ it once the paper is finalized and submitted — it is not part of the paper its
   - [ ] **#9 Metric presentation nits**: PSNR's MSE formula sums over `(h,w)` only, omitting the
     color-channel dimension (`skimage`'s actual computation is correct; only the LaTeX is
     imprecise); SSIM stated as strictly `[0,1]` when it can technically go negative; mIoU is
-    computed from one confusion matrix pooled over all 60 images (standard practice, e.g.
+    computed from one confusion matrix pooled over all 30 test images (standard practice, e.g.
     Cityscapes-style, but currently unstated - worth one clarifying sentence); the LPIPS
     "blurred cable strands" example is illustrative, not literally from Zhang et al. 2018 -
     fine as an example but could say so.
   - [ ] **#10 Convergence description inaccuracies**: `train.py` logs every 100 steps
-    (`log_every=100`), so Figure 9's "raw per-step loss" and "15-step moving average" are really
-    a 1-in-100 subsample and a ~1,500-iteration window respectively - reword. Task A's curve is
-    also not literally "monotonic" (21 of 79 epoch-to-epoch val-mIoU changes are decreases,
-    `outputs/logs/segmentation_train.log`) - soften to e.g. "smoother, less noisy." Densification
-    is a soft threshold (`if model.num_points < max_gaussians` checked once per step, so one
-    refine step can overshoot it - final count 603,757 vs. the "capped at 600,000" text), not a
-    hard cap.
+    (`log_every=100`), so Figure 8's "raw per-step loss" and "15-step moving average" are really
+    a 1-in-100 subsample and a ~1,500-iteration window respectively - reword. Task A's curve
+    should be re-checked for monotonicity against the new 80/10/10-split log
+    (`outputs/logs/segmentation_train_80_10_10.log`) before citing an exact decrease count, but
+    was already not literally monotonic under the old split (21 of 79 epoch-to-epoch val-mIoU
+    changes were decreases) - soften to e.g. "smoother, less noisy" regardless. Densification is
+    a soft threshold (`if model.num_points < max_gaussians` checked once per step, so one refine
+    step can overshoot it - final count 600,404 vs. the "capped at 600,000" text), not a hard cap.
   - [ ] **#11 Rhetoric overreach**: "arbitrary camera viewpoint" is only demonstrated via
     interpolation *within* the flown trajectory's envelope (Figure 6), with no ground truth to
     verify accuracy there - the brief itself only requires rendering at organizer-provided test
@@ -72,10 +73,11 @@ it once the paper is finalized and submitted — it is not part of the paper its
     ranging data imagery`, not `unmanned aerial vehicle LiDAR and imagery`); Semantic-NeRF [7]'s
     "was the first" claim isn't asserted by the cited paper itself - soften to "an early"/"a
     seminal approach."
-  - [ ] Table 3 (resolution ablation) still uses the pre-mask-fix checkpoints (`gaussians_v3a_fullres_noposeopt`,
-    `gaussians_halfres_40k`) - same mask/image coordinate misalignment as the bug fixed below,
-    just not yet retrained under the fix. Low priority (it's a secondary ablation, not the
-    headline numbers) but should eventually be redone for full consistency.
+  - [ ] Table 3 (resolution ablation) still uses the pre-mask-fix, pre-split-fix checkpoints
+    (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image coordinate
+    misalignment fixed below, and the old 240/60 split rather than the current 240/30/30. Low
+    priority (it's a secondary ablation, not the headline numbers) but should eventually be
+    redone for full consistency.
 - [ ] Confirm exact page/formatting requirements once the official template is downloaded from
   the IC-SHM website and available locally.
 - [ ] Reformat citations into the official template's required style once available
@@ -98,6 +100,56 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **External review fix #1 (holdout leakage) implemented and retrained.** SegFormer's
+  checkpoint selection (`src/segmentation/train.py`) was validating on the same 60 images later
+  reserved as the final render-based evaluation holdout - a model-selection step must not touch
+  its own eventual test set. Fixed by switching from a 240/60 (train/test) split to a proper
+  three-way 240/30/30 (train/internal-val/test) split, at the user's explicit choice of an 80/10/10
+  ratio (discussed and confirmed in conversation, weighing "matches existing 20% test-set
+  convention" against "less data for Task A" before landing on 10%/10%): added
+  `src.evaluation.metrics.train_val_test_split` (test held out first via the existing
+  `trajectory_interleaved_split`, then val held out from the remainder the same way - verified by
+  test to produce exactly the same `test_ids` a single direct `trajectory_interleaved_split` call
+  would) as the new single source of truth, alongside the original two-way split (kept for
+  anything that still legitimately wants it, e.g. `vote_consistency.py`'s standalone analysis).
+  `src/segmentation/train.py` now validates/selects its checkpoint on the 30-image internal-val
+  split only, never touching the 30-image test split; `src/gaussian_splatting/train.py`'s
+  `prepare_training_data` (shared by Task B training and `render_metrics.py`) folds train+val
+  (270 images) into Task B's own training pool, since Task B has no checkpoint-selection step to
+  protect - only `holdout_ids` (test, 30) stays untouched, identical to what Task A's own training
+  excludes from validation. All CLI entry points that used to take `--holdout-ratio` now take
+  `--val-ratio`/`--test-ratio` (both default 0.10): `segmentation/train.py`,
+  `gaussian_splatting/train.py`, `render_metrics.py`, `plot_per_class_iou.py`,
+  `plot_ablation_convergence.py`, `vote_consistency.py`. Added `TestTrainValTestSplit` (4 new
+  tests) to `tests/test_split_utils.py`.
+  - **Retrained the full pipeline once**: Task A (`outputs/checkpoints/segformer_mitb0_80_10_10/`,
+    best val mIoU 81.67% at epoch 69, vs. the old leaked 81.27%), pseudo-labels regenerated from
+    it (`outputs/pseudo_masks_80_10_10/`), then Task B (`outputs/checkpoints/gaussians_80_10_10/`,
+    600,404 Gaussians) - installed as canonical (old checkpoints preserved as
+    `*_stale_leaky_split_pre_20260910`).
+  - **Result on the new 30-image test set** (not directly comparable to the old 60-image numbers -
+    different, smaller test set, not just a different training procedure): PSNR 21.83 dB, SSIM
+    0.843, LPIPS 0.349, mIoU 88.97% (deck 92.31%, stay_cable 89.98%, tower 87.69%,
+    foundation 85.92%, background 98.75%), Accuracy Score 0.798. Per-class ranking reverted to
+    deck > cable > tower > foundation (matching the very first seed=42 numbers from earlier in
+    this session), unlike the intermediate mask-fix-only result where cable briefly edged out deck.
+  - **Updated throughout `DRAFT.md`**: Abstract, Introduction, Sections 3.2 (added the
+    mask-undistortion description that was missing even after the #2/mask fix below), 3.3 (full
+    rewrite - internal-val rationale), 3.6 (full rewrite - three-way split), 4.1, 4.2, 5.1, 5.2
+    (numbers + reverted ranking), 5.3 (view 005 replaced with 010, since 005 moved into the new
+    train split - and the descriptive text rewritten to match what's actually in the new render,
+    since 010 turned out to have more RGB blur than 005 did, not less), 5.4 (Task A best-epoch
+    note), Conclusion. Regenerated Figures 1, 3 (also fixed two real bugs in
+    `plot_per_class_iou.py` found while regenerating: a hardcoded "60-View" title, and a bar-label/
+    mIoU-dashed-line text collision when a class's IoU happens to land within ~1.5 points of the
+    mIoU line - both now parameterized/fixed generally, not just patched for this run's numbers),
+    4, 5, 7, 8. `README.md`'s pipeline description and results table updated too.
+  - This fix does not change the organizers' actual blind-test score (their test images are
+    disjoint from all of ours regardless of how we split internally) - discussed explicitly with
+    the user. Its value is making the paper's *self-reported* numbers an honest, leak-free
+    estimate of generalization, matching what the methodology section actually claims, rather
+    than a claim the organizers' own reproducibility check (brief: "the organizing committee will
+    further verify the reproducibility") could contradict.
 - [x] **External review triaged and fix #1 (of the review's numbering, "#2" - the mask/image
   coordinate misalignment) implemented and retrained.** An external methodology review of
   `DRAFT.md` (11 numbered issues + reference checks) was independently re-verified point by

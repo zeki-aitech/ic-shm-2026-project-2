@@ -183,7 +183,7 @@ def main():
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     parser = argparse.ArgumentParser(
-        description="Render-based evaluation on the 60 held-out (never-trained-on) views"
+        description="Render-based evaluation on the 30 held-out (never-trained-on) test views"
     )
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--colmap-dir", default=None)
@@ -191,7 +191,8 @@ def main():
     parser.add_argument("--unlabeled-dir", default=None)
     parser.add_argument("--gt-masks-dir", default=None)
     parser.add_argument("--undistorted-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10)
+    parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument("--output", default=None)
     args = parser.parse_args()
 
@@ -205,7 +206,8 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     _, _, _, _, _, holdout_cameras, _ = prepare_training_data(
-        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir, args.holdout_ratio
+        colmap_dir, images_dir, unlabeled_dir, gt_masks_dir, None, undistorted_dir,
+        args.val_ratio, args.test_ratio,
     )
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model = SemanticGaussianModel.from_state_dict(ckpt["params"], device=device)

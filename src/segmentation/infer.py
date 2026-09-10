@@ -3,7 +3,7 @@ Task A: predict pseudo-masks for the 100 unlabeled UAV images using a trained Se
 checkpoint (see `src/segmentation/train.py`). Output masks use the same uint8 class-id
 convention (0-4) as `outputs/gt_masks/`, so they can be consumed identically by Task B.
 
-Never run this on the 60 held-out labeled images - they already have real GT masks and must
+Never run this on the 30 held-out test labeled images - they already have real GT masks and must
 stay untouched for the final render-based evaluation.
 """
 import argparse

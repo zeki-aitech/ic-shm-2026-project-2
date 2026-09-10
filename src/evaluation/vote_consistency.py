@@ -129,7 +129,7 @@ def main():
 
     from src.colmap_io.reconstructor import PycolmapReconstructor
     from src.colmap_io.semantic_voting import SemanticProjector
-    from src.evaluation.metrics import trajectory_interleaved_split
+    from src.evaluation.metrics import train_val_test_split
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     parser = argparse.ArgumentParser(
@@ -138,7 +138,8 @@ def main():
     parser.add_argument("--colmap-dir", default=None)
     parser.add_argument("--images-dir", default=None)
     parser.add_argument("--gt-masks-dir", default=None)
-    parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    parser.add_argument("--val-ratio", type=float, default=0.10)
+    parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument("--output", default=None)
     args = parser.parse_args()
 
@@ -152,7 +153,10 @@ def main():
         os.path.splitext(f)[0] for f in os.listdir(images_dir)
         if f.lower().endswith(".png") and os.path.splitext(f)[0].isdigit()
     )
-    train_ids, _holdout_ids = trajectory_interleaved_split(labeled_ids, args.holdout_ratio)
+    # Matches Task B's own training pool (train + internal-val, see
+    # src/gaussian_splatting/train.py::prepare_training_data) - only Task A holds val back.
+    _train_ids, _val_ids, _test_ids = train_val_test_split(labeled_ids, args.val_ratio, args.test_ratio)
+    train_ids = _train_ids + _val_ids
 
     camera, images, pts3d = PycolmapReconstructor(colmap_dir).load()
 

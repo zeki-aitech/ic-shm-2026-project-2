@@ -75,9 +75,13 @@ ic-shm-2026-project-2/
 ## ⚙️ 4. Pipeline Architecture
 
 **Task A — 2D pseudo-labeling** (`src/segmentation/`): fine-tunes SegFormer (mit-b0 backbone) on
-the trajectory-interleaved 240-image train split, validates 2D mIoU on the 60-image holdout, then
-predicts pseudo-masks for the 100 unlabeled images. The 60 holdout images/masks are never used to
-train anything — reserved for the final render-based evaluation.
+the trajectory-interleaved 240-image train split, validates 2D mIoU on a separate 30-image
+*internal* validation split, then predicts pseudo-masks for the 100 unlabeled images. The 30-image
+test split is never used here, not even for validation — it's reserved entirely for the final
+render-based evaluation, so that Task A's own checkpoint selection can't leak information from it
+(an earlier version of this pipeline validated on the same set later used as the final holdout, an
+information leak a model-selection step must not have). Task B has no checkpoint-selection step of
+its own, so it trains on both the 240 train and 30 internal-val images (270 total).
 
 **Task B — Semantic 3D Gaussian Splatting** (`src/gaussian_splatting/`):
 1. **Undistort** (`undistort.py`) all 400 images once to a pinhole convention (`gsplat` renders
@@ -146,16 +150,16 @@ uv run python -m src.evaluation.render_metrics \
 
 ## 📊 6. Results (RTX 3080, 10GB)
 
-Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 603,757 Gaussians.
-Evaluated on the 60-image holdout, never used in training:
+Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 600,404 Gaussians.
+Evaluated on the 30-image test split, never used in training or in Task A's own validation:
 
 | Metric | Value |
 | :--- | :---: |
-| Task A val 2D mIoU (60-image holdout) | 81.27% |
-| PSNR | 21.86 dB |
-| SSIM | 0.846 |
-| LPIPS | 0.340 |
-| **Semantic mIoU (structural, 4 classes)** | **89.81%** |
-| Accuracy Score (illustrative) | 0.804 |
+| Task A val 2D mIoU (30-image internal validation split) | 81.67% |
+| PSNR | 21.83 dB |
+| SSIM | 0.843 |
+| LPIPS | 0.349 |
+| **Semantic mIoU (structural, 4 classes)** | **88.97%** |
+| Accuracy Score (illustrative) | 0.798 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.
