@@ -479,15 +479,35 @@ combination explicit here rather than presenting it as an authoritative formula.
 
 ### 5.1 Main Results
 
+Before reporting the pipeline's scored performance, we first report Task A's own intermediate
+result, since it is easy to confuse with Table 2's structural mIoU below: both are called "mIoU,"
+but they are not the same measurement. Table 1 gives the 2D SegFormer checkpoint's per-class IoU
+on its 30-image *internal validation split* (Section 3.3) — the checkpoint used to pseudo-label
+the 100 unlabeled images and widen Task B's supervision, not the contest's scored deliverable
+itself, and not measured on the same 30-image test split as Tables 2-4 below.
+
+**Table 1: Task A (SegFormer) per-class validation IoU**, on the 30-image internal validation
+split used for checkpoint selection (Section 3.3), *not* the 30-image test split evaluated in
+Tables 2-4.
+
+| Class | IoU |
+| :--- | :---: |
+| deck | 92.80% |
+| stay_cable | 89.17% |
+| tower | 78.20% |
+| foundation | 66.48% |
+| (background, reported for completeness, excluded from structural mIoU) | 98.64% |
+| **Structural mIoU (4 classes)** | **81.67%** |
+
 We report our final model's performance on the 30-view held-out test split defined in Section
 3.6 — views that contribute to neither Task A fine-tuning or internal validation, nor Task B's
-semantic warm-start, nor its photometric/semantic training loss. Table 1 summarizes the four
-metrics from Section 4.3 together with the illustrative Accuracy Score; Table 2 breaks semantic
+semantic warm-start, nor its photometric/semantic training loss. Table 2 summarizes the four
+metrics from Section 4.3 together with the illustrative Accuracy Score; Table 3 breaks semantic
 accuracy down by class. All numbers are produced by rendering each holdout pose through the same
 arbitrary-viewpoint entry point described in Section 3.5 — the literal function the contest
 evaluates a submission against.
 
-**Table 1: Overall holdout performance.**
+**Table 2: Overall holdout performance.**
 
 | Metric | Value |
 | :--- | :---: |
@@ -497,7 +517,7 @@ evaluates a submission against.
 | Structural mIoU (4 classes) | **91.04%** |
 | Illustrative Accuracy Score | 0.816 |
 
-**Table 2: Per-class IoU.**
+**Table 3: Per-class IoU.**
 
 | Class | IoU |
 | :--- | :---: |
@@ -512,7 +532,7 @@ palette used consistently across every figure in this paper, with the overall st
 marked for reference — making
 the counter-intuitive result discussed in Section 5.2, `stay_cable` scoring nearly as high as
 `deck` and `tower` despite being physically the thinnest structural component, immediately
-visible without reading Table 2 closely.
+visible without reading Table 3 closely.
 
 ![Figure 3: Per-class IoU on the 30-view holdout](figures/fig3_per_class_iou.png)
 
@@ -611,7 +631,7 @@ views rather than a claim established over the full holdout.
 300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
 the same per-class palette used throughout this paper.
 
-Because the held-out views in Table 1 still lie on the UAV's original flight line, Figure 5
+Because the held-out views in Table 2 still lie on the UAV's original flight line, Figure 5
 additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
 quaternion SLERP for rotation, linear interpolation for translation) at five evenly spaced steps
 $t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating rendering from three poses ($t=0.25, 0.5, 0.75$)
@@ -662,8 +682,9 @@ tasks, plotted in Figures 7 and 8.
 
 Figure 7 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
 curves plateau well before epoch 80 (best validation mIoU 81.67%, reached at epoch 69 and kept as
-the checkpoint used for pseudo-labeling), indicating the fine-tuned model has converged rather
-than still improving or overfitting when its pseudo-labels are handed to Task B.
+the checkpoint used for pseudo-labeling and reported per-class in Table 1), indicating the
+fine-tuned model has converged rather than still improving or overfitting when its pseudo-labels
+are handed to Task B.
 
 ![Figure 7: Task A (SegFormer) training convergence over 80 epochs](figures/fig7_task_a_training.png)
 
@@ -697,13 +718,13 @@ converged model rather than a lucky snapshot.
 
 ### 5.5 Ablation: Training Resolution
 
-**Table 3: Effect of training resolution on holdout performance,** both rows trained for the
+**Table 4: Effect of training resolution on holdout performance,** both rows trained for the
 same 40,000-iteration budget, differing only in image resolution. Both rows use the semantic
 warm-start (Section 3.4) - it was active in both, contrary to an earlier draft of this footnote -
 but with the older strict-cable-majority voting rule rather than the plain plurality used for
-Table 1's final numbers, and predate the fixes described in Sections 3.2 and 3.6 (mask
+Table 2's final numbers, and predate the fixes described in Sections 3.2 and 3.6 (mask
 undistortion; the 240/30/30 train/val/test split, run here as 240/60), so their exact values
-differ from Table 1 on three independent axes at once, not resolution alone. We have not yet
+differ from Table 2 on three independent axes at once, not resolution alone. We have not yet
 retrained this ablation under all three current fixes; the resolution and warm-start/voting-rule
 choices are themselves independent design axes, so the direction and size of the resolution
 effect itself is expected to be unaffected by that retraining once done.
@@ -713,7 +734,7 @@ effect itself is expected to be unaffected by that retraining once done.
 | Half (660x494) | 21.79 | 0.831 | 0.355 | 85.77% |
 | **Full (1320x989)** | **22.18** | **0.849** | **0.334** | **91.47%** |
 
-As Table 3 shows, training at native image resolution improves every metric, most notably mIoU
+As Table 4 shows, training at native image resolution improves every metric, most notably mIoU
 (+5.7 points), consistent with the intuition that thin structures (cable) and fine boundaries
 benefit from sharper photometric/semantic gradients during optimization. The cost is
 proportionally longer training time (≈47 min vs. ≈19 min for the same 40,000-iteration budget on

@@ -48,6 +48,24 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Added a dedicated Task A (SegFormer) results table**, at the user's request after a
+  back-and-forth about which "mIoU" Table 2 (formerly Table 1) actually reports. Section 5.1 was
+  previously silent on Task A's own validation performance except for one number folded into
+  Section 5.4's training-convergence prose (81.67%, next to Figure 7) - easy to mistake for, or
+  conflate with, Table 2's structural mIoU (91.04%), despite the two being different tasks (2D
+  segmentation vs. 3D render), different splits (30-image internal-val vs. 30-image test holdout),
+  and different roles (checkpoint-selection diagnostic vs. the actual scored deliverable). Added a
+  new **Table 1: Task A (SegFormer) per-class validation IoU** (deck 92.80%, stay_cable 89.17%,
+  tower 78.20%, foundation 66.48%, background 98.64%, structural mIoU 81.67% - read directly from
+  `outputs/checkpoints/segformer_mitb0/best.pt`'s stored `val_ious`/`val_miou`, no retraining
+  needed since `train.py` already saves per-class IoU at checkpoint time) with an explicit
+  disambiguating intro paragraph in Section 5.1, before the existing Task B tables. Renumbered the
+  three existing tables (Overall holdout performance, Per-class IoU, Resolution ablation) from
+  1/2/3 to 2/3/4 throughout the document (8 cross-references updated via a single ordered
+  `sed` pass, 3->4 then 2->3 then 1->2, to avoid collisions) and added a cross-reference from
+  Section 5.4's Figure 7 prose back to the new Table 1. Deliberately kept this as a separate table
+  rather than added as rows/columns to Table 2/3 - Task A's number is not part of the scored
+  deliverable and merging them risked implying otherwise.
 - [x] **External review fix #4 (Gaussian color init) implemented and retrained.** `DRAFT.md`
   Section 3.4 claimed each Gaussian's initial RGB came from the triangulated point's own observed
   color, but `SemanticProjector.project()` (`src/colmap_io/semantic_voting.py`) actually assigned
