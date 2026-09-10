@@ -9,6 +9,73 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Outstanding
 
+- [ ] External-review findings not yet acted on (see the "External review" Done entry below for
+  the full list this was triaged from) - in the reviewer's own priority order:
+  - [ ] **#1 Holdout leakage**: SegFormer's checkpoint selection (`src/segmentation/train.py`)
+    validates on the same 60 images reserved as the final holdout, so it isn't a clean
+    independent test set - carve a separate internal validation split out of the 240 training
+    images for Task A model selection instead, keeping the 60 fully untouched.
+  - [ ] **#3 Wrong bridge type/terminology**: this is a suspension bridge (parabolic main cable +
+    vertical hangers, confirmed by inspecting `data/Contest Dataset/images/100.png`), not a
+    cable-stayed bridge - the official brief itself uses "main cable" (p.9), not "stay cable".
+    `DRAFT.md`'s title, abstract, and Section 5.2's "fan of stay cables spans a... planar
+    surface" argument all need rewording; keep `stay_cable` only as the dataset's internal class
+    name.
+  - [ ] **#4 Gaussian color init doesn't match its own description**: `DRAFT.md` Section 3.4 says
+    initial RGB comes from the triangulated point's own color, but `SemanticProjector.project()`
+    (`src/colmap_io/semantic_voting.py:187`) actually assigns the voted-class palette color
+    (`CLASS_COLORS`), and `PycolmapReconstructor`'s `Point3D` never stores real point color at
+    all - fix the init to sample real color from an observing image, or fix the paper's
+    description (and drop the "unlike standard practice" framing around sparse-point init
+    itself, since that part **is** standard 3DGS practice per Kerbl et al. 2023 - only the
+    semantic-logit warm-start is this paper's own addition).
+  - [ ] **#6 Strided-split rationale is backwards**: `trajectory_interleaved_split` (every 5th
+    frame held out) guarantees a training frame immediately before and after every holdout
+    frame - the opposite of what Section 3.6's "avoids near-duplicate leakage" argument claims.
+    Reword, and/or add a contiguous-block or leave-block-out split as a stronger secondary
+    evaluation. The ">99% overlap between consecutive frames" claim also has no citation/measurement.
+  - [ ] **#7 Per-class explanation contradicts the data**: on the 60-holdout masks, `stay_cable`
+    is actually the *largest* structural class by pixel count (7.19%, vs. deck 5.01%) - not
+    "thin, sparsely-sampled" as Section 5.2 frames it (the coarse fan-shaped annotation is why).
+    `foundation` is not the class with fewest observations per Gaussian either (deck is lowest,
+    2.42 vs. foundation's 4.27) - Section 5.2's "fewer observing viewpoints" explanation for
+    foundation's weak IoU doesn't hold up and needs a different (or explicitly hedged) hypothesis.
+  - [ ] **#8 Table 3 footnote is misleading**: both rows' logs show a real voted class
+    distribution (semantic warm-start *was* active in both) - they differ in voting rule
+    (old strict-cable-majority vs. the current plain-plurality default), not in whether
+    warm-start was used at all. Reword "predate the semantic warm-start configuration."
+  - [ ] **#9 Metric presentation nits**: PSNR's MSE formula sums over `(h,w)` only, omitting the
+    color-channel dimension (`skimage`'s actual computation is correct; only the LaTeX is
+    imprecise); SSIM stated as strictly `[0,1]` when it can technically go negative; mIoU is
+    computed from one confusion matrix pooled over all 60 images (standard practice, e.g.
+    Cityscapes-style, but currently unstated - worth one clarifying sentence); the LPIPS
+    "blurred cable strands" example is illustrative, not literally from Zhang et al. 2018 -
+    fine as an example but could say so.
+  - [ ] **#10 Convergence description inaccuracies**: `train.py` logs every 100 steps
+    (`log_every=100`), so Figure 9's "raw per-step loss" and "15-step moving average" are really
+    a 1-in-100 subsample and a ~1,500-iteration window respectively - reword. Task A's curve is
+    also not literally "monotonic" (21 of 79 epoch-to-epoch val-mIoU changes are decreases,
+    `outputs/logs/segmentation_train.log`) - soften to e.g. "smoother, less noisy." Densification
+    is a soft threshold (`if model.num_points < max_gaussians` checked once per step, so one
+    refine step can overshoot it - final count 603,757 vs. the "capped at 600,000" text), not a
+    hard cap.
+  - [ ] **#11 Rhetoric overreach**: "arbitrary camera viewpoint" is only demonstrated via
+    interpolation *within* the flown trajectory's envelope (Figure 6), with no ground truth to
+    verify accuracy there - the brief itself only requires rendering at organizer-provided test
+    poses, not unconstrained free-viewpoint navigation. "Digital twin" (Abstract, Conclusion)
+    implies more than this static, non-real-time, non-physics-linked asset delivers - consider
+    "semantic 3D scene representation" or "digital-twin-ready asset" instead, and frame SHM
+    applications (deflection tracking, cable tension inference) explicitly as future work.
+  - [ ] Reference polish: ref [13]'s title is right but missing volume/pages (`40, 801–816`,
+    confirmed against the actual PDF, same fix already applied to ref [3]); ref [3]'s title is a
+    paraphrase, not the verbatim published title (`unmanned aerial vehicles light detection and
+    ranging data imagery`, not `unmanned aerial vehicle LiDAR and imagery`); Semantic-NeRF [7]'s
+    "was the first" claim isn't asserted by the cited paper itself - soften to "an early"/"a
+    seminal approach."
+  - [ ] Table 3 (resolution ablation) still uses the pre-mask-fix checkpoints (`gaussians_v3a_fullres_noposeopt`,
+    `gaussians_halfres_40k`) - same mask/image coordinate misalignment as the bug fixed below,
+    just not yet retrained under the fix. Low priority (it's a secondary ablation, not the
+    headline numbers) but should eventually be redone for full consistency.
 - [ ] Confirm exact page/formatting requirements once the official template is downloaded from
   the IC-SHM website and available locally.
 - [ ] Reformat citations into the official template's required style once available
@@ -31,6 +98,62 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **External review triaged and fix #1 (of the review's numbering, "#2" - the mask/image
+  coordinate misalignment) implemented and retrained.** An external methodology review of
+  `DRAFT.md` (11 numbered issues + reference checks) was independently re-verified point by
+  point against the actual code/data before acting on anything - nearly every specific number
+  the review cited was reproduced exactly (10.22% unobserved points, 85.53/5.01/7.19/1.73/0.54%
+  per-class pixel ratios, 2.42/3.90/5.47/4.27 avg observations/Gaussian, 229/240 training images
+  with foundation, 5.88px max undistort displacement, 0.9235 foundation raw-vs-undistorted IoU,
+  the seed42/43 warm-start ablation reversal, DOI/volume/pages for ref [13]) - and two errors
+  were found *in* the review itself (both in its reference-check section: it cited nonexistent
+  filenames for the Zhang et al. [1] and Lin et al. [13] PDFs, though ref [13]'s DOI/volume/page
+  data was still correct once matched to the real file). The full triaged list, including which
+  points were confirmed, partially agreed with, or disputed, is preserved in this session's
+  transcript; the still-open items are logged under Outstanding above.
+  - **What was fixed**: `undistort.py`'s image-undistortion pass wasn't matched by an equivalent
+    mask-undistortion pass - GT masks (`json_to_mask.py`, rasterized from polygons drawn on the
+    *original* distorted photos) and Task A's pseudo-masks (`infer.py`, predicted on those same
+    original photos) were both being paired, via `mask_lookup` in
+    `src/gaussian_splatting/train.py::prepare_training_data`, with the *undistorted* images and
+    the pinhole camera `K` - a systematic misalignment (~6px at this camera's k1, worst at frame
+    edges) affecting the Task B semantic loss for all 340 supervised views and the holdout
+    evaluation itself. Fixed by adding `undistort_mask`/nearest-neighbor remap to `undistort.py`
+    and lazily caching undistorted copies (`outputs/undistorted_gt_masks/`,
+    `outputs/undistorted_pseudo_masks/`) for `mask_lookup` to point at instead - `render_metrics.py`
+    reuses the same `prepare_training_data` function, so this one fix corrects both training
+    supervision and evaluation ground truth. The semantic warm-start's own vote step
+    deliberately keeps using the *original* masks, since a 3D point's 2D observation coordinates
+    come from COLMAP's own feature tracks (detected on those same original photos) - undistorting
+    that mask would have introduced a *new* misalignment there.
+  - **Retrained Task B once** with the fix (`outputs/checkpoints/gaussians_mask_undistort_fix/`,
+    2804.7s, 603,757 Gaussians), installed as the new canonical `outputs/checkpoints/gaussians/`
+    (old checkpoint preserved as `gaussians_stale_mask_misaligned_pre_20260910/`). Task A
+    (SegFormer) did not need retraining - it already trains/infers entirely on original,
+    consistently-distorted images+masks (undistortion only ever happens at the Task B stage),
+    so it had no alignment bug of its own.
+  - **Result**: mIoU 91.28% -> **89.81%** (real drop, not noise - both training supervision and
+    eval ground truth are now correctly aligned with the camera geometry, at the cost of losing
+    whatever the model had been fitting to a self-consistent-but-wrong label position for).
+    PSNR/SSIM/LPIPS barely moved (22.19->21.86 / 0.849->0.846 / 0.335->0.340), as expected since
+    the photometric loss and RGB/camera alignment were never affected by this bug. Per-class:
+    `deck` dropped the most (95.72%->91.19%, -4.53) - plausibly because it's a long, thin band
+    at a grazing angle, most sensitive to a few pixels of boundary shift - while `stay_cable`
+    barely moved (92.36%->91.33%) and is now the *highest*-scoring structural class, ahead of
+    `deck`. `tower`/`foundation` moved less (-0.18/-0.17).
+  - **Updated throughout `DRAFT.md`**: Abstract, Introduction contribution #5, Table 1/2,
+    Figure 3's caption/discussion, Section 5.2's opening (now leads with cable > deck, not
+    deck > cable), Section 3.4's Gaussian count, Conclusion. Regenerated Figures 1 (Gaussian
+    count), 3 (per-class IoU), 4 (qualitative grid - re-rendered 005/050/250/300 from the new
+    checkpoint via `src.gaussian_splatting.render`, and switched its GT-mask comparison panel to
+    `outputs/undistorted_gt_masks` to match), 5 (interpolation - re-rendered via
+    `src.gaussian_splatting.interpolate`), 8 (Task B training curve, from the new log). Also
+    updated `README.md`'s results table and pipeline description. Figure 7 (splat viewer)
+    intentionally left as-is - it needs a new manual SuperSplat capture, not yet done.
+  - Section 5.2's specific explanatory claims (the "thin, sparsely-sampled" framing for cable,
+    the "fewer viewpoints" framing for foundation) were deliberately **not** rewritten as part of
+    this fix, even though the review's #7 already flags them as data-contradicted - that's
+    scoped as a separate, later fix so the numbers-only update here stays reviewable on its own.
 - [x] Full numeric audit of `DRAFT.md` (every reported number re-traced to a real checkpoint,
   eval report, log, or freshly-reproduced script run) - caught and fixed one real methodological
   bug: Table 3's (resolution ablation, Section 5.5) "Half" row was trained for only 30,000

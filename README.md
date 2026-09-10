@@ -82,7 +82,9 @@ train anything — reserved for the final render-based evaluation.
 **Task B — Semantic 3D Gaussian Splatting** (`src/gaussian_splatting/`):
 1. **Undistort** (`undistort.py`) all 400 images once to a pinhole convention (`gsplat` renders
    an ideal pinhole camera; the shared COLMAP `SIMPLE_RADIAL` camera has a small but non-zero
-   `k1`).
+   `k1`) - and the GT/pseudo semantic masks the same way (nearest-neighbor, so class ids stay
+   discrete), since both are rasterized/predicted in the original distorted image's pixel grid
+   and would otherwise be misaligned with the undistorted images/renders they're paired with.
 2. **Initialize** Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse cloud
    (`src/colmap_io/reconstructor.py`), and semantic logits from `SemanticProjector`'s per-point
    voted class (`src/colmap_io/semantic_voting.py`, train-views only).
@@ -144,16 +146,16 @@ uv run python -m src.evaluation.render_metrics \
 
 ## 📊 6. Results (RTX 3080, 10GB)
 
-Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 600,958 Gaussians.
+Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 603,757 Gaussians.
 Evaluated on the 60-image holdout, never used in training:
 
 | Metric | Value |
 | :--- | :---: |
 | Task A val 2D mIoU (60-image holdout) | 81.27% |
-| PSNR | 22.19 dB |
-| SSIM | 0.849 |
-| LPIPS | 0.335 |
-| **Semantic mIoU (structural, 4 classes)** | **91.28%** |
-| Accuracy Score (illustrative) | 0.815 |
+| PSNR | 21.86 dB |
+| SSIM | 0.846 |
+| LPIPS | 0.340 |
+| **Semantic mIoU (structural, 4 classes)** | **89.81%** |
+| Accuracy Score (illustrative) | 0.804 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.

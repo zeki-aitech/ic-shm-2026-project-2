@@ -138,7 +138,10 @@ def prepare_training_data(
     # completely untouched, even for this warm-start step): pre-populate the mask cache with
     # just the train-split GT masks, keyed by path exactly as `SemanticProjector` expects, so
     # its internal `preload_masks()` fallback (which would load every mask in the directory)
-    # never fires.
+    # never fires. This step deliberately uses the ORIGINAL (still-distorted) masks, not the
+    # undistorted copies below: a 3D point's 2D observation coordinates come from COLMAP's own
+    # feature tracks, which were detected on these same original, distorted photos - sampling
+    # the undistorted mask at that same (u, v) would silently read the wrong pixel.
     projector = SemanticProjector(
         colmap_dir, gt_masks_dir,
         parser=_CachedParser(camera, images, pts3d),
@@ -149,14 +152,33 @@ def prepare_training_data(
             projector.mask_cache[mask_path] = np.array(Image.open(mask_path), dtype=np.uint8)
     point_classes, point_colors = projector.project(strict_cable_majority=strict_cable_majority)
 
+    # Every mask paired with a `GSCamera` below, by contrast, must be undistorted: its
+    # `image_path` points at the undistorted image cache and its `K` is the pinhole intrinsic
+    # matrix, so a still-distorted mask would be systematically misaligned with what the model
+    # actually renders (up to ~6px at this camera's k1, worse right where classes are thin) -
+    # corrupting both the training semantic loss and the holdout evaluation. GT masks and Task
+    # A's pseudo-masks are both rasterized/predicted on the original distorted photos, so both
+    # need the same one-time remap as the images, cached the same lazy way.
+    undistorted_gt_masks_dir = os.path.join(os.path.dirname(undistorted_dir), "undistorted_gt_masks")
+    if not os.path.isdir(undistorted_gt_masks_dir) or not os.listdir(undistorted_gt_masks_dir):
+        print(f"[gaussian_splatting] undistorting GT masks -> {undistorted_gt_masks_dir}")
+        undistort_all([gt_masks_dir], camera, undistorted_gt_masks_dir, is_mask=True)
+
     # `mask_lookup` covers train (GT), holdout (GT - eval-only, never used by `train_cameras`
     # since those are additionally filtered on `not is_holdout`) and pseudo-labeled unlabeled ids.
     mask_lookup: Dict[str, str] = {
-        stem: os.path.join(gt_masks_dir, f"{stem}.png") for stem in list(train_ids) + list(holdout_ids)
+        stem: os.path.join(undistorted_gt_masks_dir, f"{stem}.png")
+        for stem in list(train_ids) + list(holdout_ids)
     }
     if pseudo_masks_dir and os.path.isdir(pseudo_masks_dir):
+        undistorted_pseudo_masks_dir = os.path.join(
+            os.path.dirname(undistorted_dir), "undistorted_pseudo_masks"
+        )
+        if not os.path.isdir(undistorted_pseudo_masks_dir) or not os.listdir(undistorted_pseudo_masks_dir):
+            print(f"[gaussian_splatting] undistorting pseudo-masks -> {undistorted_pseudo_masks_dir}")
+            undistort_all([pseudo_masks_dir], camera, undistorted_pseudo_masks_dir, is_mask=True)
         for stem in _unlabeled_ids(unlabeled_dir):
-            pseudo_path = os.path.join(pseudo_masks_dir, f"{stem}.png")
+            pseudo_path = os.path.join(undistorted_pseudo_masks_dir, f"{stem}.png")
             if os.path.exists(pseudo_path):
                 mask_lookup[stem] = pseudo_path
 

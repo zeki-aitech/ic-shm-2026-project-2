@@ -1,11 +1,18 @@
 """
-One-time lens-undistortion pass over the UAV images.
+One-time lens-undistortion pass over the UAV images and their semantic masks.
 
 The shared camera is COLMAP `SIMPLE_RADIAL` (f, cx, cy, k1 != 0). `gsplat`'s rasterizer models
 an ideal pinhole camera and does not undistort internally, so training/eval/rendering must all
 operate in a consistent undistorted-pinhole convention - this module produces it once and caches
 the result, rather than leaving distortion handling implicit (small k1, but non-zero: skipping
 this would silently corrupt multi-view geometry, most visibly near image edges).
+
+Masks need the same remap as images: both GT masks (`json_to_mask.py`, rasterized from polygons
+drawn on the original distorted photos) and pseudo-masks (`src/segmentation/infer.py`, predicted
+on those same original photos) are produced in the *distorted* image's pixel grid, not the
+undistorted one `train.py`/`render_metrics.py` pair them with - so they must go through the same
+per-pixel remap as the images, just with nearest-neighbor interpolation (`undistort_mask`) so
+discrete class ids never get blended at label boundaries the way continuous pixel values can be.
 """
 import os
 from typing import Iterable, List
@@ -41,27 +48,45 @@ def undistort_image(image: np.ndarray, camera: CameraIntrinsics) -> np.ndarray:
     return cv2.undistort(image, K, dist, newCameraMatrix=K)
 
 
-def undistort_directory(image_dir: str, camera: CameraIntrinsics, output_dir: str) -> List[str]:
+def undistort_mask(mask: np.ndarray, camera: CameraIntrinsics) -> np.ndarray:
+    """Same remap as `undistort_image`, but with nearest-neighbor interpolation so discrete
+    class-id values are never blended into invalid intermediate labels at class boundaries -
+    `cv2.undistort`'s default (bilinear/cubic) is only correct for continuous-valued images.
+    `mask`: (H,W) uint8 class-id map, e.g. from `json_to_mask.py` or a SegFormer pseudo-label -
+    both are rasterized/predicted in the *original, still-distorted* image's pixel grid, the
+    same grid `undistort_image` maps away from, so this must use the identical camera model."""
+    h, w = mask.shape[:2]
+    K = build_distorted_K(camera)
+    dist = np.array([camera.k1, 0.0, 0.0, 0.0], dtype=np.float64)
+    map1, map2 = cv2.initUndistortRectifyMap(K, dist, None, K, (w, h), cv2.CV_32FC1)
+    return cv2.remap(mask, map1, map2, interpolation=cv2.INTER_NEAREST, borderValue=0)
+
+
+def undistort_directory(
+    image_dir: str, camera: CameraIntrinsics, output_dir: str, is_mask: bool = False
+) -> List[str]:
     os.makedirs(output_dir, exist_ok=True)
     written = []
     for fname in sorted(os.listdir(image_dir)):
         if not fname.lower().endswith(".png"):
             continue
         src_path = os.path.join(image_dir, fname)
-        img = cv2.imread(src_path, cv2.IMREAD_COLOR)
+        img = cv2.imread(src_path, cv2.IMREAD_GRAYSCALE if is_mask else cv2.IMREAD_COLOR)
         if img is None:
             continue
-        undistorted = undistort_image(img, camera)
+        undistorted = undistort_mask(img, camera) if is_mask else undistort_image(img, camera)
         out_path = os.path.join(output_dir, fname)
         cv2.imwrite(out_path, undistorted)
         written.append(out_path)
     return written
 
 
-def undistort_all(image_dirs: Iterable[str], camera: CameraIntrinsics, output_dir: str) -> List[str]:
+def undistort_all(
+    image_dirs: Iterable[str], camera: CameraIntrinsics, output_dir: str, is_mask: bool = False
+) -> List[str]:
     written = []
     for image_dir in image_dirs:
-        written.extend(undistort_directory(image_dir, camera, output_dir))
+        written.extend(undistort_directory(image_dir, camera, output_dir, is_mask=is_mask))
     return written
 
 
