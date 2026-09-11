@@ -9,12 +9,6 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Outstanding
 
-- [ ] Table 4 (resolution ablation, renumbered from Table 3 by the Table 1/Task A-table insertion
-  below) still uses the pre-mask-fix, pre-split-fix, pre-color-fix, pre-test-leak-fix checkpoints
-  (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image coordinate
-  misalignment, color-init bug, and triangulation test-leak all fixed below, and the old 240/60
-  split rather than the current 240/30/30. Low priority (it's a secondary ablation, not the
-  headline numbers) but should eventually be redone for full consistency.
 - [ ] **Future idea (optional, not required by anything in the paper as currently written):**
   ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
   lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
@@ -42,6 +36,26 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Retrained Table 4 (resolution ablation) under every current fix**, closing the item that
+  had been open since fix #1 (it previously used checkpoints predating mask undistortion, the
+  split fix, the color-init fix, and the triangulation test-leak fix - four independent stale
+  axes at once). Full-resolution row reuses the exact checkpoint already reported as the main
+  result (Table 2/3) rather than retraining a duplicate; only half-resolution needed a fresh run
+  (`outputs/checkpoints/gaussians_halfres_test_excluded_init/`, `--downsample 0.5`, same
+  40,000-iteration budget, ~18 min vs. ~46 min for full - both figures re-measured, not assumed).
+  - **Half-resolution result**: PSNR 22.03 dB, SSIM 0.838, LPIPS 0.330, mIoU 89.71% (was
+    21.79/0.831/0.355/85.77% pre-fix). Full-resolution (Table 2/3): PSNR 22.43 dB, SSIM 0.854,
+    LPIPS 0.321, mIoU 92.08%.
+  - **The resolution effect's direction held (full still beats half on every metric) but its size
+    shrank substantially**: mIoU gap +2.37 points (was +5.7). An earlier version of this section
+    had predicted retraining would leave "the direction and size... unaffected" - the direction
+    claim held, the size claim didn't, so the text now reports the measured result and says so
+    explicitly rather than quietly correcting the old prediction without comment.
+  - Dropped the old aside comparing the new 40k-iteration half-res number against a much earlier,
+    differently-configured 30k-iteration half-res run (87.96% mIoU) - that comparison already
+    crossed too many independent axes before this fix, and now crosses five, so it no longer says
+    anything meaningful; not replaced with anything, since re-running a 30k-iteration comparison
+    wasn't asked for and isn't needed for this section's actual conclusion.
 - [x] **Refreshed Figure 8 (splat viewer render, Section 5.3, optional) for the fix #5
   (test-split-clean triangulation) checkpoint.** Exported new `bridge_splat_test_excluded_init_
   {rgb,semantic}.ply` from the current canonical checkpoint via `export_ply.py`, user captured
