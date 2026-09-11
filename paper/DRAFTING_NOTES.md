@@ -38,16 +38,31 @@ it once the paper is finalized and submitted — it is not part of the paper its
 - [ ] `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `docs/SUBMISSION_CHECKLIST_AND_GUIDELINES.md`
   still reference the old strict-majority checkpoint's numbers/Gaussian count (602,363) - not
   updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).
-- [ ] Revisit adding a Figure 3 for the semantic Gaussian representation / fused rasterization
-  (Section 3.4) - tried a shared-trunk, dual-head matplotlib diagram (per-class-colored channel
-  bars for the 5 semantic logits, geometric params bypassing the concatenation into the shared
-  `gsplat` trunk) and a Mermaid version of the same content; reverted both (commits `f78e05b`,
-  `3943a70`, `099c43e`) at the user's request to pause on this rather than reject the idea
-  outright - the "this paper's addition" vs. standard-3DGS framing itself is still considered
-  worth a figure, just not this execution.
 
 ## Done
 
+- [x] **Added the semantic Gaussian architecture figure (new Figure 3, Section 3.4)**, revisiting
+  the previously-paused idea (two earlier attempts - a matplotlib shared-trunk/dual-head diagram
+  and a Mermaid version - were reverted at the user's request; see the old Outstanding entry this
+  replaces). The user asked for a written architecture description to hand to an external tool
+  (Codex) rather than have me draw it directly; that description (per-Gaussian parameter table,
+  init sources, fused-tensor concatenation, single rasterization pass, output split) became the
+  spec Codex drew from. Codex produced two iterations: a simpler shared-trunk/dual-head diagram
+  (`semantic_gaussian_architecture.*`, `src/evaluation/plot_semantic_architecture.py`), then a
+  more detailed tensor-style version with real per-Gaussian attribute bars, the training-loss
+  formula, and paired real RGB/semantic-map thumbnails
+  (`semantic_gaussian_tensor_architecture.*`, `src/evaluation/plot_semantic_tensor_architecture.py`).
+  Verified the tensor version's accuracy directly against `src/gaussian_splatting/model.py` (tensor
+  shapes $N\times3$/$N\times5$/$N\times8$, sigmoid on RGB and opacity, raw semantic logits,
+  `gsplat.rasterization` call) and `losses.py`/`train.py` (loss formula, mask-source weight $w$) -
+  matches exactly. The RGB/semantic thumbnails are real renders of held-out test view 300
+  (`outputs/renders/fig4_holdout_real_color/300_{rgb,sem}.png`, the same view discussed in
+  Figure 5's qualitative results), not fabricated illustrations. User picked the tensor version;
+  deleted the superseded simpler version's PNG/SVG/PDF and generator script. Inserted as new
+  Figure 3 at the end of Section 3.4 (after the Representation/Semantic warm-start/Fused
+  rendering/Losses paragraphs it visually summarizes, before Densification), renumbering old
+  Figures 3-8 to 4-9 throughout the document (same ordered-sed technique used for the Table
+  renumbering above).
 - [x] **Refreshed Figure 6 (splat viewer render, Section 5.3, optional) for the fix #4 (color
   init) retrain.** The PLYs and composed figure on disk were all from before the fix #4 retrain
   (dated 04-09 Sep, checkpoint completed 10 Sep 17:49-17:53) - re-exported both
