@@ -615,14 +615,16 @@ accurate explanation is that the annotated region, while not tracing individual 
 still 3D-consistent: this is a suspension bridge, and its main cable and vertical hangers
 together lie within a single near-vertical plane running the length of the span, so annotators
 viewing that structure from different angles trace a similar broad boundary around it each time.
-Multi-view training has no cross-view contradiction to resolve for
-a target that already agrees with itself across views, so it converges confidently to the same
-coarse region the annotations describe - for the same reason it converges confidently on large,
-consistently-labeled regions like `deck`, not by correcting per-view noise toward finer geometry,
-because there is little cross-view noise to correct. Cable's strong IoU therefore does not
-indicate the model recovers cable geometry more precisely than the annotations do; it indicates
-the model reproduces the annotation convention - coarse enclosing polygon included - consistently
-across viewpoints. This is not a compromise: the evaluation protocol (Section 3.6) scores
+A plausible mechanism, though one we have not verified with a dedicated diagnostic, is that
+multi-view training then has little cross-view contradiction to resolve for a target that already
+agrees with itself across views, converging to the same coarse region the annotations describe -
+the same reason it converges confidently on large, consistently-labeled regions like `deck` -
+rather than correcting per-view noise toward finer geometry, since there is little such noise to
+correct. Regardless of the exact mechanism, what Figure 6's rendered semantic maps show directly
+is the outcome: cable's strong IoU does not indicate the model recovers cable geometry more
+precisely than the annotations do; it indicates the model reproduces the annotation convention -
+coarse enclosing polygon included - consistently across viewpoints. This is not a compromise: the
+evaluation protocol (Section 3.6) scores
 semantic mIoU directly against these same masks, so accurately reproducing their convention, at
 whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
 some finer-grained cable delineation that the evaluation does not actually ask for.
@@ -698,10 +700,10 @@ Finally, Figure 8 (optional) views the trained Gaussians directly in an interact
 the arbitrary-viewpoint renders in Figures 6-7, this alpha-blended splat render exposes the full
 learned 3D structure simultaneously: both towers, the main cable, the deck, and the foundation
 piers are all visible at once in the semantic panel and clearly spatially coherent with the
-true-color reconstruction beside it, confirming that the semantic warm-start and training loss
-converge to a structurally sensible 3D segmentation rather than scattered, inconsistent
-per-Gaussian labels. This figure is secondary to Figures 6 and 7 and can be dropped if space is
-limited.
+true-color reconstruction beside it - a qualitative illustration, consistent with Table 3's
+per-class IoU numbers, that the semantic warm-start and training loss converge to a structurally
+sensible 3D segmentation rather than scattered, inconsistent per-Gaussian labels. This figure is
+secondary to Figures 6 and 7 and can be dropped if space is limited.
 
 ![Figure 8: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig8_splat_render.png)
 
@@ -770,11 +772,12 @@ here for direct comparison.
 As Table 4 shows, training at native image resolution still improves every metric, consistent
 with the intuition that thin structures (cable) and fine boundaries benefit from sharper
 photometric/semantic gradients during optimization - but the gap is substantially smaller than
-the +5.7 mIoU points measured before this ablation was retrained under all current fixes: PSNR
-+0.40 dB, SSIM +0.016, LPIPS -0.009, mIoU +2.37 points. An earlier draft of this section predicted
-that retraining would leave "the direction and size of the resolution effect" both unaffected;
-the direction held, but the size clearly did not, so we report the measured result rather than
-the prediction. The cost is proportionally longer training time (≈46 min vs. ≈18 min for the same
+the +5.7 mIoU points measured under the pre-fix checkpoints: PSNR +0.40 dB, SSIM +0.016, LPIPS
+-0.009, mIoU +2.37 points. The direction of the resolution effect is therefore robust to the
+mask-alignment, split, color-init, and triangulation-exclusion fixes described elsewhere in this
+paper, but its magnitude is not - a caveat worth keeping in mind before extrapolating this
+ablation's specific numbers to a different pipeline configuration. The cost is proportionally
+longer training time (≈46 min vs. ≈18 min for the same
 40,000-iteration budget on the same GPU); given the modest absolute training time either way,
 full resolution remains the recommended default.
 
