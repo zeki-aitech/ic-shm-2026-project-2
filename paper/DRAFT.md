@@ -334,14 +334,14 @@ Figure 3 summarizes this representation, rasterization, and loss pipeline end-to
 
 ![Figure 3: The semantic Gaussian model's tensor representation, shared rasterization pass, and training losses](figures/semantic_gaussian_tensor_architecture.png)
 
-**Figure 3.** Each Gaussian's RGB color ($N \times 3$) and semantic logits ($N \times 5$) are
-concatenated into a single $N \times 8$ tensor and rasterized once per view alongside geometry
-and opacity, producing an RGB image and a per-pixel semantic-logit map that share the same
-Gaussians, projection, and alpha-compositing weights; the semantic map shown is the arg max of
-the rendered logits. Both thumbnails are real renders of held-out test view 300 (Figure 5) from
-the trained model, not illustrations. Dashed arrows mark training-only paths: the photometric
-and semantic losses feed a single backpropagation pass that updates every Gaussian's geometry,
-opacity, color, and semantic logits jointly.
+**Figure 3.** Semantic Gaussian representation and joint RGB-semantic rendering. Each Gaussian
+carries geometric parameters, opacity, RGB color, and five semantic logits. RGB and logits are
+concatenated and rendered in a single differentiable rasterization pass using shared
+alpha-compositing weights. Rendered logits feed semantic cross-entropy during training and arg
+max for semantic-map generation. Photometric and semantic losses jointly optimize the
+representation. The RGB and semantic-map thumbnails are real renders of held-out test view 300
+(Figure 5), not illustrations. Dashed arrows denote training-only connections; semantic colors
+indicate class identities for visualization.
 
 **Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
 training. Gaussians whose positional gradients are large — an indication that a single primitive
