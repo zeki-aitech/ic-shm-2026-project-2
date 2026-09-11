@@ -1,5 +1,3 @@
-<!-- Drafting status and outstanding TODOs are tracked in DRAFTING_NOTES.md, not here. -->
-
 # Semantic 3D Gaussian Splatting for Multi-View Reconstruction of Suspension Bridges
 
 **[NEEDS] Author names, affiliations, IC-SHM 2026 Project 2 team identifier**
@@ -8,203 +6,151 @@
 
 ## Abstract
 
-We present a method for reconstructing a semantically labeled 3D representation of a
-suspension bridge from multi-view UAV imagery, targeting the IC-SHM 2026 Project 2 evaluation
-protocol: a model must render both an RGB image and a per-pixel semantic map from an arbitrary
-camera viewpoint, scored against held-out views by visual fidelity (PSNR/SSIM/LPIPS) and
-semantic accuracy (mIoU). Our approach extends 3D Gaussian Splatting with a per-Gaussian
-semantic logit vector, rendered jointly with color through a single fused rasterization pass, so
-that the two outputs are pixel-aligned by construction. A 2D segmentation model pseudo-labels
-unlabeled frames to widen semantic supervision to every available image, and the Gaussian model
-is warm-started from a multi-view, plurality-voted sparse point cloud rather than random
-initialization. On a 30-view held-out test split drawn from the same UAV flight trajectory but
-excluded from every stage of the pipeline - not just training and the internal validation step
-that selects the 2D segmentation model's checkpoint, but even the sparse point cloud's own
-triangulation and the Gaussians' color initialization - our method achieves PSNR 22.43 dB, SSIM
-0.854, LPIPS 0.321, and structural mIoU 92.08% across the four bridge component classes (deck,
-main cable, tower, foundation), for an illustrative Accuracy Score of 0.823. Beyond the
-contest's scoring criteria, the resulting model is a queryable semantic 3D scene representation
-of the bridge, rendering both appearance and structural identity from viewpoints never captured
-during data acquisition — a digital-twin-ready asset and a basis for downstream structural health
-monitoring tasks that must be scoped to a specific structural component.
+We present a semantic 3D Gaussian Splatting pipeline for multi-view reconstruction of a
+suspension bridge in IC-SHM 2026 Project 2. The model renders RGB images and five-class
+semantic maps from query camera poses through a single rasterization pass that composites
+color and per-Gaussian semantic logits with shared weights. A SegFormer model trained on
+240 labeled images generates pseudo-labels for 100 unannotated images. Together with 30
+additional labeled views, these provide 370 training views for the Gaussian model. Sparse
+triangulation initializes geometry, observed image colors initialize appearance, and multi-view
+plurality voting initializes semantic logits. Thirty labeled views are reserved for testing and
+excluded from both optimization and the triangulation, color sampling, and semantic voting
+performed by our pipeline. Using the supplied camera calibration and poses, the model achieves
+PSNR 22.43 dB, SSIM 0.854, LPIPS 0.321, and 92.08% structural mIoU on this local test split.
+Full-resolution training improves structural mIoU by 2.37 percentage points over half-resolution
+training in a matched experiment. Qualitative results show that component labels can remain
+recognizable despite appearance artifacts, while the coarse cable annotations limit what high
+semantic overlap implies about individual cable geometry. These results demonstrate a renderable,
+component-labeled bridge representation; accuracy at distant viewpoints and suitability for
+quantitative structural measurements remain unverified.
+
 
 ---
 
 ## 1. Introduction
 
-Bridges are critical infrastructure, and periodic condition assessment is essential for public
-safety, yet manual inspection remains slow, costly, and at times hazardous — towers, cable
-anchorages, and water-adjacent foundations are not always safely or cheaply accessible on foot
-[1]. UAV photogrammetry has emerged as a practical alternative for large-scale, low-cost bridge
-data acquisition [1], and this in turn motivates building automated 3D, semantically-labeled
-digital twins directly from drone imagery rather than relying on manual survey [2, 3]. A digital
-twin that is actually
-useful for downstream structural health monitoring needs two capabilities at once: an accurate 3D
-geometric reconstruction of the structure, and a per-component semantic labeling of that geometry
-into its constituent parts (deck, main cable, tower, foundation), so that later analyses such as
-deflection tracking, corrosion mapping, or cable tension inference can be scoped automatically to
-the correct structural element rather than to the bridge as an undifferentiated whole.
+Bridge inspection requires access to components that may be difficult or hazardous to reach,
+including towers, cable anchorages, and foundations. UAV imaging offers a practical means of
+collecting observations across these regions, although substantial human intervention remains
+in many inspection workflows [1]. Structure-aware reconstruction and sensor-fusion studies
+[2, 3] motivate representations that associate bridge geometry with component identity. Such
+representations could support the localization of inspection observations to the deck, cables,
+towers, or foundations, provided that their geometric and semantic accuracy is established.
 
-This is precisely the task posed by the contest brief: given approximately 300 labeled and 100
-unlabeled multi-view UAV images of a suspension bridge, together with COLMAP-estimated camera
-poses, build a model that renders both an RGB image and a semantic map from an arbitrary camera
-viewpoint. Submissions are scored on a blind test set of held-out camera viewpoints via
-$\text{Accuracy Score} = 0.5 \times \text{Visual Fidelity (PSNR/SSIM/LPIPS)} + 0.5 \times
-\text{Semantic mIoU}$ — a formulation that rewards a method for both photorealistic rendering and
-correct structural labeling simultaneously, from poses the model has never been trained or
-validated on.
+IC-SHM 2026 Project 2 [4] specifies a multi-view semantic reconstruction task using 300 labeled
+and 100 unlabeled UAV images, together with estimated camera intrinsics and poses. A submission
+must render both an RGB image and a semantic map from supplied test viewpoints. The organizers
+evaluate a separate blind test set using visual fidelity, measured by PSNR, SSIM, and LPIPS,
+and semantic mIoU, with equal weighting between the two components of the Accuracy Score.
+Our experiments use a local holdout from the released data; they do not measure performance on
+the organizers' blind test set.
 
-Three properties of this specific dataset and task make it non-trivial. First, the bridge's
-structural components differ sharply in geometry and visibility: the deck is a large, well-textured
-horizontal plane visible from most of the flight trajectory, towers are tall vertical columns seen
-from a narrower range of angles, and the main cable and its hangers are slender linear features
-spanning only a handful of pixels per view — and, because a 2D polygon annotation traces a region
-enclosing the whole cable-and-hanger assembly rather than each individual strand, the `stay_cable`
-class (the dataset's own annotation label for this component, following its JSON files; the
-contest brief itself calls it the "main cable" [p.9]) is itself annotated coarsely, with sky or
-water pixels falling inside the label alongside the cable and hangers themselves. Second,
-only 300 of the 400 available images carry manual annotations; the remaining 100 must be exploited
-without any ground truth if they are to contribute useful supervision at all. Third, the provided
-camera poses are Structure-from-Motion estimates — documented by the organizers as "reference
-only" rather than survey-grade ground truth — so the method cannot assume the input geometry is
-error-free.
+The dataset presents three challenges. First, structural components differ in projected size,
+texture, and visibility. In particular, the dataset label *stay_cable* denotes the main cable
+and hanger assembly, called the main cable in the brief [4, p. 9]. Its polygons enclose broad
+regions that include sky or water between physical strands. High overlap with this annotation
+therefore need not imply precise recovery of individual cables. Second, one quarter of the
+released images lack semantic annotations, motivating pseudo-labeling to use their viewpoints
+for semantic supervision. Third, the supplied camera parameters are SfM estimates, so residual
+geometric inconsistency may affect rendering quality.
 
-We address these challenges with a semantic 3D Gaussian Splatting pipeline whose contributions are:
+We develop a pipeline that combines sparse geometric initialization, supervised 2D segmentation,
+and a semantic Gaussian representation. The contributions of this study are:
 
-1. A semantic 3D Gaussian Splatting formulation that renders RGB and a 5-class semantic map in
-   a single fused rasterization pass, satisfying the contest's dual-output requirement natively
-   with no separate semantic-segmentation-of-renders post-process, and guaranteeing the two
-   outputs are pixel-aligned by construction.
-2. A semantic warm-start strategy that initializes each Gaussian's class logits from multi-view
-   plurality-voted labels on a triangulated sparse point cloud instead of random initialization.
-3. A 2D pseudo-labeling stage (fine-tuned SegFormer) that extends semantic supervision to the
-   100 unlabeled frames, increasing the effective training-view count from 270 to 370 at no
-   additional annotation cost.
-4. An empirical study of training resolution's effect on reconstruction quality, showing
-   full-resolution training yields consistent gains over half-resolution across every metric
-   (Section 5.5).
-5. End-to-end results on the contest's trajectory-interleaved 30-view test holdout: PSNR 22.43 dB,
-   SSIM 0.854, LPIPS 0.321, and structural mIoU 92.08%.
+1. An implementation of joint RGB and fixed-class semantic rendering for the bridge dataset,
+   using a shared Gaussian rasterization pass and aligned output pixels.
+2. A semantic initialization procedure that assigns Gaussian logits from multi-view plurality
+   votes over labeled observations of a triangulated sparse cloud.
+3. A pseudo-labeling stage that expands semantic supervision from 270 manually labeled views
+   to 370 views without additional manual annotation.
+4. An evaluation of the resulting system on 30 held-out views, including a matched comparison
+   of full- and half-resolution training and an analysis of annotation-related limitations.
 
-Our full implementation, including the scripts used to reproduce every number reported in this
-paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
+Implementation and reproduction instructions are available in the accompanying repository:
+[IC-SHM 2026 Project 2](https://github.com/zeki-aitech/ic-shm-2026-project-2).
+
 
 ---
 
 ## 2. Related Work
 
-**Structure-from-Motion and multi-view geometry.** COLMAP [4] is the de facto
-standard incremental Structure-from-Motion and multi-view stereo pipeline for recovering camera
-poses and sparse 3D structure from unordered image collections. The contest dataset's camera
-intrinsics, per-image poses, and 2D-3D feature tracks are all COLMAP outputs, and we build
-directly on them (Section 3.2) rather than re-deriving pose estimates from scratch.
+**Structure-from-Motion and multi-view geometry.** Schönberger and Frahm [5] describe the
+incremental Structure-from-Motion approach underlying COLMAP. The contest provides camera
+calibration, poses, and feature tracks in COLMAP format. We retain these supplied camera
+parameters and triangulate sparse points from observations in our training pool (Section 3.2).
 
-**Neural scene representations.** Neural Radiance Fields (NeRF) [5] represent a scene
-implicitly as a coordinate-based MLP queried by ray-marching, producing high-fidelity novel views
-at the cost of slow, per-pixel volumetric rendering. 3D Gaussian Splatting [6] instead
-represents a scene explicitly as a set of anisotropic 3D Gaussians rendered by fast, tile-based
-rasterization, achieving comparable or better visual quality at real-time rendering speeds. We
-adopt the explicit, primitive-based representation for a reason specific to this task: an explicit
-set of primitives gives every rendered pixel a direct, addressable set of contributing 3D elements,
-which is what makes it natural to attach a per-primitive semantic identity (Section 3.4) and
-recover it at render time — an implicit MLP would require a separate semantic decoding pathway
-with no equivalent one-to-one correspondence to discrete scene elements.
+**Neural scene representations.** NeRF [6] represents a scene through a coordinate-based
+network and synthesizes views by volumetric integration. Kerbl et al. [7] introduce an explicit
+representation of anisotropic 3D Gaussians with adaptive density control and tile-based
+rasterization, enabling real-time view synthesis in their evaluated scenes. Explicit primitives
+provide a convenient location for storing auxiliary scene attributes. Our model uses this
+representation with view-independent RGB and a five-dimensional semantic logit vector for
+each Gaussian; it does not use view-dependent spherical-harmonic appearance.
 
-**Semantic and feature-augmented radiance fields.** A growing line of work attaches non-appearance
-information to a radiance-field-style representation. Semantic-NeRF [7] was an early, influential
-approach to jointly encode semantics with appearance and geometry in a NeRF, appending a
-segmentation head to the same implicit MLP and rendering semantic logits by the same volumetric
-integration used for color; the resulting multi-view consistency lets sparse 2D labels propagate
-to dense, accurate semantic maps. Follow-up work moved this idea onto the faster, explicit
-Gaussian Splatting representation while pursuing open-vocabulary rather than fixed-class
-supervision: Feature 3DGS [8] attaches an arbitrary-dimensional feature vector to
-every Gaussian and distills it from a 2D foundation model (e.g. SAM [9] or CLIP-LSeg [10]) via a
-teacher-student loss, rendering RGB and features with what the authors describe as a "parallel"
-N-dimensional rasterizer that shares each Gaussian's opacity and depth ordering across both
-outputs; LangSplat [11] similarly bakes per-Gaussian CLIP language embeddings
-(compressed through a scene-specific autoencoder to keep rendering tractable) to support
-open-vocabulary 3D queries; and Gaussian Grouping [12] attaches a compact identity
-encoding to every Gaussian, supervised by Segment Anything masks, to support open-world instance
-grouping and editing rather than semantic classification. All three explicit-representation
-methods share a structural similarity with our approach — an auxiliary per-Gaussian attribute
-rendered jointly with color through the same alpha-compositing weights — but target open-vocabulary
-or instance-level embeddings distilled from a general-purpose foundation model, which is
-well-suited to interactive querying and editing but is neither necessary nor the most direct route
-to the contest's requirement: a per-pixel map over a small, fixed set of five known structural
-classes, evaluated by mIoU against official class IDs. We instead attach a low-dimensional,
-directly-supervised class-logit vector trained with ordinary cross-entropy against real and
-pseudo-labeled masks, and — distinct from all four of the above — warm-start that vector from a
-multi-view plurality vote over a triangulated sparse point cloud (Section 3.4) rather than from a
-foundation-model distillation process, which requires no pretrained 2D foundation model at all and
-ties the semantic initialization directly to the contest's own annotated classes.
+**Semantic and feature-augmented scene representations.** Semantic-NeRF [8] jointly learns
+appearance, geometry, and semantic predictions in an implicit scene representation. Semantic
+logits are integrated along rays and supervised by 2D labels, enabling label propagation and
+semantic novel-view rendering. Thus, direct semantic supervision of a renderable scene
+representation predates our method.
 
-**Structure-aware bridge segmentation.** Lin et al. [13] propose a structure-oriented loss
-function for automated semantic segmentation of bridge *point clouds*, explicitly weighting the
-loss to reflect each structural component's spatial role rather than treating all classes
-uniformly — a training-time loss on 3D point clouds, a different stage and data modality from
-our own warm-start label initialization from 2D images (Section 3.4), but a related concern with
-component-aware treatment of structurally distinct classes. Our own 2D pseudo-labeling stage
-(Section 3.3) fine-tunes
-SegFormer [14], a semantic segmentation architecture built around a hierarchical Transformer
-encoder that produces multi-scale features without positional encodings - avoiding the
-resolution-dependent interpolation artifacts that encodings introduce - paired with a
-lightweight all-MLP decoder that aggregates the encoder's per-stage features, instead of the
-heavier convolutional decoders typical of earlier segmentation architectures. We use its
-smallest variant, MiT-B0, chosen for its strong accuracy-to-compute ratio on a single consumer
-GPU.
+Feature 3DGS [9] augments Gaussians with feature vectors distilled from 2D models, including
+SAM [10] and CLIP-LSeg [11], and uses an N-dimensional rasterizer for RGB and feature rendering.
+LangSplat [12] learns per-Gaussian language features, with a scene-specific autoencoder for
+compression, to support open-vocabulary queries. Gaussian Grouping [13] instead learns compact
+identity encodings from associated SAM masks through a rendered identity-classification loss
+and a spatial consistency regularizer, supporting grouping and editing. These methods share the
+use of renderable auxiliary Gaussian attributes, but differ in supervision and intended output.
 
-**Structure-aware 3D bridge reconstruction.** Hu et al. [2] reconstruct structure-aware 3D
-models of cable-stayed bridges with a recursive network that predicts both a high-level structural
-relation graph and low-level 3D geometry from multi-view images and a photogrammetric point cloud
-— sharing our goal of a structurally-labeled 3D bridge model, but pursuing it through explicit
-geometric/graph prediction and mesh-level outputs rather than a differentiable, renderable scene
-representation. Li et al. [3] fuse UAV LiDAR and imagery for high-resolution bridge model
-reconstruction and damage detection, illustrating a complementary sensor-fusion route to bridge
-digital twins that, unlike our approach, depends on dedicated LiDAR hardware rather than imagery
-and poses alone.
+Our application requires class IDs for a fixed set of bridge components, so we optimize five
+class logits directly using manually annotated and pseudo-labeled masks. Multi-view votes
+initialize these logits before optimization. This initialization uses the provided annotations
+without feature distillation; the separate pseudo-labeling stage uses a pretrained SegFormer.
+We present the combination as a task-specific system design, rather than claiming auxiliary
+attribute rendering itself as a new mechanism.
 
-**UAV-based bridge inspection.** Zhang et al. [1] systematically review 115 UAV-enabled bridge
-inspection studies and find that, despite UAVs' promise for automating the full inspection
-pipeline, most existing approaches still require substantial human intervention at some stage —
-typically manual review of captured imagery or point clouds rather than an end-to-end model that
-directly outputs a labeled 3D representation queryable from arbitrary viewpoints. This gap is
-precisely what a renderable, semantically-labeled 3D reconstruction pipeline like ours is
-positioned to close: once trained, our model can compute a "what does the bridge look like, and
-what is each pixel" answer for any camera pose an inspector specifies, without further manual
-annotation - though we only verify rendering accuracy at poses within the UAV's flown trajectory
-(Section 3.6); accuracy at poses well outside that envelope is plausible by construction but not
-independently confirmed (Section 5.3).
+**Structure-aware bridge segmentation.** Lin et al. [14] introduce a structure-oriented loss
+for bridge point-cloud segmentation, incorporating spatially informed weighting and structural
+relationships. Their work addresses component-aware segmentation in 3D point clouds, whereas
+our initialization transfers labels from 2D observations to sparse points. Task A uses
+SegFormer [15], whose hierarchical Transformer encoder produces four feature scales and whose
+lightweight all-MLP decoder aggregates them. Its encoder avoids positional encodings, and its
+MiT-B0 configuration provides a compact model for fine-tuning on a single GPU.
+
+**Structure-aware reconstruction and inspection.** Hu et al. [2] reconstruct cable-stayed
+bridges from multi-view images and a photogrammetric point cloud using a recursive network
+that predicts structural relations and component geometry. Li et al. [3] combine UAV LiDAR
+and imagery for bridge reconstruction and damage detection. These studies demonstrate
+complementary approaches to associating geometry with structural information. Zhang et al. [1]
+review 115 UAV-enabled bridge inspection studies and identify remaining automation challenges.
+Our scope is narrower than a complete inspection system: we reconstruct appearance and
+component labels, without detecting damage or validating displacement, deformation, or cable
+force measurements.
+
 
 ---
 
 ## 3. Method
 
-Our pipeline has two stages, summarized in Figure 1. Task A produces pixel-level semantic labels
-for images the contest leaves unannotated, so that the widest possible set of viewpoints can
-supervise the 3D model. Task B fits a semantically-augmented 3D Gaussian Splatting model to the
-posed images and their (real or predicted) semantic masks, and exposes a single rendering
-function that answers the contest's core requirement: given any camera pose, produce both a
-photorealistic RGB image and a per-pixel structural-class map. Posed UAV images feed two parallel
-branches — sparse triangulation and multi-view semantic voting produce a semantic warm-start for
-the Gaussians, while Task A's fine-tuned SegFormer pseudo-labels the 100 unlabeled images to
-widen Task B's supervision to 370 views — before Task B trains the semantically-augmented
-Gaussians with fused single-pass RGB+semantic rasterization and exposes a single `render(pose)`
-entry point producing both an RGB image and a semantic map for any camera viewpoint. The rest of
-this section formalizes the task, then describes each stage in turn.
+Figure 1 summarizes the pipeline. Task A generates pseudo-labels for the 100 unlabeled frames.
+In parallel, sparse triangulation and multi-view voting initialize the Gaussian representation.
+Task B optimizes this representation using 270 manually labeled views and 100 pseudo-labeled
+views, producing RGB and semantic outputs from a query camera pose.
 
 ![Figure 1: Pipeline overview](figures/fig1_pipeline.png)
 
-**Figure 1.** Pipeline overview. Left: sparse triangulation and multi-view voting produce a
-semantic warm-start, alongside Task A's SegFormer pseudo-labeling of the unlabeled images.
-Right: Task B trains on both, and its trained model exposes the `render(pose)` entry point.
+**Figure 1.** Pipeline overview. Geometry and observed RGB initialize Gaussian positions and
+colors; plurality votes from 270 labeled views initialize semantic logits. Task A is fine-tuned
+on 240 images and selected using 30 validation images. Task B uses these 270 labeled images
+plus 100 pseudo-labeled images. Thirty test images are excluded from the model-building steps
+performed by our pipeline. The trained model renders RGB and semantic maps from query poses.
 
 ### 3.1 Problem Formulation
 
 We are given a set of posed UAV images of a single suspension bridge,
 $\{(I_i, \pi_i)\}_{i=1}^{N}$, where $I_i$ is an RGB photograph and $\pi_i$ its camera pose
 (position and orientation) recovered by Structure-from-Motion. A subset of these images carries
-pixel-level semantic annotations $M_i \in \{0,1,2,3,4\}^{H\times W}$ over five structural
-classes (0: background, 1: deck, 2: `stay_cable`, 3: tower, 4: foundation); the remainder do not.
+pixel-level semantic annotations $M_i \in \{0,1,2,3,4\}^{H\times W}$ over five semantic
+classes (0: background, 1: deck, 2: stay_cable, 3: tower, 4: foundation); the remainder do not.
 Our goal is to learn a 3D scene representation $\mathcal{G}$ such that, for an arbitrary query
 pose $\pi_q$ — including poses never observed during acquisition — rendering $\mathcal{G}$ from
 $\pi_q$ produces both an RGB image $\hat{I}_q$ and a semantic map $\hat{M}_q$ that closely match
@@ -215,198 +161,160 @@ truth at inference time.
 
 ### 3.2 Camera Geometry and Sparse Point Initialization
 
-The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
-poses for all 400 UAV frames, together with two-dimensional feature tracks linking pixel
-observations across views, but it does not include precomputed 3D point coordinates. To keep the
-held-out test split (Section 3.6) from influencing even this geometric initialization, we build
-tracks from only the 370 images available for training - the 240 train, 30 internal-val, and 100
-unlabeled frames - discarding the 30 test images' observations before triangulation ever sees
-them; this yields 86,319 tracks. We recover
-a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [15] (Locally
-Optimized RANSAC) multi-view triangulation: as in standard RANSAC, candidate 3D points are estimated from
-small random subsets of a track's observations and validated by reprojection error to reject
-outlier correspondences, with an added local refinement step that further optimizes each accepted
-hypothesis rather than accepting it as-is. This robust estimation jointly enforces cheirality and
-a minimum triangulation-angle constraint to reject ill-conditioned geometry; the resulting points
-have a mean reprojection error of
-approximately 0.5 pixels. A subsequent distance-from-median outlier filter (using the
-interquartile range of each point's distance to the cloud centroid) removes residual floaters,
-leaving 82,518 triangulated points. Because the shared camera carries non-negligible radial
-distortion ($k_1 \approx 0.009$), and Gaussian rasterization assumes an ideal pinhole projection,
-we undistort all 400 images once, up front, to a consistent pinhole convention; every subsequent
-training, evaluation, and rendering step operates in this undistorted space. The semantic
-masks (both real and pseudo-labeled) are rasterized/predicted on the *original* distorted photos
-(Sections 3.3-3.4), so we undistort each with the identical per-pixel remap - nearest-neighbor,
-so class ids stay discrete - before pairing it with an undistorted image; without this, a mask
-would be systematically offset from the pixel it is meant to label by several pixels at frame
-edges.
+The dataset supplies COLMAP [5] SIMPLE_RADIAL camera intrinsics, per-image poses, and feature
+tracks for 400 frames, but no precomputed 3D point coordinates. We remove observations from
+the 30 test images before triangulation, leaving 86,319 tracks from the 370-image training
+pool. Supplied calibration and poses remain fixed throughout reconstruction.
+
+Tracks with at least two observations are triangulated using LO-RANSAC [16]. Candidate points
+are estimated from subsets of observations and scored using angular residuals; local refinement
+is applied to hypotheses that improve the best consensus found so far. The angular inlier
+threshold is 2 degrees, and the minimum triangulation angle is 0.5 degrees. Cheirality checks
+reject points behind observing cameras. This yields 84,086 points with a mean reprojection
+error of 0.49 pixels, measured after triangulation. An outlier filter then removes points whose
+distance from the coordinate-wise median exceeds $Q_3 + 3(Q_3-Q_1)$, where $Q_1$ and $Q_3$
+are the quartiles of those distances. The resulting initialization contains 82,518 points.
+
+Task A operates on the original distorted photographs. Sparse color sampling and semantic
+voting also use original images and masks, because feature-track coordinates refer to those
+images. Task B uses a pinhole convention: images are undistorted using the supplied radial
+coefficient ($k_1\approx0.009$), and both manual and pseudo-label masks undergo the identical
+coordinate remap with nearest-neighbor interpolation. Task B training, local evaluation, and
+rendering therefore use aligned, undistorted images and masks. Test images and masks are
+transformed for evaluation only.
 
 ### 3.3 Task A: 2D Semantic Pseudo-Labeling
 
-Only 300 of the 400 available UAV frames carry manual polygon annotations; the remaining 100 are
-unlabeled. To make use of them, we fine-tune a SegFormer [14] semantic segmentation model (MiT-B0
-backbone) on the 240-image labeled training split (Section 3.6), validating 2D mIoU each epoch on
-a separate 30-image *internal* validation split and retaining the checkpoint with the best score
-there. This internal validation split exists specifically so Task A's own checkpoint selection
-never touches the 30-image test split reserved for Section 5's final evaluation - validating
-against the same images used for final evaluation would let that evaluation set influence which
-checkpoint gets chosen, undermining its role as a genuinely held-out test. The fine-tuned model is
-then applied to the 100 unlabeled images to produce pseudo-masks, which widen the pool of
-semantically-supervised training viewpoints available to Task B from 270 (240 train + 30 internal
-val - Task B has no checkpoint-selection step of its own, so it trains on both) to 370 - a 37%
-increase in viewpoint coverage for the semantic loss described in Section 3.4, at no additional
-annotation cost. The 30 test images are never touched by this stage, whether as training data,
-internal validation data, or prediction targets: they are reserved exclusively for the final
-evaluation in Section 5.
+We fine-tune SegFormer [15] with a pretrained MiT-B0 encoder on 240 labeled images. Per-epoch
+validation on a separate set of 30 images selects the checkpoint with the highest structural
+mIoU. This checkpoint generates masks for the 100 unlabeled images. Task B then uses 270
+manually labeled views, including Task A's validation views, and 100 pseudo-labeled views.
+Task B is trained for a fixed iteration budget without validation-based checkpoint selection.
+The remaining 30 labeled images are reserved for final evaluation and are not used in either
+Task A fine-tuning or pseudo-label generation.
 
-Figure 2 illustrates Task A's pseudo-label generation. The hierarchical encoder supplies four
-feature scales to the decoder, which combines fine spatial detail with coarser contextual
-features. The predicted logits are resized to the original image dimensions before argmax,
-yielding a five-class pseudo-mask for semantic supervision in Task B.
+Figure 2 illustrates the prediction path. Four feature scales provide spatial detail and
+context to the decoder. Its five-class logits are resized to the original image dimensions
+before argmax produces a pseudo-mask, which is subsequently undistorted for Task B.
 
 ![Figure 2: SegFormer architecture for Task A pseudo-label generation](figures/fig2_segformer_architecture.png)
 
-**Figure 2.** SegFormer-based pseudo-label generation for Task A. The MiT-B0 encoder [14]
-extracts features at four spatial scales relative to the resized input. The All-MLP decoder
+**Figure 2.** SegFormer-based pseudo-label generation after fine-tuning. The MiT-B0 encoder
+[15] extracts features at four scales relative to the resized input. The all-MLP decoder
 projects, resizes, and fuses these features, with its final classifier producing five-class
-logits at one-quarter input resolution. The logits are resized to the original image dimensions
-before argmax generates pseudo-masks for semantic supervision in Task B. The schematic shows the
-inference path after fine-tuning.
+logits at one-quarter input resolution. Resizing logits followed by argmax yields a pseudo-mask
+at the original image dimensions.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
-**Representation.** Following 3D Gaussian Splatting [6], we represent the bridge as a set of
-anisotropic 3D Gaussians. Each Gaussian $g_k$ is parameterized by a mean position
-$\mu_k \in \mathbb{R}^3$, a scale $s_k \in \mathbb{R}^3$, a rotation quaternion $q_k$, an
-opacity $\alpha_k$, and an RGB color $c_k$. We augment this standard parameterization with a
-semantic logit vector $\ell_k \in \mathbb{R}^5$, one entry per structural class, turning every
-Gaussian into a carrier of both appearance and structural identity.
+**Representation.** Following 3D Gaussian Splatting [7], we represent the scene as anisotropic
+Gaussians. Each Gaussian $g_k$ has a mean $\mu_k\in\mathbb{R}^3$, positive scales
+$s_k\in\mathbb{R}_{>0}^3$, a unit rotation quaternion $q_k$, opacity $o_k\in(0,1)$, and
+view-independent RGB $c_k\in(0,1)^3$. We additionally optimize semantic logits
+$\ell_k\in\mathbb{R}^5$ for four structural classes and background. Scales are stored in log
+space and exponentiated; quaternions are normalized; sigmoid transforms constrain opacity
+and RGB. Semantic logits remain unconstrained.
 
-**Semantic warm-start.** Following standard 3D Gaussian Splatting practice [6], each Gaussian's
-initial position and color are taken directly from a corresponding point in the sparse cloud from
-Section 3.2, rather than from random values - position from the point's triangulated 3D
-coordinate, color from the real RGB pixel value observed at that point's projection, averaged
-over every view that observes it. Our own addition is extending this warm-start to the semantic
-channel: each Gaussian's semantic logits are initialized from that same point's class, determined
-by a multi-view plurality vote over the 2D masks of every training view that observes it: each
-observing view casts one vote for the class it sees at that point's projected pixel, and the
-class with the most votes wins, with a fixed tie-break priority (favoring thin/rare structural
-classes over background) resolving exact ties. The winning class is encoded as a scaled one-hot
-logit (+2 at the voted class, −2 elsewhere) rather than a hard, unbreakable label, so that the
-semantic channel begins optimization from an informed prior instead of from noise, while
-remaining free to be corrected by the photometric and semantic losses during training.
+**Initialization.** Each sparse point initializes a Gaussian position. Its RGB is the average
+of sampled pixel colors over its retained observing views, including unlabeled views but
+excluding test views. Each initial scale equals the mean Euclidean distance to the three nearest
+other points; rotations start at the identity and opacity at 0.3. Initial scales are isotropic
+but can become anisotropic during optimization.
 
-The main cable and its hangers are slender, and the `stay_cable` class is annotated as a coarse
-polygon enclosing the whole cable-and-hanger assembly rather than tracing individual strands
-(Figure 3), so sky and water pixels fall inside the label alongside the cable and hangers
-themselves. We use the same plain plurality
-rule for every class, including cable, rather than adding a class-specific exception for this;
-Section 5.2 examines what this means for cable's final IoU and what the model actually
-learns from it.
+To initialize semantics, each labeled observation in the 270-image labeled training pool
+votes for the mask class at its feature-track coordinate. The plurality winner initializes
+logits to +2 for that class and -2 for the others. Ties use the fixed priority cable, tower,
+foundation, deck, background; points without labeled observations initialize as background.
+The same plurality rule applies to all classes. Pseudo-labels supervise subsequent training but
+do not participate in this initialization.
 
-![Figure 3: The coarse stay_cable annotation region and the multi-view plurality vote](figures/fig3_cable_voting.png)
+Figure 3 shows the coarse cable annotation and an illustrative vote. The polygon includes
+regions between physical strands, so the initialization reflects the annotation convention.
+The logits remain learnable under semantic supervision; the rendering loss does not impose
+an immutable class assignment.
 
-**Figure 3.** The `stay_cable` annotation region and the multi-view plurality vote. Left: a
-real ground-truth mask overlaid on its undistorted UAV photo — the `stay_cable` polygon (cyan)
-covers a large triangular region of sky and river far beyond the cable and hangers themselves. Right:
-an illustrative (not one specific real point) schematic of the voting mechanism — each triangle
-is a camera, oriented to face the 3D point being voted on, labeled with the class it observes
-there.
+![Figure 3: Cable annotation and multi-view plurality voting](figures/fig3_cable_voting.png)
 
-**Fused rendering.** A central design choice of our method is that RGB and semantic outputs
-share a single rasterization pass. We concatenate each Gaussian's RGB color (3 channels) and
-semantic logits (5 channels) into one 8-channel color tensor, and render it through `gsplat`'s
-differentiable rasterizer [16]: every Gaussian is projected onto the image plane, the projections
-are depth-sorted, and each pixel is computed by alpha-compositing the sorted splats from front to
-back. Because the geometric projection and depth ordering that determine this composite depend
-only on each Gaussian's position, scale, and rotation — not on which of its channels are being
-composited — rendering RGB and semantics together in one pass is both simpler and cheaper than
-running two independent rasterization passes with duplicated projection and sorting work, and it
-guarantees the two outputs are pixel-aligned by construction.
+**Figure 3.** Cable annotation and semantic initialization. Left: an undistorted ground-truth
+mask overlaid on the correspondingly undistorted photograph; cyan marks the broad cable-and-hanger
+region, including sky and river between strands. Right: a schematic vote for one 3D point,
+not an extracted real track. Camera triangles face the point. Cable and background each receive
+two votes, and the fixed tie-break priority assigns cable.
 
-Crucially, the semantic channels are composited by the *same* alpha-blending rule as color: a
-rendered pixel's logit vector is an opacity- and depth-weighted combination of the semantic
-logits of every Gaussian whose projected splat covers that pixel, not a hard, per-pixel vote
-among discrete labels. The predicted class at a pixel is only resolved by taking the arg max of
-this blended logit vector at read-out time (Section 3.5). During training, this same
-differentiability is what lets semantic supervision reach the individual Gaussians: the
-cross-entropy loss described below is computed on the blended per-pixel logits, and its gradient
-is distributed back through the alpha-compositing weights to exactly the Gaussians that
-contributed to each supervised pixel, in proportion to their contribution. A Gaussian whose
-current class prediction is wrong for a given view is thus pushed toward the correct class, while
-one that is already correct has its logits reinforced — and because each Gaussian is typically
-observed by many training views from different angles over the course of optimization, its final
-semantic identity reflects an accumulation of evidence across the whole trajectory rather than
-any single observation. This is the same mechanism by which color and geometry are refined by the
-photometric loss, applied identically to the semantic channels.
+**Fused rendering.** RGB and semantic logits are concatenated into an eight-channel attribute
+vector and passed to the differentiable gsplat rasterizer [17]. Projected Gaussians are
+composited in depth order, with the same weights applied to both attributes. For pixel $p$,
+let $a_{kp}$ be the effective opacity of the projected footprint of Gaussian $k$, and let
+$T_{kp}=\prod_{j<k}(1-a_{jp})$ be its transmittance. The outputs are
+$$\hat I_p=\sum_k T_{kp}a_{kp}c_k+T_{\mathrm{end},p}b_I,\qquad
+z_p=\sum_k T_{kp}a_{kp}\ell_k+T_{\mathrm{end},p}b_\ell,$$
+where $b_I$ and $b_\ell$ are fixed background attributes and
+$T_{\mathrm{end},p}=\prod_k(1-a_{kp})$. We use $b_I=(0.5,0.5,0.5)$ and
+$b_\ell=(4,-4,-4,-4,-4)$, favoring the background class in uncovered regions.
+This formulation shares projection, depth ordering, and compositing across all
+eight channels. The semantic map is $\hat M_p=\arg\max_c z_{pc}$.
 
-**Losses.** Training minimizes
-$\mathcal{L} = \mathcal{L}_{\text{photo}} + \lambda_{\text{sem}} \, w \, \mathcal{L}_{\text{sem}}$
-for each sampled training view. $\mathcal{L}_{\text{photo}} = 0.8\,\mathcal{L}_1 +
-0.2\,(1-\text{SSIM})$ is the standard photometric loss used in 3D Gaussian Splatting, comparing
-the rendered RGB image against the real photograph. $\mathcal{L}_{\text{sem}}$ is a per-pixel
-cross-entropy loss between the rendered semantic logits and the corresponding ground-truth or
-pseudo-label mask, and $w$ down-weights views supervised by Task A's pseudo-labels relative to
-views with real manual annotations, reflecting their lower label confidence.
+Cross-entropy is applied to the rendered logits before argmax. For a pixel with label $y_p$,
+its gradient to a Gaussian's logits is
+$$\frac{\partial\mathcal L_{\mathrm{CE},p}}{\partial\ell_k}
+=T_{kp}a_{kp}\left(\operatorname{softmax}(z_p)-e_{y_p}\right),$$
+where $e_{y_p}$ is the one-hot target and the compositing weights are held fixed in this
+partial derivative. Gradients therefore depend on the blended pixel prediction, not on a
+separate classification decision for each Gaussian. Semantic loss also updates geometry and
+opacity through the weights. Photometric loss directly updates geometry, opacity, and RGB,
+but has no direct gradient to semantic logits.
 
-Figure 4 summarizes this representation, rasterization, and loss pipeline end-to-end.
+**Losses.** For each sampled view, optimization minimizes
+$$\mathcal L=\mathcal L_{\mathrm{photo}}+\lambda_{\mathrm{sem}}w\mathcal L_{\mathrm{sem}},
+\qquad \mathcal L_{\mathrm{photo}}=0.8\mathcal L_1+0.2(1-\mathrm{SSIM}),$$
+where $\mathcal L_1$ is mean absolute RGB error and $\mathcal L_{\mathrm{sem}}$ is cross-entropy
+averaged over pixels. We use $\lambda_{\mathrm{sem}}=0.5$, with $w=1$ for manual annotations
+and $w=0.5$ for pseudo-labels. The latter reduces their semantic-loss contribution without
+changing the RGB target or photometric weight. Figure 4 summarizes the representation and losses.
 
-![Figure 4: The semantic Gaussian model's tensor representation, shared rasterization pass, and training losses](figures/fig4_gaussian_architecture.png)
+![Figure 4: Semantic Gaussian representation and training losses](figures/fig4_gaussian_architecture.png)
 
-**Figure 4.** Semantic Gaussian representation and joint RGB-semantic rendering. Each Gaussian
-carries geometric parameters, opacity, RGB color, and five semantic logits. RGB and logits are
-concatenated and rendered in a single differentiable rasterization pass using shared
-alpha-compositing weights. Rendered logits feed semantic cross-entropy during training and arg
-max for semantic-map generation. Photometric and semantic losses jointly optimize the
-representation. Dashed arrows denote training-only connections; semantic colors indicate class
-identities for visualization.
+**Figure 4.** Semantic Gaussian representation and joint rendering. Each Gaussian carries
+geometry, opacity, RGB, and five semantic logits. Concatenated RGB and logits are rendered with
+shared alpha-compositing weights. Rendered logits feed cross-entropy during training and argmax
+for class-map generation. Photometric loss supervises RGB; both losses update shared geometry
+and opacity. Dashed arrows denote training connections. Semantic colors illustrate class IDs.
 
-**Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
-training. Gaussians whose positional gradients are large — an indication that a single primitive
-is being stretched to cover detail it cannot adequately represent — are split or duplicated,
-while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [16] built-in
-density-control strategy. This process grows the representation from the 82,518-point sparse
-initialization to 600,583 Gaussians by the end of training, allowing the model to allocate
-additional capacity to structurally intricate regions, such as individual cable strands, that
-the initial sparse cloud under-represents.
+**Density control.** The gsplat density-control strategy [17] duplicates or splits Gaussians
+according to projected positional gradients and scale, and prunes low-opacity primitives.
+These operations adapt representation capacity during training. With the schedule and soft
+point-count cap in Section 4.2, the model grows from 82,518 initial points to 600,583 Gaussians.
 
 ### 3.5 Rendering for Arbitrary Viewpoints
 
-The trained model exposes a single inference entry point that takes an arbitrary camera pose —
-position, orientation, and the shared camera intrinsics — and returns both an RGB image and a
-semantic-class map using the official class IDs (0–4). This function makes no assumption that
-the requested pose was observed during training or even lies close to the UAV's original flight
-line; it is the literal artifact evaluated by the contest organizers against their blind held-out
-test poses, and we use the same function throughout this paper to render the results in Section
-5.
+Inference accepts a world-to-camera rotation and translation, pinhole intrinsics, and image
+size. Rasterization returns RGB and five semantic channels; argmax converts the latter to a
+class-ID map with values 0–4. This interface supports query poses outside the acquisition set,
+although the ability to render a pose does not establish accuracy at that pose. Our local
+results use the undistorted convention described in Section 3.2. Evaluation against distorted
+photographs would require a matching camera model or coordinate remapping.
 
 ### 3.6 Evaluation Protocol
 
-We adopt a held-out evaluation protocol that mirrors the contest's own blind-test philosophy as
-closely as possible without access to the organizers' actual test poses. Thirty of the 300
-labeled images — every tenth frame along the UAV's flight trajectory - are withheld as a test
-split from every stage of the pipeline: they contribute to neither Task A's fine-tuning nor its
-internal validation, nor Task B's semantic warm-start voting, nor its photometric/semantic
-training loss, nor even the sparse point cloud's own triangulation or the Gaussians' color
-initialization (Section 3.2) - the two stages most naturally overlooked, since they precede the
-training loop rather than being part of it. A further 30 images (every ninth of the remaining 270, by the same
-trajectory-interleaved strided mechanism) form a separate internal validation split used only by
-Task A's own checkpoint selection (Section 3.3); Task B treats these as ordinary labeled training
-views, since it has no checkpoint-selection step of its own to protect from leakage. We choose
-this trajectory-interleaved, strided split - every Nth frame along the flight path, rather than a
-random 10%/10% or one contiguous block - because it guarantees the held-out views are spread
-uniformly across the entire flight trajectory, covering the full range of altitudes, viewing
-angles, and lighting the UAV encountered, rather than being concentrated in whichever segment a
-random draw or a single contiguous block happens to land on. This comes with a real limitation we
-state plainly rather than gloss over: because consecutive UAV frames overlap by more than 99%
-visually, a strided split of this kind places a training frame immediately adjacent, in flight
-order, to essentially every held-out frame - it does not test the model on views far from any
-training view, and the reported metrics should be read as measuring interpolation within a dense
-camera trajectory rather than extrapolation to genuinely distant viewpoints. A contiguous-block or
-leave-block-out split would stress-test extrapolation more directly, at the cost of the uniform
-trajectory coverage this split provides; we leave that comparison to future work. For each of the
-30 held-out test views, we render RGB and semantic outputs from the trained model and compare
-them against the real photograph and ground-truth mask using the metrics described in Section 4.3.
+We reserve every tenth image among the 300 labeled frames for testing, yielding 30 test views.
+Every ninth image among the remaining 270 forms a 30-view internal validation set; the other
+240 images train Task A. Task B uses the 270 train-plus-validation labeled images and all 100
+unlabeled images. The 30 test views contribute to neither Task A training or selection, nor
+Task B losses, semantic voting, sparse triangulation, or color initialization.
+
+This separation applies to model-building operations performed by our pipeline. We retain the
+organizer-supplied calibration and poses, estimated from the released image collection, rather
+than estimating a new SfM model from the training subset. Our local holdout is therefore a
+conditional view-synthesis evaluation with supplied camera geometry, distinct from the
+organizers' unreleased blind test set.
+
+The interleaved split distributes test views across acquisition order but places them near
+training frames along the densely sampled flight. It primarily evaluates interpolation near
+the observed trajectory. Coverage is uniform in frame index, not necessarily in physical camera
+position or viewing angle. A separated trajectory segment would provide a complementary test
+of generalization beyond nearby observations. We render each local test pose once with the
+final model and compare it with its undistorted photograph and mask using Section 4.3's metrics.
+
 
 ---
 
@@ -414,25 +322,27 @@ them against the real photograph and ground-truth mask using the metrics describ
 
 ### 4.1 Dataset
 
-The contest dataset consists of 400 UAV images of a single suspension bridge at
-1320$\times$989 resolution, captured by one shared camera with `SIMPLE_RADIAL` intrinsics
-($f \approx 925.7$ px, $k_1 \approx 0.009$). Of these, 300 carry pixel-level polygon annotations
-over the five structural classes described in Section 3.1; the remaining 100 are unannotated and
-are used only through Task A's pseudo-labeling (Section 3.3). Annotations were produced with
-Labelme and rasterized to per-pixel class masks; because the `stay_cable` polygons are thin and
-frequently nested inside or adjacent to broader `deck` and `tower` regions, they are rasterized
-last so that a cable's mask pixels are never silently overwritten by a coarser structural class
-drawn on top of it. All 400 images share the same 240/30/30 (train/internal-val/test)
-trajectory-interleaved split defined in Section 3.6 - the 30 test images are identical across
-Task A, Task B training, and final evaluation, so that no stage of the pipeline ever trains, or
-selects a checkpoint, on a view another stage reports results on.
+The released dataset [4] contains 400 UAV images of one suspension bridge at
+$1320\times989$ pixels, with shared SIMPLE_RADIAL calibration
+($f\approx925.7$ pixels, $k_1\approx0.009$). Three hundred images have polygon annotations
+for four structural components and background. The remaining 100 provide RGB observations
+for geometry and appearance, and receive pseudo-labels for semantic supervision.
+
+Labelme polygons are rasterized into class-ID masks. Drawing order is deck, tower, foundation,
+then cable, with background assigned to unpainted pixels. Drawing cable last preserves its
+annotation where polygons overlap. The 300 labeled images are partitioned 240/30/30 as defined
+in Section 3.6; the 100 unlabeled images remain separate from that partition. All Task B
+comparisons use undistorted image–mask pairs at the evaluation resolution.
 
 ### 4.2 Implementation Details
 
 All experiments run on a single NVIDIA RTX 3080 (10 GB). Task A fine-tunes SegFormer (MiT-B0
 backbone) for 80 epochs with AdamW (learning rate $6\times10^{-5}$, weight decay
 $1\times10^{-4}$, cosine-annealed over training), batch size 8, at a downsampled resolution of
-$512\times384$; the checkpoint with the highest validation mIoU on the 30-image internal
+$512\times384$. RGB inputs use ImageNet normalization. Training augmentation comprises
+horizontal flipping (probability 0.5), brightness/contrast adjustment (probability 0.3), and
+hue/saturation/value adjustment (probability 0.2); masks undergo the corresponding geometric
+transform only. The checkpoint with the highest validation mIoU on the 30-image internal
 validation split (Section 3.3) is kept for pseudo-labeling. Task B optimizes each Gaussian
 parameter group with its own Adam optimizer
 and learning rate — means $1.6\times10^{-4}$ (exponentially decayed to 1% of its initial value
@@ -441,72 +351,71 @@ $5\times10^{-2}$, and both color and semantic logits $2.5\times10^{-3}$ — for 
 at full image resolution ($1320\times989$). The semantic loss weight $\lambda_{\text{sem}}$ is
 set to 0.5, and pseudo-labeled views are additionally down-weighted by a factor of 0.5 relative
 to manually-annotated views when computing $\mathcal{L}_{\text{sem}}$, reflecting their lower
-label confidence. Densification (Section 3.4) is active between iterations 500 and 15,000, with a
-600,000-Gaussian soft cap checked once per step (a single densification step can still push the
-count slightly past it before the next check, as in our own 600,583-Gaussian final model),
-bounding both memory use and per-iteration cost on a 10 GB GPU.
+label confidence. Density control is scheduled every 100 steps after step 500 and before step 15,000,
+with opacity resets scheduled every 3,000 steps. A 600,000-Gaussian soft cap gates the
+entire density-control update: once reached, splitting, pruning, and resets are skipped.
+A single update may exceed the cap; our count reaches 600,583 at step 7,400 and remains
+constant thereafter. Task B uses seed 42 for view shuffling and tensor random operations.
+The two resolution experiments use the same settings and fixed camera poses. We report one
+run per resolution, without a multi-seed uncertainty estimate.
 
 ### 4.3 Metrics
 
-We report the two components of the contest's Accuracy Score separately as well as combined,
-using four metrics computed between each rendered holdout view and its corresponding ground
-truth (real photograph for visual fidelity, annotated mask for semantic accuracy).
+We evaluate RGB reconstruction with PSNR, SSIM, and LPIPS, and semantic prediction with
+per-class IoU and structural mIoU. RGB outputs and targets are scaled to $[0,1]$.
+Each visual-fidelity metric is computed per test image and then averaged over the 30 views.
+Semantic metrics use a single confusion matrix accumulated over all test pixels.
 
-**PSNR** (peak signal-to-noise ratio, in decibels, higher is better) measures raw pixel-wise
-reconstruction error:
-$$\text{PSNR} = 10 \log_{10}\!\left(\frac{\text{MAX}^2}{\text{MSE}}\right), \qquad
-\text{MSE} = \frac{1}{3HW}\sum_{h,w}\sum_{c=1}^{3}\left(\hat{I}_c(h,w) - I_c(h,w)\right)^2,$$
-where $\hat{I}$ and $I$ are the rendered and ground-truth RGB images, $H \times W$ the image
-dimensions, $c$ indexes the three color channels, and $\text{MAX}$ the maximum representable
-pixel value (255 for 8-bit images). Because
-PSNR is a direct function of per-pixel squared error, it penalizes any pixel-level discrepancy
-equally regardless of whether that discrepancy is visually salient.
+**PSNR** (peak signal-to-noise ratio; higher is better) is
+$$\mathrm{PSNR}=10\log_{10}\frac{1}{\mathrm{MSE}},\qquad
+\mathrm{MSE}=\frac{1}{3HW}\sum_{h,w,c}(\hat I_c(h,w)-I_c(h,w))^2.$$
+The numerator is one because the RGB dynamic range is normalized to one. PSNR measures
+pixel-wise squared error and is reported in decibels; it does not model perceptual salience.
 
-**SSIM** [17] (structural similarity index, higher is better; in $[-1, 1]$ in general, though in
-practice close to $[0, 1]$ for comparisons between real photographs and their renders) addresses
-this by
-comparing local luminance, contrast, and structure rather than raw pixel differences:
-$$\text{SSIM}(\hat{I}, I) = \frac{(2\mu_{\hat{I}}\mu_I + c_1)(2\sigma_{\hat{I}I} + c_2)}
-{(\mu_{\hat{I}}^2 + \mu_I^2 + c_1)(\sigma_{\hat{I}}^2 + \sigma_I^2 + c_2)},$$
-where $\mu$, $\sigma^2$, and $\sigma_{\hat{I}I}$ are the mean, variance, and covariance computed
-over local sliding windows (averaged over the full image), and $c_1$, $c_2$ are small constants
-that stabilize the division when the local means or variances are near zero. SSIM tracks
-perceived image quality more closely than PSNR alone, but both remain pixel/patch-level
-comparisons.
+**SSIM** [18] (structural similarity; higher is better) compares local luminance, contrast,
+and structure:
+$$\mathrm{SSIM}(\hat I,I)=
+\frac{(2\mu_{\hat I}\mu_I+c_1)(2\sigma_{\hat I I}+c_2)}
+{(\mu_{\hat I}^2+\mu_I^2+c_1)(\sigma_{\hat I}^2+\sigma_I^2+c_2)}.$$
+Means, variances, and covariance are computed in local windows, with $c_1=0.01^2$ and
+$c_2=0.03^2$ for unit-range images. Evaluation uses uniform $7\times7$ windows, sample
+covariance normalization, and averaging across valid spatial locations and RGB channels.
+The training loss instead uses $11\times11$ Gaussian windows with standard deviation 1.5,
+population covariance, and zero padding. We distinguish these configurations for reproducibility.
+SSIM can range from -1 to 1, with 1 denoting identical inputs.
 
-**LPIPS** [18] (learned perceptual image patch similarity, lower is better, AlexNet backbone) instead
-compares deep-network feature activations:
-$$\text{LPIPS}(\hat{I}, I) = \sum_{l} \frac{1}{H_l W_l} \sum_{h,w}
-\left\| w_l \odot \left(\phi_l(\hat{I})_{hw} - \phi_l(I)_{hw}\right) \right\|_2^2,$$
-where $\phi_l$ is the (channel-normalized) feature map extracted at layer $l$ of a pretrained
-network, $H_l \times W_l$ its spatial resolution, and $w_l$ a per-channel weight learned to
-match human perceptual judgments. Because it compares learned features rather than pixels, LPIPS
-correlates more closely with human judgments of visual similarity than either PSNR or SSIM, and
-is comparatively more sensitive to structural artifacts that are easy to miss in raw pixel error
-but visually obvious - blurred cable strands are a plausible illustrative example in this domain,
-though this is our own extrapolation of LPIPS's known general property rather than a finding
-Zhang et al. [18] report for this specific case.
+**LPIPS** [19] (learned perceptual image patch similarity; lower is better) compares learned
+feature activations:
+$$\mathrm{LPIPS}(\hat I,I)=\sum_l\frac{1}{H_lW_l}\sum_{h,w}
+\left\|w_l\odot\big(\phi_l(\hat I)_{hw}-\phi_l(I)_{hw}\big)\right\|_2^2.$$
+Here $\phi_l$ is a channel-normalized feature map and $w_l$ denotes learned channel weights.
+We use the calibrated AlexNet LPIPS model, version 0.1, with RGB tensors mapped to $[-1,1]$.
+The metric was developed to reflect perceptual similarity [19]; its sensitivity to particular
+bridge defects or cable artifacts is not established by our experiments.
 
-**Semantic accuracy** is measured by per-class intersection-over-union and a structural mIoU that
-averages it over the four structural classes while excluding the background class. For class $c$,
-$$\text{IoU}_c = \frac{TP_c}{TP_c + FP_c + FN_c}, \qquad
-\text{mIoU} = \frac{1}{|\mathcal{C}|}\sum_{c \in \mathcal{C}} \text{IoU}_c, \quad
-\mathcal{C} = \{\text{deck}, \text{stay\_cable}, \text{tower}, \text{foundation}\},$$
-where $TP_c$, $FP_c$, and $FN_c$ are the true-positive, false-positive, and false-negative pixel
-counts for class $c$, obtained from a single confusion matrix pooled over every pixel of all 30
-holdout test views at once (the standard convention in semantic segmentation benchmarks, e.g.
-Cityscapes), rather than an average of 30 separate per-image mIoU scores - so a class's IoU here
-is a pixel-weighted, not an image-weighted, average across the test set. Background is excluded
-from the mean not because of how many pixels it covers - the mean in $\text{mIoU}$ already weights
-every class equally regardless of size - but because it is a comparatively easy class to segment
-(98.64%/99.20% IoU for Task A/Task B respectively, Tables 1 and 3) and is not itself one of the
-four structural components the contest evaluates; including it would pad the average with an
-artificially high, uninformative score and mask real errors on the classes that matter. Because the
-contest brief specifies the 0.5/0.5 weighting between Visual Fidelity and Semantic mIoU but does
-not define how PSNR, SSIM, and LPIPS combine into a single Visual Fidelity number, we report an
-illustrative Accuracy Score computed as the mean of PSNR (normalized against a 35 dB reference),
-raw SSIM, and $(1-\text{LPIPS})$, averaged with mIoU under the official weighting; we make this
-combination explicit here rather than presenting it as an authoritative formula.
+**Semantic accuracy.** For class $c$, pooled counts give
+$$\mathrm{IoU}_c=\frac{TP_c}{TP_c+FP_c+FN_c},\qquad
+\mathrm{mIoU}_{\mathrm{struct}}=\frac14\sum_{c\in\mathcal C}\mathrm{IoU}_c,\quad
+\mathcal C=\{\mathrm{deck},\mathrm{stay\_cable},\mathrm{tower},\mathrm{foundation}\}.$$
+Pooling counts differs from averaging per-image IoUs. Equivalently, each class's pooled IoU
+weights its per-image IoUs by their union sizes, omitting images with zero union. The subsequent
+mean across classes weights each structural class equally. We use four-class mIoU to focus
+on bridge components and report background IoU separately. This is our stated local evaluation
+convention; the brief [4] does not explicitly resolve background inclusion in its mIoU definition.
+For completeness, we also report
+$\mathrm{mIoU}_{\mathrm{all}}=\frac15\sum_{c=0}^{4}\mathrm{IoU}_c$, which includes background.
+
+**Illustrative combined score.** The brief specifies equal weighting between visual fidelity
+and semantic accuracy but does not define the normalization and aggregation of the three visual
+metrics [4]. For internal comparison only, we report
+$$V_{\mathrm{illustrative}}=\frac13\left[
+\operatorname{clip}(\overline{\mathrm{PSNR}}/35,0,1)+\overline{\mathrm{SSIM}}+
+\operatorname{clip}(1-\overline{\mathrm{LPIPS}},0,1)\right],\qquad
+A_{\mathrm{illustrative}}=\tfrac12 V_{\mathrm{illustrative}}+
+\tfrac12\mathrm{mIoU}_{\mathrm{struct}}.$$
+Bars denote means over test views, and 35 dB is a chosen normalization reference. This
+illustrative score is not an organizer-reported score or a predictor of competition ranking.
+
 
 ---
 
@@ -514,12 +423,10 @@ combination explicit here rather than presenting it as an authoritative formula.
 
 ### 5.1 Main Results
 
-Before reporting the pipeline's scored performance, we first report Task A's own intermediate
-result, since it is easy to confuse with Table 2's structural mIoU below: both are called "mIoU,"
-but they are not the same measurement. Table 1 gives the 2D SegFormer checkpoint's per-class IoU
-on its 30-image *internal validation split* (Section 3.3) — the checkpoint used to pseudo-label
-the 100 unlabeled images and widen Task B's supervision, not the contest's scored deliverable
-itself, and not measured on the same 30-image test split as Tables 2-4 below.
+Task A and Task B are evaluated on different splits and prediction tasks. Table 1 reports
+SegFormer's 2D segmentation accuracy on its 30-image internal validation set, used to select
+the pseudo-labeling checkpoint. Tables 2–4 report rendered predictions from the Gaussian model
+on the separate 30-image test set.
 
 **Table 1: Task A (SegFormer) per-class validation IoU**, on the 30-image internal validation
 split used for checkpoint selection (Section 3.3), *not* the 30-image test split evaluated in
@@ -533,14 +440,11 @@ Tables 2-4.
 | foundation | 66.48% |
 | (background, reported for completeness, excluded from structural mIoU) | 98.64% |
 | **Structural mIoU (4 classes)** | **81.67%** |
+| mIoU including background (5 classes) | 85.06% |
 
-We report Task B's performance — the pipeline's final, scored model — on the 30-view held-out
-test split defined in Section 3.6 — views that contribute to neither Task A fine-tuning or
-internal validation, nor Task B's semantic warm-start, nor its photometric/semantic training
-loss. Table 2 summarizes the four metrics from Section 4.3 together with the illustrative
-Accuracy Score; Table 3 breaks semantic accuracy down by class. All numbers are produced by
-rendering each holdout pose through the same arbitrary-viewpoint entry point described in
-Section 3.5 — the literal function the contest evaluates a submission against.
+Tables 2 and 3 report the final Task B model's aggregate metrics and class-wise IoU. Test RGB
+images and masks are excluded from the model-building operations listed in Section 3.6.
+Predictions are obtained using the same rendering procedure described in Section 3.5.
 
 **Table 2: Task B (semantic Gaussian Splatting) overall holdout performance.**
 
@@ -550,6 +454,7 @@ Section 3.5 — the literal function the contest evaluates a submission against.
 | SSIM | 0.854 |
 | LPIPS | 0.321 |
 | Structural mIoU (4 classes) | **92.08%** |
+| mIoU including background (5 classes) | 93.5% |
 | Illustrative Accuracy Score | 0.823 |
 
 **Table 3: Task B per-class IoU**, on the same 30-image test holdout as Table 2.
@@ -562,86 +467,40 @@ Section 3.5 — the literal function the contest evaluates a submission against.
 | foundation | 88.49% |
 | (background, reported for completeness, excluded from structural mIoU) | 99.20% |
 
-Figure 5 visualizes this per-class breakdown, sorted by class and colored by the fixed per-class
-palette used consistently across every figure in this paper, with the overall structural mIoU
-marked for reference — making
-the counter-intuitive result discussed in Section 5.2, `stay_cable` scoring close to `tower` and
-comfortably clear of `foundation` despite being physically the thinnest structural component,
-immediately visible without reading Table 3 closely.
+Figure 5 compares the four structural IoUs using a zero-based axis. Deck has the highest IoU,
+followed by tower, cable, and foundation. Cable is 0.61 percentage points below tower and
+3.27 points above foundation, despite the physical slenderness of its strands. The relationship
+between this result and the annotation convention is examined in Section 5.2.
 
-![Figure 5: Per-class IoU on the 30-view holdout](figures/fig5_per_class_iou.png)
+![Figure 5: Per-class IoU on the 30-view test split](figures/fig5_per_class_iou.png)
 
-**Figure 5.** Per-class IoU on the 30-view holdout, sorted by class and colored by the same
-per-class palette used consistently across every figure in this paper, with the overall
-structural mIoU (92.08%) marked for reference.
-
-As Figure 5 shows, the four structural classes all clear 88% IoU despite substantial differences
-in physical scale, surface texture, and viewpoint coverage, and background — by far the easiest
-class, since it occupies most of every frame's pixels — reaches 99.20%, confirming the model is
-not achieving a high structural mIoU merely by defaulting to the dominant class. The ranking
-among the four structural classes, and in particular why `stay_cable` — physically the thinnest
-structural component on the bridge — scores within a point of `tower` and clear of `foundation`
-rather than trailing well behind every other class, is discussed next.
+**Figure 5.** Structural-class IoUs on 30 test views. Class colors identify components; the
+dashed line marks structural mIoU (92.08%). The vertical axis starts at zero. Background IoU
+is reported separately in Table 3.
 
 ### 5.2 Discussion — Per-Class Behavior
 
-The `deck` class achieves the highest structural IoU (95.72%), which is expected: it is a
-large, well-textured, planar surface observed from a wide range of overlapping viewpoints
-throughout the flight, giving both the photometric and semantic losses abundant, consistent
-supervision to converge on. `tower` is the second-highest (92.37%) but meaningfully behind
-`deck`: also a large, solid structural element with a simple, consistent shape across viewpoints,
-even though it covers far fewer pixels than `deck` (Section 5.1).
+Deck reaches 95.72% IoU, followed by tower at 92.37%, cable at 91.76%, and foundation at
+88.49%. Deck's relatively large projected area and visible surface texture are plausible
+contributors, but this experiment does not isolate their effects from geometry, annotation
+quality, or optimization.
 
-`stay_cable` is the more interesting case. In the broader bridge-segmentation literature, thin
-cable-like structures are consistently reported as the hardest class, since a physical cable
-strand spans only a handful of pixels per view - and on that basis alone, one would expect
-`stay_cable` to trail well behind the other three structural classes. Our results show the
-opposite: at 91.76% IoU, cable lands within a point of `tower` - well behind `deck`, but clearly
-ahead of `foundation` (88.49%) - not the dramatically weaker class the physical-thinness argument would
-predict. Part of the explanation is that "thin" describes the physical cable strands, not the
-class actually being scored: as Section 3.4 describes, `stay_cable` is annotated as a coarse
-polygon enclosing sky or water background well beyond the strands themselves, and on the 30-view
-test holdout this coarse region is in fact the *largest* of the four structural classes by pixel
-count (7.16% of test-holdout pixels, ahead of `deck`'s 5.02%) - not a small, hard-to-hit target
-at all. A large, easy-to-hit region only gets you so far, though: `tower` and `foundation` are
-also annotated tightly around their true extent rather than padded out, and `tower` still scores
-higher than cable despite that, so pixel count alone does not fully explain the full ranking.
+Physical cable strands occupy few pixels, yet the scored cable class includes the much broader
+polygon enclosing the cable-and-hanger assembly. On the undistorted test masks, cable covers
+7.12% of pixels and deck 4.99%, compared with 1.69% for tower and 0.61% for foundation.
+The cable annotation is therefore the largest structural region by pixel count, despite the
+thinness of the physical strands. As Figure 6 shows, rendered cable masks reproduce broad
+annotated regions. Their high IoU measures agreement with this convention and does not establish
+recovery of individual strands or improved cable geometry beyond the annotation resolution.
 
-This is not evidence that training corrects the annotation toward truer cable geometry - Figure
-6's rendered semantic maps (Section 5.3) show the opposite. On views 010, 250, and 300, the
-rendered cable region closely reproduces the same broad, coarsely-annotated shape as the
-ground-truth mask itself, not a thinner region tracing the actual strands. The more
-accurate explanation is that the annotated region, while not tracing individual strands, is
-still 3D-consistent: this is a suspension bridge, and its main cable and vertical hangers
-together lie within a single near-vertical plane running the length of the span, so annotators
-viewing that structure from different angles trace a similar broad boundary around it each time.
-A plausible mechanism, though one we have not verified with a dedicated diagnostic, is that
-multi-view training then has little cross-view contradiction to resolve for a target that already
-agrees with itself across views, converging to the same coarse region the annotations describe -
-the same reason it converges confidently on large, consistently-labeled regions like `deck` -
-rather than correcting per-view noise toward finer geometry, since there is little such noise to
-correct. Regardless of the exact mechanism, what Figure 6's rendered semantic maps show directly
-is the outcome: cable's strong IoU does not indicate the model recovers cable geometry more
-precisely than the annotations do; it indicates the model reproduces the annotation convention -
-coarse enclosing polygon included - consistently across viewpoints. This is not a compromise: the
-evaluation protocol (Section 3.6) scores
-semantic mIoU directly against these same masks, so accurately reproducing their convention, at
-whatever granularity they were drawn, is precisely the scored task - not a shortfall relative to
-some finer-grained cable delineation that the evaluation does not actually ask for.
-
-`foundation` is the weakest of the four structural classes. Viewpoint coverage is a natural first
-hypothesis - foundations sit at the low-lying, often partially water-adjacent base of the bridge,
-and are visible from a narrower range of the UAV flight envelope than the deck or towers - but it
-does not hold up against the actual training-view statistics: averaged over the sparse points
-that vote for each class, `foundation` receives 6.57 observing views per point, more than `deck`
-(3.12) despite `deck` scoring the highest of all four classes, so fewer observing viewpoints is
-not, by itself, a sufficient explanation. A more likely factor is `foundation`'s small absolute
-footprint - on the 30-view test holdout it covers only 0.62% of pixels, well below `tower`'s
-1.69% and an order of magnitude below `deck`'s 5.02% - which makes IoU for this class more
-sensitive to a fixed-width boundary error than for the larger classes, a well-known property of
-small or thin regions under an area-based overlap metric. We have not run a dedicated ablation or
-error analysis to confirm this, so we present it as our leading hypothesis rather than an
-established explanation.
+Foundation's lower IoU cannot be attributed to fewer observations per sparse point alone.
+Among points assigned each class by the initialization vote, the mean number of retained RGB
+observations is 6.57 for foundation and 3.12 for deck. These counts include unlabeled views;
+restricting them to labeled observations participating in the semantic vote gives 4.70 and 2.85,
+respectively. Track length measures repeated observation, not angular diversity, visibility of
+an entire component, or annotation quality. Foundation's small image footprint may increase
+sensitivity to boundary errors, but identifying the dominant cause requires a dedicated error
+analysis. These descriptive statistics do not establish a causal explanation for the class ranking.
 
 ### 5.3 Qualitative Results
 
@@ -667,159 +526,125 @@ views rather than a claim established over the full holdout.
 ![Figure 6: RGB and semantic renders vs. ground truth on held-out views](figures/fig6_qualitative_grid.png)
 
 **Figure 6.** RGB and semantic renders vs. ground truth on four held-out views (010, 050, 250,
-300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
-the same per-class palette used throughout this paper.
+300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask.
+Only the two semantic columns use the class-color palette; RGB columns retain image colors.
 
-Because the held-out test split (Section 3.6) still lies on the UAV's original flight line, Figure 7
-additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
-quaternion SLERP for rotation, linear interpolation for translation) at five evenly spaced steps
-$t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating rendering from three poses ($t=0.25, 0.5, 0.75$)
-never captured during acquisition, closer to the contest brief's arbitrary-viewpoint requirement
-than the flight-line holdout views alone. These interpolated poses still lie *within* the flight
-envelope, between two real flown positions, rather than testing extrapolation to viewpoints
-further outside it; we have no ground truth to verify accuracy at such poses, only that the
-model renders something plausible there. The two endpoints ($t=0, 1$) are real flown poses and
-render cleanly; RGB quality
-degrades visibly in the intermediate frames, where the interpolated pose departs furthest from
-any training view. The semantic map degrades far less severely over the same frames — the
-overall deck/stay_cable layout stays recognizable throughout, though at $t=0.25$-$0.75$ the
-boundary between them grows visibly ragged, with small blobs of the wrong class breaking off
-into the other region — a second, independent illustration of the pattern noted in Figure 6,
-though a less clean one than the near-perfect stability seen there. RGB and semantic outputs
-remain pixel-aligned at every step, including the degraded ones.
+Figure 7 illustrates rendering along a constructed path between the supplied poses of images
+280 and 300, both members of the local test split. Rotation is interpolated by quaternion
+SLERP; world-to-camera translation is interpolated linearly at
+$t\in\{0,0.25,0.5,0.75,1\}$. The camera center is $C=-R^\top T$, so this construction does
+not impose a straight camera-center path or guarantee containment within the flight envelope.
+The three intermediate poses have no corresponding ground-truth images and serve only as
+qualitative demonstrations of the rendering interface.
 
-![Figure 7: Novel-view interpolation between two flown poses](figures/fig7_interpolation.png)
+Appearance artifacts are visible at both endpoints and are more pronounced in several
+intermediate frames, where blur and streaking obscure image detail. The broad cable and deck
+regions remain identifiable, but their boundaries develop holes and irregular fragments. Thus,
+semantic rendering also degrades along this path. Shared rasterization preserves pixel alignment
+between RGB and semantic outputs; it does not guarantee correct reconstruction at novel poses.
 
-**Figure 7.** A camera path interpolated between two real flown poses (images 280 and 300;
-quaternion SLERP for rotation, linear interpolation for translation), rendered at five evenly
-spaced steps $t \in \{0, 0.25, 0.5, 0.75, 1\}$; top row RGB, bottom row the corresponding semantic
-map.
+![Figure 7: Interpolated-pose RGB and semantic renders](figures/fig7_interpolation.png)
 
-Finally, Figure 8 (optional) views the trained Gaussians directly in an interactive splat viewer
-([SuperSplat](https://superspl.at/editor)) rather than through one camera pose at a time. Unlike
-the arbitrary-viewpoint renders in Figures 6-7, this alpha-blended splat render exposes the full
-learned 3D structure simultaneously: both towers, the main cable, the deck, and the foundation
-piers are all visible at once in the semantic panel and clearly spatially coherent with the
-true-color reconstruction beside it - a qualitative illustration, consistent with Table 3's
-per-class IoU numbers, that the semantic warm-start and training loss converge to a structurally
-sensible 3D segmentation rather than scattered, inconsistent per-Gaussian labels. This figure is
-secondary to Figures 6 and 7 and can be dropped if space is limited.
+**Figure 7.** RGB (top) and semantic maps (bottom) at five interpolated poses between images
+280 and 300. SLERP is applied to rotation and linear interpolation to world-to-camera
+translation, not directly to camera position. The intermediate views have no ground truth.
 
-![Figure 8: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig8_splat_render.png)
+Figure 8 presents two interactive-viewer screenshots of the same trained representation.
+Panel (a) uses learned RGB; panel (b) replaces each Gaussian's color with its argmax class color
+before rasterization. Each panel is rendered from a viewer camera, and the screenshots are
+not a registered image pair. Major component regions are recognizable, while dispersed and
+partially transparent splats remain visible around the bridge. This visualization illustrates
+per-Gaussian label distribution without establishing geometric accuracy or the isolated effect
+of semantic initialization.
 
-**Figure 8 (optional).** The trained Gaussians viewed in an interactive splat viewer, from the
-same viewpoint. **(a)** Rendered in true RGB color. **(b)** The same Gaussians, each recolored by
-its predicted semantic class rather than its true RGB color (deck red, stay_cable cyan, tower
-green, foundation yellow, background gray).
+Recoloring each Gaussian before compositing also differs from the evaluated semantic output,
+which composites logits before taking pixel-wise argmax. The latter, used in Figures 6 and 7,
+is the prediction assessed by the reported IoU metrics.
+
+![Figure 8: Interactive-viewer screenshots of the Gaussian representation](figures/fig8_splat_render.png)
+
+**Figure 8.** Interactive-viewer screenshots of the trained Gaussian representation.
+(a) Learned RGB appearance. (b) Per-Gaussian argmax labels displayed as colors: deck red,
+cable cyan, tower green, foundation yellow, background gray. Viewpoints are not registered.
+The class-colored splat visualization is distinct from a rendered-logit argmax semantic map.
 
 ### 5.4 Training Convergence
 
-The results in Sections 5.1-5.3 characterize the final trained models but say nothing about how
-they got there — whether the reported numbers reflect a stably converged optimum or an early,
-possibly fragile checkpoint. We check this directly against the real training logs for both
-tasks, plotted in Figures 9 and 10.
+Figures 9 and 10 summarize optimization trajectories for the models evaluated in Section 5.1.
+Task A's mean training loss falls rapidly and then changes slowly, while internal-validation
+mIoU approaches a plateau. The maximum validation mIoU is 81.67% at epoch 69; that checkpoint
+is used for pseudo-labeling. The curve supports diminishing validation improvement within this
+80-epoch run, but cannot establish a global optimum or rule out overfitting to the validation set.
 
-Figure 9 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
-curves plateau well before epoch 80 (best validation mIoU 81.67%, reached at epoch 69 and kept as
-the checkpoint used for pseudo-labeling and reported per-class in Table 1), indicating the
-fine-tuned model has converged rather than still improving or overfitting when its pseudo-labels
-are handed to Task B.
+![Figure 9: Task A training and validation curves](figures/fig9_task_a_training.png)
 
-![Figure 9: Task A (SegFormer) training convergence over 80 epochs](figures/fig9_task_a_training.png)
+**Figure 9.** Task A training loss (red, left axis) and structural validation mIoU (blue, right
+axis) over 80 epochs. Training uses 240 images; validation uses the separate 30-image internal
+split. The final 30-image test set is not used for checkpoint selection.
 
-**Figure 9.** Task A (SegFormer) training convergence: training loss (red, left axis) and
-validation mIoU on the 30-image internal validation split (blue, right axis, Section 3.3 - not
-the final 30-image test holdout Section 5.1 reports on) over 80 epochs on the 240-image labeled
-training split.
+Task B logs the loss of one sampled view every 100 steps. Figure 10 shows these values and
+a 15-sample trailing moving average, spanning approximately 1,500 steps. The average decreases
+substantially early in training and fluctuates within a narrower range later. Spikes remain
+after the Gaussian count reaches its cap at step 7,400. View-dependent difficulty may contribute,
+but the logs do not isolate the causes of individual spikes or measure held-out performance
+throughout optimization.
 
-Figure 10 plots the corresponding curve for Task B (light gray: loss logged every 100 steps;
-green: a 15-sample trailing moving average, spanning roughly 1,500 training steps). Unlike Task
-A's per-epoch average, each logged value is computed on a single rendered view and fluctuates
-accordingly, with occasional spikes that persist even after the Gaussian count stabilizes around
-step 7,400 — consistent with per-view difficulty variance (e.g. grazing viewing angles or
-motion-blurred training photos) rather than an optimization instability. The moving average
-nonetheless shows steady convergence with no divergence, settling to a stable plateau by roughly
-step 20,000.
+![Figure 10: Task B training loss](figures/fig10_task_b_training.png)
 
-![Figure 10: Task B (semantic Gaussian Splatting) training convergence over 40,000 steps](figures/fig10_task_b_training.png)
+**Figure 10.** Task B loss for the full-resolution 40,000-step run: single-view samples logged
+every 100 steps (gray) and their 15-sample trailing moving average (green). These are training
+losses, not test metrics.
 
-**Figure 10.** Task B (semantic Gaussian Splatting) training convergence: training loss over
-40,000 steps for the full-resolution model reported throughout this paper (light gray: loss
-logged every 100 steps; green: a 15-sample trailing moving average, spanning roughly 1,500
-training steps).
-
-Task A's smoother, less noisy curve and Task B's noisier but still clearly convergent one differ
-because Task A's loss is a per-epoch average over the full 240-image training set, while Task
-B's is a per-view, per-logged-step loss, so individual hard viewpoints show up directly in the
-raw curve rather than being averaged away. In both cases, training had clearly finished improving
-well before its final checkpoint, supporting the Section 5.1 numbers as representative of a
-converged model rather than a lucky snapshot.
+The horizontal axes differ because Task A reports an average over an epoch, whereas Task B
+performs one rendered-view optimization step at a time. Their loss magnitudes and fluctuations
+are therefore not directly comparable. Final test performance is reported separately in
+Tables 2 and 3.
 
 ### 5.5 Ablation: Training Resolution
 
-**Table 4: Effect of training resolution on holdout performance,** both rows trained for the
-same 40,000-iteration budget under every current fix (Sections 3.2, 3.4, 3.6: mask undistortion,
-the 240/30/30 train/val/test split, plain-plurality voting, and triangulation/color
-initialization restricted to the 370-image training pool), differing only in image resolution.
-The full-resolution row is the same run reported as our main result in Table 2/3, reproduced
-here for direct comparison.
+Table 4 compares half- and full-resolution training with the same 40,000-step budget,
+240/30/30 labeled split, pseudo-masks, initialization, loss weights, density-control settings,
+and fixed supplied poses. Both runs are evaluated at full resolution on the same 30 test views.
+The full-resolution row is the model reported in Tables 2 and 3.
+
+**Table 4: Effect of training resolution on local test performance.** One run per resolution,
+with otherwise matched settings and full-resolution evaluation.
 
 | Training resolution | PSNR | SSIM | LPIPS | mIoU |
 | :--- | :---: | :---: | :---: | :---: |
 | Half (660x494) | 22.03 | 0.838 | 0.330 | 89.71% |
 | **Full (1320x989)** | **22.43** | **0.854** | **0.321** | **92.08%** |
 
-As Table 4 shows, training at native image resolution still improves every metric, consistent
-with the intuition that thin structures (cable) and fine boundaries benefit from sharper
-photometric/semantic gradients during optimization - but the gap is substantially smaller than
-the +5.7 mIoU points measured under the pre-fix checkpoints: PSNR +0.40 dB, SSIM +0.016, LPIPS
--0.009, mIoU +2.37 points. The direction of the resolution effect is therefore robust to the
-mask-alignment, split, color-init, and triangulation-exclusion fixes described elsewhere in this
-paper, but its magnitude is not - a caveat worth keeping in mind before extrapolating this
-ablation's specific numbers to a different pipeline configuration. The cost is proportionally
-longer training time (≈46 min vs. ≈18 min for the same
-40,000-iteration budget on the same GPU); given the modest absolute training time either way,
-full resolution remains the recommended default.
+Full-resolution training improves PSNR by 0.40 dB, SSIM by 0.016, and structural mIoU by 2.37
+percentage points, while reducing LPIPS by 0.009. Finer supervision may help preserve boundaries
+and appearance detail, although this comparison does not isolate that mechanism from changes
+in optimization and density control induced by resolution. Training takes approximately
+46 minutes at full resolution and 18 minutes at half resolution on the same GPU. These results
+support the full-resolution configuration for this dataset and budget; variation across random
+seeds, other scenes, and other training budgets is not quantified by this paired experiment.
+
 
 ---
 
 ## 6. Conclusion
 
-We presented a semantic 3D Gaussian Splatting pipeline that natively satisfies the contest's
-dual-output requirement: a single trained model that renders both an RGB image and a per-pixel
-structural-class map from any camera viewpoint, using a fused single-pass rasterization design in
-which the two outputs are pixel-aligned by construction rather than reconciled after the fact. A
-point-cloud-informed semantic warm-start from a simple multi-view plurality vote, together with a
-pseudo-labeling stage that extends supervision to every available image regardless of annotation
-status, let this representation reach 92.08% structural mIoU and an illustrative Accuracy Score
-of 0.823 on a held-out evaluation protocol built to mirror the organizers' own blind-test
-methodology as closely as possible.
+We presented a semantic 3D Gaussian Splatting system for the RGB-and-semantic rendering task
+in IC-SHM 2026 Project 2 [4]. Sparse geometry and observed colors initialize the Gaussian
+representation, multi-view plurality votes initialize semantic logits, and SegFormer
+pseudo-labels extend semantic supervision to 370 views. Shared rasterization produces aligned
+RGB images and class maps. On a local 30-view test split using supplied camera parameters,
+the system achieves PSNR 22.43 dB, SSIM 0.854, LPIPS 0.321, and 92.08% structural mIoU.
+A matched resolution experiment favors full-resolution training within the tested budget.
 
-Beyond the contest's scoring criteria, a trained model of this kind is a queryable, digital-twin-
-ready semantic 3D scene representation of the bridge: once optimized, it can be rendered from
-inspection viewpoints beyond the ones captured during the original UAV flight, with
-per-component semantic labels attached to every pixel - though, as Section 5.3 discusses, we have
-only verified rendering accuracy near the flown trajectory, not at arbitrarily distant future
-viewpoints, and the model has none of a true digital twin's real-time sensor linkage or physical
-simulation. This is a natural basis for downstream structural health
-monitoring tasks that need to be scoped to a specific structural element, such as tracking deck
-deflection over repeated inspections, inferring cable tension from cable-region imagery, or
-localizing detected defects to the deck, tower, cable, or foundation they actually belong to,
-rather than to the bridge as an undifferentiated whole.
+The results establish agreement with the released annotations near the acquisition trajectory,
+not survey-grade geometric accuracy or unrestricted novel-view fidelity. Cable IoU reflects
+coarse region annotations, and constructed novel poses expose artifacts in both RGB and semantic
+outputs. The system has not been evaluated for damage detection, deformation measurement, or
+structural response estimation. Future work could test spatially separated holdouts, assess
+geometry against independent measurements, and investigate finer cable annotations. These steps
+would clarify the representation's suitability as a component-aware input to bridge inspection
+and structural health monitoring workflows.
 
-Two directions follow naturally from the results in Section 5. First, since full-resolution
-training already improved every metric over half-resolution (Section 5.5) purely from sharper
-supervision, further gains in visual fidelity are plausible from longer training schedules or
-additional hyperparameter tuning within the same architecture, without changing the underlying
-method. Second, Section 5.2 shows that cable's strong IoU reflects the model consistently
-reproducing the coarse annotation convention across viewpoints rather than recovering finer
-cable geometry than the annotations themselves provide; refining the annotation protocol for
-thin structures like `stay_cable`, or supervising against a geometry-aware prior instead of the
-raw 2D polygon mask, is a natural next step for pushing accuracy on this class further. Beyond
-the scope of this contest submission, a semantically-labeled,
-queryable 3D reconstruction of this kind is also a natural complement to UAV-based displacement
-and deformation measurement systems, toward a single pipeline that ties visual structural
-identification to quantitative structural response over a bridge's full inspection lifecycle.
 
 ---
 
@@ -835,36 +660,38 @@ identification to quantitative structural response over a bridge's full inspecti
    reconstruction and bridge damage detection based on data fusion of unmanned aerial vehicles
    light detection and ranging data imagery. Computer-Aided Civil and Infrastructure
    Engineering, 39, 1197–1217.
-4. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
-5. Mildenhall, B., Srinivasan, P. P., Tancik, M., Barron, J. T., Ramamoorthi, R., & Ng, R. (2020)
+4. IC-SHM 2026 Organizing Committee (2026) — The 4th International Project Competition
+   for Structural Health Monitoring (IC-SHM 2026). Competition brief, Project 2, pp. 9–10.
+5. Schönberger, J. L., & Frahm, J.-M. (2016) — Structure-from-Motion Revisited. CVPR.
+6. Mildenhall, B., Srinivasan, P. P., Tancik, M., Barron, J. T., Ramamoorthi, R., & Ng, R. (2020)
    — NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis. ECCV, 405–421.
-6. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
+7. Kerbl, B., Kopanas, G., Leimkühler, T., & Drettakis, G. (2023) — 3D Gaussian Splatting for
    Real-Time Radiance Field Rendering. ACM Transactions on Graphics, 42(4), Article 139.
-7. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
+8. Zhi, S., Laidlow, T., Leutenegger, S., & Davison, A. J. (2021) — In-Place Scene Labelling and
    Understanding with Implicit Scene Representation. ICCV.
-8. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
+9. Zhou, S., Chang, H., Jiang, S., Fan, Z., Zhu, Z., Xu, D., Chari, P., You, S., Wang, Z., &
    Kadambi, A. (2024) — Feature 3DGS: Supercharging 3D Gaussian Splatting to Enable Distilled
    Feature Fields. CVPR.
-9. Kirillov, A., Mintun, E., Ravi, N., Mao, H., Rolland, C., Gustafson, L., Xiao, T., Whitehead,
+10. Kirillov, A., Mintun, E., Ravi, N., Mao, H., Rolland, C., Gustafson, L., Xiao, T., Whitehead,
    S., Berg, A. C., Lo, W.-Y., et al. (2023) — Segment Anything. ICCV.
-10. Li, B., Weinberger, K. Q., Belongie, S., Koltun, V., & Ranftl, R. (2022) — Language-Driven
+11. Li, B., Weinberger, K. Q., Belongie, S., Koltun, V., & Ranftl, R. (2022) — Language-Driven
     Semantic Segmentation. ICLR.
-11. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
+12. Qin, M., Li, W., Zhou, J., Wang, H., & Pfister, H. (2024) — LangSplat: 3D Language Gaussian
     Splatting. CVPR.
-12. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
+13. Ye, M., Danelljan, M., Yu, F., & Ke, L. (2024) — Gaussian Grouping: Segment and Edit Anything
     in 3D Scenes. ECCV.
-13. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
+14. Lin, C., Abe, S., Zheng, S., Li, X., & Chun, P.-J. (2025) — A structure-oriented loss
     function for automated semantic segmentation of bridge point clouds. Computer-Aided Civil
     and Infrastructure Engineering, 40, 801–816.
-14. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
+15. Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021) — SegFormer:
     Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS.
-15. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
+16. Chum, O., Matas, J., & Kittler, J. (2003) — Locally Optimized RANSAC. DAGM-Symposium
     (Pattern Recognition), LNCS vol. 2781, 236–243.
-16. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
+17. Ye, V., Li, R., Kerr, J., Turkulainen, M., Yi, B., Pan, Z., Seiskari, O., Ye, J., Hu, J.,
     Tancik, M., & Kanazawa, A. (2025) — gsplat: An Open-Source Library for Gaussian Splatting.
     Journal of Machine Learning Research, 26(34), 1–17.
-17. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
+18. Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004) — Image Quality Assessment:
     From Error Visibility to Structural Similarity. IEEE Transactions on Image Processing, 13(4),
     600–612.
-18. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
+19. Zhang, R., Isola, P., Efros, A. A., Shechtman, E., & Wang, O. (2018) — The Unreasonable
     Effectiveness of Deep Features as a Perceptual Metric. CVPR, 586–595.

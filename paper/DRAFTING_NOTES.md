@@ -9,6 +9,9 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Outstanding
 
+The current submission preparation checklist is [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md).
+The manuscript uses 19 numbered references, including the competition brief as reference [4].
+
 - [ ] **Future idea (optional, not required by anything in the paper as currently written):**
   ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
   lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
@@ -28,8 +31,8 @@ it once the paper is finalized and submitted — it is not part of the paper its
   citations and the reference list's ordering will need to change accordingly.
 - [ ] Team/author details: name(s), affiliation, IC-SHM 2026 Project 2 team identifier
   (`DRAFT.md` title block, currently `[NEEDS]`).
-- [ ] Repository URL for the Code Availability sentence (`DRAFT.md` Section 1, currently
-  `[NEEDS]`) once the submission link is finalized.
+- [x] Repository URL included in Section 1. Public access and the exact submission commit
+  still need verification during submission packaging.
 - [ ] `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `docs/SUBMISSION_CHECKLIST_AND_GUIDELINES.md`
   still reference the old strict-majority checkpoint's numbers/Gaussian count (602,363) - not
   updated in the plain-plurality baseline switch below (only `DRAFT.md` and `README.md` were).

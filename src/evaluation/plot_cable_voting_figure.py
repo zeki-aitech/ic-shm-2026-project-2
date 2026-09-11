@@ -1,5 +1,5 @@
 """
-Renders Figure 2 (Section 3.4): a two-panel illustration of the coarse `stay_cable` annotation
+Renders Figure 3 (Section 3.4): a two-panel illustration of the coarse `stay_cable` annotation
 region and the multi-view plurality voting mechanism used to initialize each Gaussian's semantic
 logits from it.
 
@@ -129,12 +129,13 @@ def main():
     import argparse
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    parser = argparse.ArgumentParser(description="Render Figure 2 (stay_cable annotation region + voting)")
+    parser = argparse.ArgumentParser(description="Render Figure 3 (stay_cable annotation region + voting)")
     parser.add_argument(
         "--image", default=os.path.join(project_root, "outputs", "undistorted_images", "300.png")
     )
     parser.add_argument(
-        "--mask", default=os.path.join(project_root, "outputs", "gt_masks", "300.png")
+        "--mask", default=os.path.join(project_root, "outputs", "undistorted_gt_masks", "300.png"),
+        help="Class-ID mask in the same undistorted coordinate system as --image",
     )
     parser.add_argument("--crop", nargs=4, type=int, default=[0, 780, 0, 950], metavar=("Y0", "Y1", "X0", "X1"))
     parser.add_argument(

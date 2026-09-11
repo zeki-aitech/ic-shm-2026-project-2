@@ -5,10 +5,18 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.evaluation.plot_per_class_iou import plot_per_class_iou
+from src.evaluation.plot_per_class_iou import plot_per_class_iou, read_report_ious
 
 
 class TestPlotPerClassIoU(unittest.TestCase):
+    def test_reads_class_ious_without_treating_aggregate_miou_as_a_class(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "report.md")
+            with open(path, "w") as f:
+                f.write("- mIoU: 0.5\n  - deck: 0.9\n  - stay_cable: 0.8\n"
+                        "  - tower: 0.7\n  - foundation: 0.6\n  - background: 0.99\n")
+            self.assertEqual(read_report_ious(path), {0: 0.99, 1: 0.9, 2: 0.8, 3: 0.7, 4: 0.6})
+
     def test_writes_a_nonempty_png(self):
         iou_per_class = {0: 0.99, 1: 0.95, 2: 0.92, 3: 0.91, 4: 0.87}
         with tempfile.TemporaryDirectory() as tmp:

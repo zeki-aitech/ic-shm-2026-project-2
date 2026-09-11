@@ -1,9 +1,10 @@
 """
-Renders the per-class IoU bar chart used as Figure 3 in the paper (Section 5.1), from the same
+Renders the per-class IoU bar chart used as Figure 5 in the paper (Section 5.1), from the same
 `iou_per_class` dict `render_metrics.RenderEvalReport` already produces - so the figure is always
 regenerated from a real evaluation run rather than hand-typed numbers.
 """
 import os
+import re
 from typing import Dict, Optional
 
 import matplotlib
@@ -23,6 +24,16 @@ PLOT_COLORS = {
     "tower": (0.0, 180 / 255, 0.0),
     "foundation": (210 / 255, 180 / 255, 0.0),
 }
+
+
+def read_report_ious(path: str) -> Dict[int, float]:
+    """Read the class-IoU entries emitted by RenderEvalReport.to_markdown."""
+    with open(path) as report:
+        entries = dict(re.findall(r"^\s*- (\w+): ([0-9.]+)\s*$", report.read(), flags=re.M))
+    values = {cid: float(entries[name]) for cid, name in CLASS_NAMES.items() if name in entries}
+    if not all(cid in values for cid in range(1, 5)) or any(not 0 <= v <= 1 for v in values.values()):
+        raise ValueError("Report must contain IoUs in [0,1] for all four structural classes")
+    return values
 
 
 def plot_per_class_iou(
@@ -50,23 +61,21 @@ def plot_per_class_iou(
     miou_pct = structural_miou * 100.0
 
     for bar, val in zip(bars, values):
-        # Nudge a value label further above its bar when it would otherwise sit right on top
-        # of the mIoU dashed line (close enough in height that the bold label text and the line
-        # visually collide).
-        offset = 1.3 if abs(val - miou_pct) < 1.5 else 0.6
+        # Separate value labels from the mean line on the zero-based axis.
+        label_y = val + 2.5
+        if abs(label_y - miou_pct) < 3.5:
+            label_y = miou_pct + 3.5
         ax.text(
-            bar.get_x() + bar.get_width() / 2, val + offset, f"{val:.2f}%",
+            bar.get_x() + bar.get_width() / 2, label_y, f"{val:.2f}%",
             ha="center", va="bottom", fontsize=10.5, fontweight="bold", color="black", zorder=4,
         )
 
-    ax.axhline(miou_pct, color="black", linestyle="--", linewidth=1.0, zorder=2)
-    ax.text(
-        len(names) - 0.38, miou_pct + 0.6, f"structural mIoU = {miou_pct:.2f}%",
-        ha="right", va="bottom", fontsize=9, style="italic", color="dimgray", zorder=4,
-    )
+    ax.axhline(miou_pct, color="black", linestyle="--", linewidth=1.0, zorder=2,
+               label=f"Structural mIoU = {miou_pct:.2f}%")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), fontsize=10, frameon=False)
 
-    lo = max(0.0, min(values) - 10.0)
-    ax.set_ylim(lo, 100)
+    ax.set_ylim(0, 105)
+    ax.set_yticks(range(0, 101, 20))
     ax.set_ylabel("IoU (%)", fontsize=11)
     ax.set_title(f"Per-Class IoU on the {n_holdout_views}-View Holdout", fontsize=12, fontweight="bold", pad=12)
     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.6, zorder=0)
@@ -83,17 +92,14 @@ def plot_per_class_iou(
 def main():
     import argparse
 
-    import torch
-
-    from src.evaluation.render_metrics import evaluate_render_holdout
-    from src.gaussian_splatting.model import SemanticGaussianModel
-    from src.gaussian_splatting.train import prepare_training_data
-
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     parser = argparse.ArgumentParser(
-        description="Regenerate Figure 3 (per-class IoU bar chart) from a trained checkpoint"
+        description="Regenerate Figure 5 (per-class IoU bar chart) from a trained checkpoint"
     )
-    parser.add_argument("--checkpoint", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--checkpoint")
+    source.add_argument("--report", help="Saved render evaluation Markdown; avoids rerendering")
+    parser.add_argument("--n-holdout-views", type=int, default=30)
     parser.add_argument("--colmap-dir", default=None)
     parser.add_argument("--images-dir", default=None)
     parser.add_argument("--unlabeled-dir", default=None)
@@ -106,6 +112,17 @@ def main():
         default=os.path.join(project_root, "paper", "figures", "fig5_per_class_iou.png"),
     )
     args = parser.parse_args()
+
+    if args.report:
+        out = plot_per_class_iou(read_report_ious(args.report), args.output,
+                                 n_holdout_views=args.n_holdout_views)
+        print(f"[plot_per_class_iou] wrote {out}")
+        return
+
+    import torch
+    from src.evaluation.render_metrics import evaluate_render_holdout
+    from src.gaussian_splatting.model import SemanticGaussianModel
+    from src.gaussian_splatting.train import prepare_training_data
 
     dataset_dir = os.getenv("CONTEST_DATASET_DIR", os.path.join(project_root, "data", "Contest Dataset"))
     colmap_dir = args.colmap_dir or os.path.join(dataset_dir, "camera_parameters")

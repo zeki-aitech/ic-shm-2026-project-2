@@ -75,7 +75,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
     # Row 0: input
     in_b, in_t, in_l, in_r = _box(
         ax, 5, 16.3, 7.4, 1.4,
-        "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
+        "400 UAV images + supplied camera poses\n300 labeled + 100 unlabeled\n30 test views excluded from model fitting",
         fontsize=16, fontweight="bold",
     )
 
@@ -175,21 +175,21 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
 
     in_b, in_t, in_l, in_r = _box(
         ax, 4.6, input_cy, input_w, input_h,
-        "400 UAV images (300 labeled + 100 unlabeled)\n+ COLMAP camera poses",
+        "400 UAV images + supplied camera poses\n300 labeled + 100 unlabeled\n30 test views excluded from model fitting",
         fontsize=16.5, fontweight="bold",
     )
 
     # Left column, two sub-branch chains. Task A and Task B share a color (MERGE_COLOR) to mark
     # them visually as the pipeline's two named tasks, distinct from the plain preprocessing
     # steps (COLMAP/voting/warm-start/pseudo-labeling) around them.
-    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(82,518 points)", fontsize=15.5)
-    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)",
+    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "Triangulate 370 training views\n→ sparse point cloud\n(82,518 points)", fontsize=15.5)
+    b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: SegFormer\n240 training views\n30 validation views",
                                    face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15.5, fontweight="bold")
 
-    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Multi-view semantic voting\n(plurality vote per point)", fontsize=15.5)
-    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict pseudo-masks for\n100 unlabeled images", fontsize=15.5)
+    a2_b, a2_t, a2_l, a2_r = _box(ax, sub_l, row2_y, bw, bh, "Semantic plurality voting\n270 labeled views", fontsize=15.5)
+    b2_b, b2_t, b2_l, b2_r = _box(ax, sub_r, row2_y, bw, bh, "Predict 100 pseudo-masks\nCombine with 270 manual masks\n(370 supervised views)", fontsize=15.5)
 
-    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Semantic warm-start\n(Gaussian means,\ncolors, logits)", fontsize=15.5)
+    a3_b, a3_t, a3_l, a3_r = _box(ax, sub_l, row3_y, bw, bh, "Gaussian initialization\nPositions + observed RGB\n+ voted semantic logits", fontsize=15.5)
 
     # Right column, top-down, starting level with the input box.
     merge_cy = input_top - merge_h / 2
@@ -206,7 +206,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     render_top = tm_b[1] - CHAIN_GAP
     render_h = 1.5
     render_cy = render_top - render_h / 2
-    r_b, r_t, r_l, r_r = _box(ax, right_x, render_cy, 7.9, render_h, "render(pose): arbitrary camera viewpoint",
+    r_b, r_t, r_l, r_r = _box(ax, right_x, render_cy, 7.9, render_h, "Render from a query camera pose",
                                fontsize=17, fontweight="bold")
 
     output_top = r_b[1] - CHAIN_GAP
