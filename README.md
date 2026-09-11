@@ -90,8 +90,10 @@ its own, so it trains on both the 240 train and 30 internal-val images (270 tota
    discrete), since both are rasterized/predicted in the original distorted image's pixel grid
    and would otherwise be misaligned with the undistorted images/renders they're paired with.
 2. **Initialize** Gaussian means/colors from `PycolmapReconstructor`'s triangulated sparse cloud
-   (`src/colmap_io/reconstructor.py`), and semantic logits from `SemanticProjector`'s per-point
-   voted class (`src/colmap_io/semantic_voting.py`, train-views only).
+   (`src/colmap_io/reconstructor.py`, triangulated only from the 370 training-pool images -
+   `exclude_image_names` keeps the 30 test images from influencing even this step), and semantic
+   logits from `SemanticProjector`'s per-point voted class (`src/colmap_io/semantic_voting.py`,
+   train-views only).
 3. **Train** (`train.py`) on the 270 GT-mask + 100 pseudo-mask = 370 views with photometric
    (L1 + D-SSIM) + semantic cross-entropy loss, using `gsplat.strategy.DefaultStrategy` for
    gradient-driven densification/pruning.
@@ -150,16 +152,18 @@ uv run python -m src.evaluation.render_metrics \
 
 ## 📊 6. Results (RTX 3080, 10GB)
 
-Trained at full resolution (1320x989), 40,000 iterations, 84,613 -> 604,152 Gaussians.
+Trained at full resolution (1320x989), 40,000 iterations, 82,518 -> 600,583 Gaussians (sparse
+point cloud triangulated only from the 370 training-pool images - the 30 test images are
+excluded from triangulation and color init, not just from the training loop).
 Evaluated on the 30-image test split, never used in training or in Task A's own validation:
 
 | Metric | Value |
 | :--- | :---: |
 | Task A val 2D mIoU (30-image internal validation split) | 81.67% |
-| PSNR | 22.13 dB |
-| SSIM | 0.853 |
+| PSNR | 22.43 dB |
+| SSIM | 0.854 |
 | LPIPS | 0.321 |
-| **Semantic mIoU (structural, 4 classes)** | **91.04%** |
-| Accuracy Score (illustrative) | 0.816 |
+| **Semantic mIoU (structural, 4 classes)** | **92.08%** |
+| Accuracy Score (illustrative) | 0.823 |
 
 Full breakdown in `docs/EXPERIMENT_PROGRESS_AND_FINDINGS.md` and `outputs/eval/render_eval_report.md`.

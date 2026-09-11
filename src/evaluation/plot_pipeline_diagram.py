@@ -80,7 +80,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
     )
 
     # Row 1
-    a1_b, a1_t, a1_l, a1_r = _box(ax, left_x, 14.0, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)")
+    a1_b, a1_t, a1_l, a1_r = _box(ax, left_x, 14.0, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(82,518 points)")
     b1_b, b1_t, b1_l, b1_r = _box(ax, right_x, 14.0, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)")
 
     # Row 2
@@ -98,7 +98,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
     )
 
     # Trained model
-    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.5, 5.4, 1.4, "Trained model\n(604,152 Gaussians)")
+    tm_b, tm_t, tm_l, tm_r = _box(ax, 5, 4.5, 5.4, 1.4, "Trained model\n(600,583 Gaussians)")
 
     # Render
     r_b, r_t, r_l, r_r = _box(ax, 5, 2.4, 7.0, 1.3, "render(pose): arbitrary camera viewpoint",
@@ -182,7 +182,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     # Left column, two sub-branch chains. Task A and Task B share a color (MERGE_COLOR) to mark
     # them visually as the pipeline's two named tasks, distinct from the plain preprocessing
     # steps (COLMAP/voting/warm-start/pseudo-labeling) around them.
-    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(84,613 points)", fontsize=15.5)
+    a1_b, a1_t, a1_l, a1_r = _box(ax, sub_l, row1_y, bw, bh, "COLMAP triangulation\n→ sparse point cloud\n(82,518 points)", fontsize=15.5)
     b1_b, b1_t, b1_l, b1_r = _box(ax, sub_r, row1_y, bw, bh, "Task A: fine-tune SegFormer\n(240 labeled training views)",
                                    face=MERGE_COLOR, edge=MERGE_EDGE, fontsize=15.5, fontweight="bold")
 
@@ -201,7 +201,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     tm_top = merge_b[1] - CHAIN_GAP
     tm_h = 1.6
     tm_cy = tm_top - tm_h / 2
-    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.4, tm_h, "Trained model\n(604,152 Gaussians)", fontsize=17)
+    tm_b, tm_t, tm_l, tm_r = _box(ax, right_x, tm_cy, 6.4, tm_h, "Trained model\n(600,583 Gaussians)", fontsize=17)
 
     render_top = tm_b[1] - CHAIN_GAP
     render_h = 1.5

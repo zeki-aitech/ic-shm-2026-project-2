@@ -9,11 +9,15 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Outstanding
 
-- [ ] Table 3 (resolution ablation) still uses the pre-mask-fix, pre-split-fix, pre-color-fix
-  checkpoints (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image
-  coordinate misalignment and color-init bug fixed below, and the old 240/60 split rather than
-  the current 240/30/30. Low priority (it's a secondary ablation, not the headline numbers) but
-  should eventually be redone for full consistency.
+- [ ] Table 4 (resolution ablation, renumbered from Table 3 by the Table 1/Task A-table insertion
+  below) still uses the pre-mask-fix, pre-split-fix, pre-color-fix, pre-test-leak-fix checkpoints
+  (`gaussians_v3a_fullres_noposeopt`, `gaussians_halfres_40k`) - same mask/image coordinate
+  misalignment, color-init bug, and triangulation test-leak all fixed below, and the old 240/60
+  split rather than the current 240/30/30. Low priority (it's a secondary ablation, not the
+  headline numbers) but should eventually be redone for full consistency.
+- [ ] Figure 8 (splat viewer render, Section 5.3, optional) still shows the pre-test-leak-fix
+  checkpoint's Gaussians - needs a fresh `export_ply`/SuperSplat capture from the current
+  checkpoint, same workflow as after fix #4 (Figure 6 at the time).
 - [ ] **Future idea (optional, not required by anything in the paper as currently written):**
   ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
   lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
@@ -41,6 +45,63 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **External review fix #5 (test-split leakage into triangulation/color-init) implemented
+  and retrained.** The user's own review (echoing an external reviewer's finding) caught that
+  `DRAFT.md` claimed the 30-image test split was "excluded from every stage of training," but
+  `src/gaussian_splatting/train.py::prepare_training_data` actually triangulated the sparse point
+  cloud and sampled Gaussian color init from all 400 images, test split included - only semantic
+  voting and the training loss were genuinely train-only. Verified this in the code before
+  acting (`PycolmapReconstructor(colmap_dir).load()` had no split awareness at all), then fixed
+  it: added `exclude_image_names` to `PycolmapReconstructor`/`build_tracks`/`triangulate_tracks`
+  (`src/colmap_io/reconstructor.py`) so excluded images' poses still load (needed to render them
+  at eval time) but contribute no 2D observation to any feature track, so they cannot influence a
+  triangulated point's position - and, since `sample_point_colors` only samples from a point's
+  own observing images, color init is transitively excluded too, with no separate filtering
+  needed there. `prepare_training_data` now computes the split before triangulating and passes
+  the test filenames through. Added `tests/test_build_tracks_exclusion.py` (4 tests, synthetic
+  fake reconstruction, no real pycolmap needed) covering the core exclusion logic.
+  - **Verified against the real dataset before committing to a retrain**: 84,613 -> 82,518 points
+    after excluding the 30 test images (86,319 tracks attempted, reprojection error essentially
+    unchanged at 0.49px mean vs. the prior 0.50px) - consistent with the dense UAV trajectory's
+    >99% frame-to-frame overlap making most of a test image's triangulation information
+    redundant with its adjacent training frames.
+  - **Retrained Task B once** (`outputs/checkpoints/gaussians/`, installed as canonical; prior
+    checkpoint preserved as `gaussians_stale_test_leak_init_pre_20260911`) - 600,583 Gaussians
+    (was 604,152), Gaussian count stabilizing at step 7,400 (unchanged) and loss plateauing by
+    ~step 20,000 (unchanged, re-verified via moving-average check on the new log). Task A
+    (SegFormer) needed no retraining - it never used `PycolmapReconstructor` at all.
+  - **Result on the same 30-image test set**: every metric improved again - PSNR 22.43 dB (was
+    22.13), SSIM 0.854 (was 0.853), LPIPS 0.321 (unchanged), mIoU 92.08% (was 91.04%; deck
+    95.72%, stay_cable 91.76%, tower 92.37%, foundation 88.49%, background 99.20%), Accuracy
+    Score 0.823 (was 0.816). Per-class ranking unchanged (deck > tower > cable > foundation) but
+    deck's gap over the other three widened substantially, so Section 5.2's "cable lands within a
+    point of deck and tower" framing was corrected to "within a point of tower" only (deck is now
+    ~4 points ahead) - not just a number swap, a real framing fix. Also recomputed the
+    per-class avg-observations-per-point statistic (foundation 6.57, deck 3.12 - was 4.66/2.68)
+    since it depends on the now-different point cloud; the qualitative narrative (foundation gets
+    *more* observing views than deck despite scoring lower) still holds.
+  - **Re-verified Section 5.3's per-view qualitative claims against real per-view PSNR/SSIM/LPIPS**
+    (not just eyeballing the new renders): the old checkpoint's "050 cleanest, 250 close behind"
+    ordering no longer holds - on the new checkpoint 250 is actually the cleanest of the four
+    views shown (010/050/250/300) and 050 second; 010 and 300 are now comparably weak rather than
+    300 being unambiguously worst. Rewrote that paragraph with the real per-view numbers instead
+    of re-describing the images by eye.
+  - **Strengthened Section 3.6's evaluation-protocol paragraph and the Abstract** to explicitly
+    state the test split is excluded from triangulation and color init too, not just training/
+    validation/voting - this claim is now actually true, closing the gap between what the paper
+    claimed and what the code did.
+  - **Updated throughout `DRAFT.md`**: Abstract, Introduction (bullet 5), Section 3.2 (track/point
+    counts, new exclusion description), Section 3.4/4.2 (point cloud and Gaussian counts, both
+    occurrences), Section 3.6 (exclusion list), Table 2, Table 3, Table 4's footnote (now four
+    independent axes of staleness, not three), Figure 5's surrounding text/caption, Section 5.2
+    (deck/tower/cable/foundation discussion, rewritten where the framing itself changed, not just
+    the numbers), Section 5.3 (per-view qualitative claims), Conclusion. Regenerated Figures 1
+    (Gaussian/point counts), 4 (new view-300 render), 5 (per-class IoU chart), 6 (qualitative
+    grid, re-rendered views 010/050/250/300), 7 (interpolation filmstrip, images 280/300), 10
+    (Task B training curve). Figure 8 (splat viewer, optional) was not refreshed this round - it
+    still needs a new SuperSplat capture from the current checkpoint, same as after fix #4.
+    Updated `README.md`'s results table and pipeline description. Ran the full test suite
+    (101 passed) after all changes.
 - [x] **Added the Task A SegFormer architecture figure (new Figure 2, Section 3.3)**, produced by
   a Codex session working on this same repo in parallel with this one (per the user's earlier
   request to hand an architecture description to an external tool rather than have me draw it -

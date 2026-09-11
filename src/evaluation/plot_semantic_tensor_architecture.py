@@ -61,7 +61,7 @@ def draw():
     arrow([(3.45,3.17),(10.6,3.17),(10.6,4.15)])
     text(7.15,2.88,'Geometry and opacity',12)
     # Same source view for both output panels; retain the full image and aspect ratio.
-    render_dir = Path('outputs/renders/fig4_holdout_real_color')
+    render_dir = Path('outputs/renders/holdout_test_excluded_init')
     rgb = np.asarray(Image.open(render_dir / '300_rgb.png').convert('RGB'))
     labels = np.asarray(Image.open(render_dir / '300_sem.png'))
     if labels.ndim != 2 or not np.isin(labels, list(CLASS_COLORS)).all():

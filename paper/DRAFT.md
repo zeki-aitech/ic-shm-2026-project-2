@@ -18,10 +18,11 @@ that the two outputs are pixel-aligned by construction. A 2D segmentation model 
 unlabeled frames to widen semantic supervision to every available image, and the Gaussian model
 is warm-started from a multi-view, plurality-voted sparse point cloud rather than random
 initialization. On a 30-view held-out test split drawn from the same UAV flight trajectory but
-excluded from every stage of training - including the internal validation step that selects the
-2D segmentation model's checkpoint - our method achieves PSNR 22.13 dB, SSIM 0.853, LPIPS
-0.321, and structural mIoU 91.04% across the four bridge component classes (deck, main cable,
-tower, foundation), for an illustrative Accuracy Score of 0.816. Beyond the
+excluded from every stage of the pipeline - not just training and the internal validation step
+that selects the 2D segmentation model's checkpoint, but even the sparse point cloud's own
+triangulation and the Gaussians' color initialization - our method achieves PSNR 22.43 dB, SSIM
+0.854, LPIPS 0.321, and structural mIoU 92.08% across the four bridge component classes (deck,
+main cable, tower, foundation), for an illustrative Accuracy Score of 0.823. Beyond the
 contest's scoring criteria, the resulting model is a queryable semantic 3D scene representation
 of the bridge, rendering both appearance and structural identity from viewpoints never captured
 during data acquisition — a digital-twin-ready asset and a basis for downstream structural health
@@ -82,8 +83,8 @@ We address these challenges with a semantic 3D Gaussian Splatting pipeline whose
 4. An empirical study of training resolution's effect on reconstruction quality, showing
    full-resolution training yields consistent gains over half-resolution across every metric
    (Section 5.5).
-5. End-to-end results on the contest's trajectory-interleaved 30-view test holdout: PSNR 22.13 dB,
-   SSIM 0.853, LPIPS 0.321, and structural mIoU 91.04%.
+5. End-to-end results on the contest's trajectory-interleaved 30-view test holdout: PSNR 22.43 dB,
+   SSIM 0.854, LPIPS 0.321, and structural mIoU 92.08%.
 
 Our full implementation, including the scripts used to reproduce every number reported in this
 paper, is publicly available. **[NEEDS: repository URL once the submission link is finalized.]**
@@ -215,8 +216,12 @@ truth at inference time.
 ### 3.2 Camera Geometry and Sparse Point Initialization
 
 The contest dataset provides COLMAP [4] `SIMPLE_RADIAL` camera intrinsics and per-image extrinsic
-poses for all 400 UAV frames, together with 86,336 two-dimensional feature tracks linking pixel
-observations across views, but it does not include precomputed 3D point coordinates. We recover
+poses for all 400 UAV frames, together with two-dimensional feature tracks linking pixel
+observations across views, but it does not include precomputed 3D point coordinates. To keep the
+held-out test split (Section 3.6) from influencing even this geometric initialization, we build
+tracks from only the 370 images available for training - the 240 train, 30 internal-val, and 100
+unlabeled frames - discarding the 30 test images' observations before triangulation ever sees
+them; this yields 86,319 tracks. We recover
 a sparse point cloud of the bridge by triangulating every track with LO-RANSAC [15] (Locally
 Optimized RANSAC) multi-view triangulation: as in standard RANSAC, candidate 3D points are estimated from
 small random subsets of a track's observations and validated by reprojection error to reject
@@ -226,7 +231,7 @@ a minimum triangulation-angle constraint to reject ill-conditioned geometry; the
 have a mean reprojection error of
 approximately 0.5 pixels. A subsequent distance-from-median outlier filter (using the
 interquartile range of each point's distance to the cloud centroid) removes residual floaters,
-leaving 84,613 triangulated points. Because the shared camera carries non-negligible radial
+leaving 82,518 triangulated points. Because the shared camera carries non-negligible radial
 distortion ($k_1 \approx 0.009$), and Gaussian rasterization assumes an ideal pinhole projection,
 we undistort all 400 images once, up front, to a consistent pinhole convention; every subsequent
 training, evaluation, and rendering step operates in this undistorted space. The semantic
@@ -360,8 +365,8 @@ identities for visualization.
 training. Gaussians whose positional gradients are large — an indication that a single primitive
 is being stretched to cover detail it cannot adequately represent — are split or duplicated,
 while Gaussians whose opacity decays toward zero are pruned, using `gsplat`'s [16] built-in
-density-control strategy. This process grows the representation from the 84,613-point sparse
-initialization to 604,152 Gaussians by the end of training, allowing the model to allocate
+density-control strategy. This process grows the representation from the 82,518-point sparse
+initialization to 600,583 Gaussians by the end of training, allowing the model to allocate
 additional capacity to structurally intricate regions, such as individual cable strands, that
 the initial sparse cloud under-represents.
 
@@ -382,7 +387,9 @@ closely as possible without access to the organizers' actual test poses. Thirty 
 labeled images — every tenth frame along the UAV's flight trajectory - are withheld as a test
 split from every stage of the pipeline: they contribute to neither Task A's fine-tuning nor its
 internal validation, nor Task B's semantic warm-start voting, nor its photometric/semantic
-training loss. A further 30 images (every ninth of the remaining 270, by the same
+training loss, nor even the sparse point cloud's own triangulation or the Gaussians' color
+initialization (Section 3.2) - the two stages most naturally overlooked, since they precede the
+training loop rather than being part of it. A further 30 images (every ninth of the remaining 270, by the same
 trajectory-interleaved strided mechanism) form a separate internal validation split used only by
 Task A's own checkpoint selection (Section 3.3); Task B treats these as ordinary labeled training
 views, since it has no checkpoint-selection step of its own to protect from leakage. We choose
@@ -436,7 +443,7 @@ set to 0.5, and pseudo-labeled views are additionally down-weighted by a factor 
 to manually-annotated views when computing $\mathcal{L}_{\text{sem}}$, reflecting their lower
 label confidence. Densification (Section 3.4) is active between iterations 500 and 15,000, with a
 600,000-Gaussian soft cap checked once per step (a single densification step can still push the
-count slightly past it before the next check, as in our own 604,152-Gaussian final model),
+count slightly past it before the next check, as in our own 600,583-Gaussian final model),
 bounding both memory use and per-iteration cost on a 10 GB GPU.
 
 ### 4.3 Metrics
@@ -492,7 +499,7 @@ Cityscapes), rather than an average of 30 separate per-image mIoU scores - so a 
 is a pixel-weighted, not an image-weighted, average across the test set. Background is excluded
 from the mean not because of how many pixels it covers - the mean in $\text{mIoU}$ already weights
 every class equally regardless of size - but because it is a comparatively easy class to segment
-(98.64%/98.93% IoU for Task A/Task B respectively, Tables 1 and 3) and is not itself one of the
+(98.64%/99.20% IoU for Task A/Task B respectively, Tables 1 and 3) and is not itself one of the
 four structural components the contest evaluates; including it would pad the average with an
 artificially high, uninformative score and mask real errors on the classes that matter. Because the
 contest brief specifies the 0.5/0.5 weighting between Visual Fidelity and Semantic mIoU but does
@@ -539,58 +546,58 @@ Section 3.5 — the literal function the contest evaluates a submission against.
 
 | Metric | Value |
 | :--- | :---: |
-| PSNR | 22.13 dB |
-| SSIM | 0.853 |
+| PSNR | 22.43 dB |
+| SSIM | 0.854 |
 | LPIPS | 0.321 |
-| Structural mIoU (4 classes) | **91.04%** |
-| Illustrative Accuracy Score | 0.816 |
+| Structural mIoU (4 classes) | **92.08%** |
+| Illustrative Accuracy Score | 0.823 |
 
 **Table 3: Task B per-class IoU**, on the same 30-image test holdout as Table 2.
 
 | Class | IoU |
 | :--- | :---: |
-| deck | 92.59% |
-| stay_cable | 91.00% |
-| tower | 91.88% |
-| foundation | 88.71% |
-| (background, reported for completeness, excluded from structural mIoU) | 98.93% |
+| deck | 95.72% |
+| stay_cable | 91.76% |
+| tower | 92.37% |
+| foundation | 88.49% |
+| (background, reported for completeness, excluded from structural mIoU) | 99.20% |
 
 Figure 5 visualizes this per-class breakdown, sorted by class and colored by the fixed per-class
 palette used consistently across every figure in this paper, with the overall structural mIoU
 marked for reference — making
-the counter-intuitive result discussed in Section 5.2, `stay_cable` scoring nearly as high as
-`deck` and `tower` despite being physically the thinnest structural component, immediately
-visible without reading Table 3 closely.
+the counter-intuitive result discussed in Section 5.2, `stay_cable` scoring close to `tower` and
+comfortably clear of `foundation` despite being physically the thinnest structural component,
+immediately visible without reading Table 3 closely.
 
 ![Figure 5: Per-class IoU on the 30-view holdout](figures/fig5_per_class_iou.png)
 
 **Figure 5.** Per-class IoU on the 30-view holdout, sorted by class and colored by the same
 per-class palette used consistently across every figure in this paper, with the overall
-structural mIoU (91.04%) marked for reference.
+structural mIoU (92.08%) marked for reference.
 
 As Figure 5 shows, the four structural classes all clear 88% IoU despite substantial differences
 in physical scale, surface texture, and viewpoint coverage, and background — by far the easiest
-class, since it occupies most of every frame's pixels — reaches 98.93%, confirming the model is
+class, since it occupies most of every frame's pixels — reaches 99.20%, confirming the model is
 not achieving a high structural mIoU merely by defaulting to the dominant class. The ranking
 among the four structural classes, and in particular why `stay_cable` — physically the thinnest
-structural component on the bridge — scores within a point of `deck` and `tower` rather than
-trailing well behind them, is discussed next.
+structural component on the bridge — scores within a point of `tower` and clear of `foundation`
+rather than trailing well behind every other class, is discussed next.
 
 ### 5.2 Discussion — Per-Class Behavior
 
-The `deck` class achieves the highest structural IoU (92.59%), which is expected: it is a
+The `deck` class achieves the highest structural IoU (95.72%), which is expected: it is a
 large, well-textured, planar surface observed from a wide range of overlapping viewpoints
 throughout the flight, giving both the photometric and semantic losses abundant, consistent
-supervision to converge on. `tower` follows closely (91.88%): also a large, solid structural
-element with a simple, consistent shape across viewpoints, even though it covers far fewer
-pixels than `deck` (Section 5.1).
+supervision to converge on. `tower` is the second-highest (92.37%) but meaningfully behind
+`deck`: also a large, solid structural element with a simple, consistent shape across viewpoints,
+even though it covers far fewer pixels than `deck` (Section 5.1).
 
 `stay_cable` is the more interesting case. In the broader bridge-segmentation literature, thin
 cable-like structures are consistently reported as the hardest class, since a physical cable
 strand spans only a handful of pixels per view - and on that basis alone, one would expect
 `stay_cable` to trail well behind the other three structural classes. Our results show the
-opposite: at 91.00% IoU, cable lands within a point of `deck` and `tower`, and clearly ahead of
-`foundation` (88.71%) - not the dramatically weaker class the physical-thinness argument would
+opposite: at 91.76% IoU, cable lands within a point of `tower` - well behind `deck`, but clearly
+ahead of `foundation` (88.49%) - not the dramatically weaker class the physical-thinness argument would
 predict. Part of the explanation is that "thin" describes the physical cable strands, not the
 class actually being scored: as Section 3.4 describes, `stay_cable` is annotated as a coarse
 polygon enclosing sky or water background well beyond the strands themselves, and on the 30-view
@@ -624,8 +631,8 @@ some finer-grained cable delineation that the evaluation does not actually ask f
 hypothesis - foundations sit at the low-lying, often partially water-adjacent base of the bridge,
 and are visible from a narrower range of the UAV flight envelope than the deck or towers - but it
 does not hold up against the actual training-view statistics: averaged over the sparse points
-that vote for each class, `foundation` receives 4.66 observing views per point, more than `deck`
-(2.68) despite `deck` scoring the highest of all four classes, so fewer observing viewpoints is
+that vote for each class, `foundation` receives 6.57 observing views per point, more than `deck`
+(3.12) despite `deck` scoring the highest of all four classes, so fewer observing viewpoints is
 not, by itself, a sufficient explanation. A more likely factor is `foundation`'s small absolute
 footprint - on the 30-view test holdout it covers only 0.62% of pixels, well below `tower`'s
 1.69% and an order of magnitude below `deck`'s 5.02% - which makes IoU for this class more
@@ -641,13 +648,15 @@ metric, but do not show where the model succeeds or fails, or what a rendered vi
 like. We complement them with three qualitative figures.
 
 Figure 6 shows four held-out views (010, 050, 250, 300), each as rendered RGB, the real
-photograph, the rendered semantic map, and the ground-truth mask. 050 is the cleanest RGB
-reconstruction of the four, a wide, low-grazing-angle view; 250 is close behind, with only a
-faint streaking artifact visible over the river. 010 and 300 both show visible RGB degradation -
-soft directional blur across the background for 010, and more pronounced color fringing and
-rainbow-like artifacts around the tower and cable structure for 300, the weakest RGB
-reconstruction in this set. Notably, the rendered semantic map stays close to the ground truth in
-all four views, including 010 and 300, despite their degraded RGB quality. A plausible
+photograph, the rendered semantic map, and the ground-truth mask. 250 is the cleanest RGB
+reconstruction of the four by every visual-fidelity metric (PSNR 22.05 dB, SSIM 0.844, LPIPS
+0.304), with only a faint streaking artifact visible over the river; 050 follows closely (21.40
+dB, 0.828, 0.340). 010 and 300 both show visible RGB degradation - soft, cloud-like blur
+artifacts over the background water and sky - and score comparably weak on all three metrics
+(PSNR 20.55/21.01 dB, SSIM 0.818/0.820, LPIPS 0.382/0.384): 010 is marginally worse on PSNR and
+SSIM, 300 marginally worse on LPIPS, so neither is unambiguously the single weakest view in this
+set. Notably, the rendered semantic map stays close to the ground truth in all four views,
+including 010 and 300, despite their degraded RGB quality. A plausible
 explanation is that per-pixel classification is a coarser, lower-precision target than exact
 color reconstruction — an appearance error large enough to visibly corrupt RGB may still leave
 the arg-max class unchanged — but we present this as an illustrative observation from this set of
@@ -751,11 +760,12 @@ same 40,000-iteration budget, differing only in image resolution. Both rows use 
 warm-start (Section 3.4) - it was active in both, contrary to an earlier draft of this footnote -
 but with the older strict-cable-majority voting rule rather than the plain plurality used for
 Table 2's final numbers, and predate the fixes described in Sections 3.2 and 3.6 (mask
-undistortion; the 240/30/30 train/val/test split, run here as 240/60), so their exact values
-differ from Table 2 on three independent axes at once, not resolution alone. We have not yet
-retrained this ablation under all three current fixes; the resolution and warm-start/voting-rule
-choices are themselves independent design axes, so the direction and size of the resolution
-effect itself is expected to be unaffected by that retraining once done.
+undistortion; the 240/30/30 train/val/test split, run here as 240/60; excluding the test split
+from triangulation and color initialization), so their exact values differ from Table 2 on four
+independent axes at once, not resolution alone. We have not yet retrained this ablation under all
+four current fixes; the resolution and warm-start/voting-rule choices are themselves independent
+design axes, so the direction and size of the resolution effect itself is expected to be
+unaffected by that retraining once done.
 
 | Training resolution | PSNR | SSIM | LPIPS | mIoU |
 | :--- | :---: | :---: | :---: | :---: |
@@ -784,8 +794,8 @@ structural-class map from any camera viewpoint, using a fused single-pass raster
 which the two outputs are pixel-aligned by construction rather than reconciled after the fact. A
 point-cloud-informed semantic warm-start from a simple multi-view plurality vote, together with a
 pseudo-labeling stage that extends supervision to every available image regardless of annotation
-status, let this representation reach 91.04% structural mIoU and an illustrative Accuracy Score
-of 0.816 on a held-out evaluation protocol built to mirror the organizers' own blind-test
+status, let this representation reach 92.08% structural mIoU and an illustrative Accuracy Score
+of 0.823 on a held-out evaluation protocol built to mirror the organizers' own blind-test
 methodology as closely as possible.
 
 Beyond the contest's scoring criteria, a trained model of this kind is a queryable, digital-twin-
