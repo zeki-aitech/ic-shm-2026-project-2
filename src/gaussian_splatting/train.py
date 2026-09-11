@@ -12,8 +12,11 @@ isn't validated on data it was trained on, which doesn't apply to Task B (it has
 holdout-based selection step of its own).
 
 Gaussian means/colors are warm-started from `PycolmapReconstructor`'s triangulated sparse cloud,
-and semantic logits from `SemanticProjector`'s per-point voted class (using ONLY the 270
-train+val views' masks - the 30 test images never influence even the initialization).
+and semantic logits from `SemanticProjector`'s per-point voted class - both restricted to the
+270 train+val views (`PycolmapReconstructor(..., exclude_image_names=...)` excludes the 30 test
+images' observations from triangulation itself, so they influence neither point positions nor,
+transitively, the colors sampled from those points' observing images; semantic voting already
+only ever saw train+val masks). The 30 test images never influence even the initialization.
 """
 import argparse
 import glob
@@ -135,8 +138,6 @@ def prepare_training_data(
     Task A it has no reason to hold `val_ids` back too: they're real GT-labeled views, and Task B
     folds them into its own training pool (`train_ids` below = Task A's `train_ids + val_ids`).
     """
-    camera, images, pts3d = PycolmapReconstructor(colmap_dir).load()
-
     labeled_ids = _load_labeled_ids(images_dir)
     _train_ids, _val_ids, holdout_ids = train_val_test_split(labeled_ids, val_ratio, test_ratio)
     train_ids = _train_ids + _val_ids
@@ -145,6 +146,14 @@ def prepare_training_data(
         f"[gaussian_splatting] labeled={len(labeled_ids)} "
         f"train={len(_train_ids)}+val={len(_val_ids)}={len(train_ids)} holdout={len(holdout_ids)}"
     )
+
+    # Test-split filenames are excluded from triangulation itself (not just from the training
+    # loop below), so the held-out test images influence neither the sparse point cloud's
+    # positions nor - transitively, via sample_point_colors below - the Gaussians' initial
+    # colors. Without this, the geometric/photometric warm-start (though not the loss or the
+    # semantic vote, both already train-only) would have quietly seen the test split.
+    exclude_names = {f"{stem}.png" for stem in holdout_ids}
+    camera, images, pts3d = PycolmapReconstructor(colmap_dir, exclude_image_names=exclude_names).load()
 
     if not os.path.isdir(undistorted_dir) or not os.listdir(undistorted_dir):
         print(f"[gaussian_splatting] undistorting images -> {undistorted_dir}")
@@ -171,8 +180,9 @@ def prepare_training_data(
     # Real per-point RGB, sampled from the original photos at each point's own projected pixel -
     # NOT `_class_palette_colors` above, which is a lookup from voted class to a fixed swatch
     # (the same palette used to color the semantic figures) and carries no actual appearance
-    # information. Uses every image regardless of split, like triangulation itself: a point's
-    # color is photometric input data, not a supervised label.
+    # information. `pts3d[i].image_ids` already excludes the 30 test images (triangulation above
+    # was called with `exclude_image_names`), so this transitively excludes them too - it samples
+    # from every image that's actually allowed to influence the model, train+val+unlabeled alike.
     point_colors = sample_point_colors(pts3d, images, [images_dir, unlabeled_dir])
 
     # Every mask paired with a `GSCamera` below, by contrast, must be undistorted: its

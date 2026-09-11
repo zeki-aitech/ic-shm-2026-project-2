@@ -14,7 +14,7 @@ import shutil
 import tempfile
 import time
 from collections import defaultdict
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Optional, Set, Tuple
 
 import cv2
 import numpy as np
@@ -47,10 +47,20 @@ def load_contest_model(colmap_dir: str) -> pycolmap.Reconstruction:
         shutil.rmtree(tmp)
 
 
-def build_tracks(rec: pycolmap.Reconstruction) -> Dict[int, list]:
-    """Group 2D observations by point3D_id: id -> [(image_id, point2D_idx), ...]."""
+def build_tracks(
+    rec: pycolmap.Reconstruction, exclude_image_ids: Optional[Set[int]] = None
+) -> Dict[int, list]:
+    """Group 2D observations by point3D_id: id -> [(image_id, point2D_idx), ...].
+
+    `exclude_image_ids` (if given) drops observations from those images entirely, so a track
+    triangulated afterward never reflects anything those images saw - used to keep the held-out
+    test split from influencing even the sparse point cloud's positions.
+    """
+    exclude_image_ids = exclude_image_ids or set()
     tracks: Dict[int, list] = defaultdict(list)
     for image_id, image in rec.images.items():
+        if image_id in exclude_image_ids:
+            continue
         for idx, p2d in enumerate(image.points2D):
             if p2d.has_point3D():
                 tracks[p2d.point3D_id].append((image_id, idx))
@@ -61,10 +71,16 @@ def triangulate_tracks(
     rec: pycolmap.Reconstruction,
     min_track_length: int = 2,
     min_tri_angle_deg: float = 0.5,
+    exclude_image_ids: Optional[Set[int]] = None,
 ) -> Dict[str, int]:
     """
     Triangulate all tracks with LO-RANSAC and insert the resulting 3D points
     (with their tracks) into the reconstruction. Returns counters.
+
+    `exclude_image_ids`: see `build_tracks` - images in this set (e.g. the held-out test split)
+    contribute no 2D observations to any track, so they cannot influence a point's triangulated
+    position. Their poses/intrinsics are untouched and remain available elsewhere (needed to
+    render them at evaluation time).
     """
     options = pycolmap.EstimateTriangulationOptions()
     options.min_tri_angle = np.deg2rad(min_tri_angle_deg)
@@ -72,7 +88,7 @@ def triangulate_tracks(
     poses = {img_id: img.cam_from_world() for img_id, img in rec.images.items()}
     stats = {"ok": 0, "rejected": 0, "too_short": 0}
 
-    for p3d_id, obs in build_tracks(rec).items():
+    for p3d_id, obs in build_tracks(rec, exclude_image_ids).items():
         if len(obs) < min_track_length:
             stats["too_short"] += 1
             continue
@@ -171,10 +187,11 @@ def sample_point_colors(
     `PycolmapReconstructor`'s triangulation and `SemanticProjector`'s semantic vote already use,
     so this reads the *original* images, not the undistorted cache.
 
-    This deliberately does not restrict to any train/val/test split: a point's real color is
-    photometric input data, not a supervised label - the same treatment already given to each
-    point's xyz position, which pycolmap triangulates from every available 2D observation
-    (holdout images included) rather than a training-only subset.
+    This function itself has no notion of train/val/test - it simply averages over whichever
+    images `pts3d[i].image_ids` says observed point `i`. In this pipeline that set already
+    excludes the held-out test split, because `PycolmapReconstructor.load(exclude_image_names=...)`
+    excludes those images' observations from every track before triangulation - so a point's
+    color, like its xyz position, only ever reflects images the model is allowed to train on.
 
     A point with no readable observation (all its images missing, or every projected pixel
     landing outside its image's bounds) falls back to mid-gray, matching the previous behavior
@@ -227,9 +244,23 @@ class PycolmapReconstructor:
     `SemanticProjector` via its `parser` argument.
     """
 
-    def __init__(self, colmap_dir: str, iqr_multiplier: float = 3.0):
+    def __init__(
+        self,
+        colmap_dir: str,
+        iqr_multiplier: float = 3.0,
+        exclude_image_names: Optional[Iterable[str]] = None,
+    ):
+        """
+        `exclude_image_names` (e.g. the held-out test split's filenames): these images' poses
+        and intrinsics are still loaded normally (needed to render them at evaluation time), but
+        their 2D feature observations contribute to no track, so they cannot influence any
+        triangulated 3D point's position - and, since Gaussian color init (`sample_point_colors`)
+        only samples from a point's own observing images, they're transitively excluded from
+        color init too, with no separate filtering needed there.
+        """
         self.colmap_dir = colmap_dir
         self.iqr_multiplier = iqr_multiplier
+        self.exclude_image_names = set(exclude_image_names) if exclude_image_names else set()
         self.reconstruction: pycolmap.Reconstruction = None
         self.camera: CameraIntrinsics = None
         self.images: Dict[int, ImagePose] = {}
@@ -239,10 +270,15 @@ class PycolmapReconstructor:
         t0 = time.time()
         print(f"[pycolmap] Loading contest model from '{self.colmap_dir}'...")
         self.reconstruction = load_contest_model(self.colmap_dir)
-        print(f"[pycolmap] {self.reconstruction.num_images()} images loaded. "
+        exclude_image_ids = {
+            iid for iid, img in self.reconstruction.images.items()
+            if img.name in self.exclude_image_names
+        }
+        print(f"[pycolmap] {self.reconstruction.num_images()} images loaded "
+              f"({len(exclude_image_ids)} excluded from triangulation). "
               f"Triangulating tracks with LO-RANSAC...")
 
-        stats = triangulate_tracks(self.reconstruction)
+        stats = triangulate_tracks(self.reconstruction, exclude_image_ids=exclude_image_ids)
         errors = np.array([p.error for p in self.reconstruction.points3D.values()])
         print(f"[pycolmap] Triangulated {stats['ok']} points "
               f"({stats['rejected']} rejected, {stats['too_short']} too short). "
