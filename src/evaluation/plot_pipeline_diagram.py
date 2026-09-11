@@ -121,7 +121,7 @@ def plot_pipeline_diagram(output_path: str) -> str:
 
     # Both branches -> merge
     _arrow(ax, a3_b, (left_x, merge_t[1] + 0.05), label="warm-start")
-    _arrow(ax, (right_x, b2_b[1]), (right_x, merge_t[1] + 0.05), label="340 supervised views")
+    _arrow(ax, (right_x, b2_b[1]), (right_x, merge_t[1] + 0.05), label="370 supervised views")
 
     _arrow(ax, merge_b, tm_t)
     _arrow(ax, tm_b, r_t)
@@ -231,7 +231,7 @@ def plot_pipeline_diagram_horizontal(output_path: str) -> str:
     # through any box (or each other) along the way.
     target_y_pseudo = merge_cy + 0.5
     target_y_warmstart = merge_cy - 0.5
-    _zigzag_arrow(ax, b2_r, 9.3, (merge_l[0], target_y_pseudo), label="340 supervised views")
+    _zigzag_arrow(ax, b2_r, 9.3, (merge_l[0], target_y_pseudo), label="370 supervised views")
     _zigzag_arrow(ax, a3_r, 9.6, (merge_l[0], target_y_warmstart), label="warm-start")
 
     # Right column chain

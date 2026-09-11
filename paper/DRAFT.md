@@ -489,10 +489,12 @@ where $TP_c$, $FP_c$, and $FN_c$ are the true-positive, false-positive, and fals
 counts for class $c$, obtained from a single confusion matrix pooled over every pixel of all 30
 holdout test views at once (the standard convention in semantic segmentation benchmarks, e.g.
 Cityscapes), rather than an average of 30 separate per-image mIoU scores - so a class's IoU here
-is a pixel-weighted, not an image-weighted, average across the test set. Background
-is excluded from the mean because it occupies the large majority of most frames and, being the
-least structurally informative class, would otherwise dominate the average and mask errors on the
-four classes the contest actually cares about. Because the
+is a pixel-weighted, not an image-weighted, average across the test set. Background is excluded
+from the mean not because of how many pixels it covers - the mean in $\text{mIoU}$ already weights
+every class equally regardless of size - but because it is a comparatively easy class to segment
+(98.64%/98.93% IoU for Task A/Task B respectively, Tables 1 and 3) and is not itself one of the
+four structural components the contest evaluates; including it would pad the average with an
+artificially high, uninformative score and mask real errors on the classes that matter. Because the
 contest brief specifies the 0.5/0.5 weighting between Visual Fidelity and Semantic mIoU but does
 not define how PSNR, SSIM, and LPIPS combine into a single Visual Fidelity number, we report an
 illustrative Accuracy Score computed as the mean of PSNR (normalized against a 35 dB reference),
