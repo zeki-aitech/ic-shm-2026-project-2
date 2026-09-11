@@ -15,9 +15,6 @@ it once the paper is finalized and submitted — it is not part of the paper its
   misalignment, color-init bug, and triangulation test-leak all fixed below, and the old 240/60
   split rather than the current 240/30/30. Low priority (it's a secondary ablation, not the
   headline numbers) but should eventually be redone for full consistency.
-- [ ] Figure 8 (splat viewer render, Section 5.3, optional) still shows the pre-test-leak-fix
-  checkpoint's Gaussians - needs a fresh `export_ply`/SuperSplat capture from the current
-  checkpoint, same workflow as after fix #4 (Figure 6 at the time).
 - [ ] **Future idea (optional, not required by anything in the paper as currently written):**
   ablate the semantic warm-start logit magnitude (`sem_init`, `src/gaussian_splatting/model.py`
   lines ~131/133 - currently a hardcoded `+2.0`/`-2.0`, chosen by feel, not by any ablation or
@@ -45,6 +42,12 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Refreshed Figure 8 (splat viewer render, Section 5.3, optional) for the fix #5
+  (test-split-clean triangulation) checkpoint.** Exported new `bridge_splat_test_excluded_init_
+  {rgb,semantic}.ply` from the current canonical checkpoint via `export_ply.py`, user captured
+  true-color and semantic screenshots in SuperSplat, composed via `compose_splat_screenshots.py`
+  into `fig8_splat_render.png`. Deleted the superseded `bridge_splat_real_color_{rgb,semantic}.ply`
+  exports from `outputs/renders/` (gitignored local artifacts).
 - [x] **External review fix #5 (test-split leakage into triangulation/color-init) implemented
   and retrained.** The user's own review (echoing an external reviewer's finding) caught that
   `DRAFT.md` claimed the 30-image test split was "excluded from every stage of training," but
