@@ -261,11 +261,12 @@ yielding a five-class pseudo-mask for semantic supervision in Task B.
 
 ![Figure 2: SegFormer architecture for Task A pseudo-label generation](figures/fig2_segformer_architecture.png)
 
-**Figure 2.** Task A pseudo-label generation using SegFormer with a MiT-B0 encoder [14].
-Features at 1/4, 1/8, 1/16, and 1/32 of the resized input's spatial resolution are projected,
-resized to a common 1/4 resolution, and fused by the All-MLP decoder. The five-class classifier
-produces logits that are resized to the original image dimensions before argmax generates
-the pseudo-mask. The schematic summarizes the architecture used for fine-tuning and inference.
+**Figure 2.** SegFormer-based pseudo-label generation for Task A. The MiT-B0 encoder [14]
+extracts features at four spatial scales relative to the resized input. The All-MLP decoder
+projects, resizes, and fuses these features, with its final classifier producing five-class
+logits at one-quarter input resolution. The logits are resized to the original image dimensions
+before argmax generates pseudo-masks for semantic supervision in Task B. The schematic shows the
+inference path after fine-tuning.
 
 ### 3.4 Task B: Semantic 3D Gaussian Splatting
 
