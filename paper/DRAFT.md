@@ -339,9 +339,8 @@ carries geometric parameters, opacity, RGB color, and five semantic logits. RGB 
 concatenated and rendered in a single differentiable rasterization pass using shared
 alpha-compositing weights. Rendered logits feed semantic cross-entropy during training and arg
 max for semantic-map generation. Photometric and semantic losses jointly optimize the
-representation. The RGB and semantic-map thumbnails are real renders of held-out test view 300
-(Figure 5), not illustrations. Dashed arrows denote training-only connections; semantic colors
-indicate class identities for visualization.
+representation. Dashed arrows denote training-only connections; semantic colors indicate class
+identities for visualization.
 
 **Densification.** As is standard in Gaussian Splatting, the point set is not fixed throughout
 training. Gaussians whose positional gradients are large — an indication that a single primitive
