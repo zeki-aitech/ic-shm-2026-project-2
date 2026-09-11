@@ -599,7 +599,7 @@ also annotated tightly around their true extent rather than padded out, and `tow
 higher than cable despite that, so pixel count alone does not fully explain the full ranking.
 
 This is not evidence that training corrects the annotation toward truer cable geometry - Figure
-4's rendered semantic maps (Section 5.3) show the opposite. On views 010, 250, and 300, the
+6's rendered semantic maps (Section 5.3) show the opposite. On views 010, 250, and 300, the
 rendered cable region closely reproduces the same broad, coarsely-annotated shape as the
 ground-truth mask itself, not a thinner region tracing the actual strands. The more
 accurate explanation is that the annotated region, while not tracing individual strands, is
@@ -684,12 +684,12 @@ map.
 
 Finally, Figure 8 (optional) views the trained Gaussians directly in an interactive splat viewer
 ([SuperSplat](https://superspl.at/editor)) rather than through one camera pose at a time. Unlike
-the arbitrary-viewpoint renders in Figures 4-5, this alpha-blended splat render exposes the full
+the arbitrary-viewpoint renders in Figures 6-7, this alpha-blended splat render exposes the full
 learned 3D structure simultaneously: both towers, the main cable, the deck, and the foundation
 piers are all visible at once in the semantic panel and clearly spatially coherent with the
 true-color reconstruction beside it, confirming that the semantic warm-start and training loss
 converge to a structurally sensible 3D segmentation rather than scattered, inconsistent
-per-Gaussian labels. This figure is secondary to Figures 4 and 5 and can be dropped if space is
+per-Gaussian labels. This figure is secondary to Figures 6 and 7 and can be dropped if space is
 limited.
 
 ![Figure 8: Splat-viewer renders of the trained Gaussians, true-color and by predicted semantic class](figures/fig8_splat_render.png)
@@ -704,7 +704,7 @@ green, foundation yellow, background gray).
 The results in Sections 5.1-5.3 characterize the final trained models but say nothing about how
 they got there — whether the reported numbers reflect a stably converged optimum or an early,
 possibly fragile checkpoint. We check this directly against the real training logs for both
-tasks, plotted in Figures 7 and 8.
+tasks, plotted in Figures 9 and 10.
 
 Figure 9 plots Task A's training loss and validation mIoU over its 80 training epochs. Both
 curves plateau well before epoch 80 (best validation mIoU 81.67%, reached at epoch 69 and kept as
