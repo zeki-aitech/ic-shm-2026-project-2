@@ -668,7 +668,7 @@ views rather than a claim established over the full holdout.
 300): rendered RGB, real photograph, rendered semantic map, and ground-truth mask, all colored by
 the same per-class palette used throughout this paper.
 
-Because the held-out views in Table 2 still lie on the UAV's original flight line, Figure 7
+Because the held-out test split (Section 3.6) still lies on the UAV's original flight line, Figure 7
 additionally renders a camera path interpolated between two real flown poses (images 280 and 300;
 quaternion SLERP for rotation, linear interpolation for translation) at five evenly spaced steps
 $t \in \{0, 0.25, 0.5, 0.75, 1\}$ — demonstrating rendering from three poses ($t=0.25, 0.5, 0.75$)
