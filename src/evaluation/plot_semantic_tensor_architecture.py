@@ -120,7 +120,7 @@ def draw():
     text(8.85, -2.0, 'Concatenate', 12)
     fig.subplots_adjust(left=.01,right=.99,bottom=.03,top=.98)
     for ext in ['png','pdf','svg']:
-        fig.savefig(Path('paper/figures')/f'semantic_gaussian_tensor_architecture.{ext}',dpi=250,facecolor='white')
+        fig.savefig(Path('paper/figures')/f'fig4_gaussian_architecture.{ext}',dpi=250,facecolor='white')
     plt.close(fig)
 
 if __name__=='__main__':

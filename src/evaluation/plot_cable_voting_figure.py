@@ -139,7 +139,7 @@ def main():
     parser.add_argument("--crop", nargs=4, type=int, default=[0, 780, 0, 950], metavar=("Y0", "Y1", "X0", "X1"))
     parser.add_argument(
         "--output",
-        default=os.path.join(project_root, "paper", "figures", "fig2_cable_voting.png"),
+        default=os.path.join(project_root, "paper", "figures", "fig3_cable_voting.png"),
     )
     args = parser.parse_args()
 

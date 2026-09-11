@@ -41,6 +41,50 @@ it once the paper is finalized and submitted — it is not part of the paper its
 
 ## Done
 
+- [x] **Added the Task A SegFormer architecture figure (new Figure 2, Section 3.3)**, produced by
+  a Codex session working on this same repo in parallel with this one (per the user's earlier
+  request to hand an architecture description to an external tool rather than have me draw it -
+  the same pattern as the Figure 4/gaussian-architecture figure below). Placed at the end of
+  Section 3.3, right after the paragraph describing pseudo-mask generation for the 100 unlabeled
+  images, with a caption describing the MiT-B0 encoder's four feature scales (1/4, 1/8, 1/16,
+  1/32), the All-MLP decoder's project/resize/fuse steps, the 5-class classifier at 1/4
+  resolution, and the resize+argmax step producing the pseudo-mask - verified accurate against
+  `src/segmentation/train.py`'s actual model (`SegformerForSemanticSegmentation.from_pretrained
+  ("nvidia/mit-b0", num_labels=5, ...)`) and citation [14] (Xie et al. 2021, already used
+  elsewhere in Related Work). Source: `fig2_segformer_architecture.{png,svg,pdf}`,
+  `src/evaluation/plot_segformer_architecture.py`.
+- [x] **Renamed every paper figure PNG to `fig<N>_<content>.png`, matching its actual Figure N
+  in the current text - in two passes, because of a concurrent-edit collision.** First pass (after
+  the Figure 3/gaussian-architecture insertion below shifted every later figure by one): renamed
+  8 files via `git mv` to `fig1_pipeline` through `fig9_task_b_training`. While that pass's
+  generator-script updates were still in progress, the concurrent Codex session above inserted
+  the new Figure 2 (SegFormer) directly into `DRAFT.md` and reorganized `paper/figures/` on its
+  own - moving `bridge_splat_real_color_{rgb,semantic}.png`, the gaussian-architecture figure's
+  `.svg`/`.pdf` siblings, and `segformer-references.png` (unrelated, provenance unclear) into a
+  new `paper/figures/tmp/` subdirectory, and deleting the just-renamed orphaned ablation figure
+  (`unused_ablation_convergence_seed43.png`, itself a rename of the never-referenced
+  `fig9_ablation_convergence.png` - see the "Removed the no-warmstart ablation" entry below) with
+  no copy left anywhere findable. Caught this via `git status` showing unexplained deletions right
+  before committing; paused and confirmed with the user rather than committing over a concurrent
+  change. Second pass, after confirming the new Figure 2 placement was correct and intentional:
+  renamed every figure again to its final number - `fig1_pipeline`, `fig2_segformer_architecture`,
+  `fig3_cable_voting`, `fig4_gaussian_architecture` (only the `.png` survived the first pass -
+  its `.svg`/`.pdf` siblings were in `tmp/` under the old `fig3_` name - so regenerated all three
+  under the final name by re-running `plot_semantic_tensor_architecture.py`, byte-identical to
+  the `tmp/` copies; the stale `tmp/` copies were left as-is, not deleted),
+  `fig5_per_class_iou`, `fig6_qualitative_grid`, `fig7_interpolation`, `fig8_splat_render`,
+  `fig9_task_a_training`, `fig10_task_b_training`. Updated all 10
+  `![Figure N: ...](figures/...)` references in `DRAFT.md` and every generator script's default
+  output filename (`plot_pipeline_diagram.py`, `plot_segformer_architecture.py`,
+  `plot_cable_voting_figure.py`, `plot_semantic_tensor_architecture.py`, `plot_per_class_iou.py`,
+  `plot_qualitative_grid.py`, `plot_interpolation_sequence.py`, `compose_splat_screenshots.py`,
+  `plot_training_curves.py`). Net effect versus before this pair of passes: the orphaned ablation
+  figure is now genuinely gone (not just moved) - it was never referenced by the paper and is
+  reproducible via `plot_ablation_convergence.py` from the preserved
+  `gaussians_replicate_{warmstart,no_warmstart}_seed43` checkpoints if ever needed again; nothing
+  else was lost. `bridge_splat_real_color_{rgb,semantic}.png` (Figure 8's source screenshots, not
+  embedded directly) and `segformer-references.png` now live under `paper/figures/tmp/`, untouched
+  by either pass.
 - [x] **Added the semantic Gaussian architecture figure (new Figure 3, Section 3.4)**, revisiting
   the previously-paused idea (two earlier attempts - a matplotlib shared-trunk/dual-head diagram
   and a Mermaid version - were reverted at the user's request; see the old Outstanding entry this

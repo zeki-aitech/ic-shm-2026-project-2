@@ -103,7 +103,7 @@ def main():
     parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument(
         "--output",
-        default=os.path.join(project_root, "paper", "figures", "fig3_per_class_iou.png"),
+        default=os.path.join(project_root, "paper", "figures", "fig5_per_class_iou.png"),
     )
     args = parser.parse_args()
 

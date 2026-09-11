@@ -108,7 +108,7 @@ def main():
     parser.add_argument("--output")
     args = parser.parse_args()
 
-    default_name = "fig7_task_a_training.png" if args.task == "a" else "fig8_task_b_training.png"
+    default_name = "fig9_task_a_training.png" if args.task == "a" else "fig10_task_b_training.png"
     output = args.output or os.path.join(project_root, "paper", "figures", default_name)
     fn = plot_task_a_training_curve if args.task == "a" else plot_task_b_training_curve
     out = fn(args.log, output)

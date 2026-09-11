@@ -90,7 +90,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default=os.path.join(project_root, "paper", "figures", "fig4_qualitative_grid.png"),
+        default=os.path.join(project_root, "paper", "figures", "fig6_qualitative_grid.png"),
     )
     args = parser.parse_args()
 

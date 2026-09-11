@@ -105,7 +105,7 @@ def main():
     parser.add_argument("--val-ratio", type=float, default=0.10)
     parser.add_argument("--test-ratio", type=float, default=0.10)
     parser.add_argument(
-        "--output", default=os.path.join(project_root, "paper", "figures", "fig9_ablation_convergence.png")
+        "--output", default=os.path.join(project_root, "paper", "figures", "unused_ablation_convergence_seed43.png")
     )
     args = parser.parse_args()
 

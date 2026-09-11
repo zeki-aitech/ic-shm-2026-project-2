@@ -65,7 +65,7 @@ def main():
     parser.add_argument("--semantic", required=True)
     parser.add_argument(
         "--output",
-        default=os.path.join(project_root, "paper", "figures", "fig6_splat_render.png"),
+        default=os.path.join(project_root, "paper", "figures", "fig8_splat_render.png"),
     )
     args = parser.parse_args()
 

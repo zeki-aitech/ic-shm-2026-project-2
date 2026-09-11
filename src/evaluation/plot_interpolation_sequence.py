@@ -76,7 +76,7 @@ def main():
     parser.add_argument("--frame-dir", required=True)
     parser.add_argument(
         "--output",
-        default=os.path.join(project_root, "paper", "figures", "fig5_interpolation.png"),
+        default=os.path.join(project_root, "paper", "figures", "fig7_interpolation.png"),
     )
     args = parser.parse_args()
 
