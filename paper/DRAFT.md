@@ -430,7 +430,7 @@ on the separate 30-image test set.
 
 **Table 1: Task A (SegFormer) per-class validation IoU**, on the 30-image internal validation
 split used for checkpoint selection (Section 3.3), *not* the 30-image test split evaluated in
-Tables 2-4.
+Tables 2–4.
 
 | Class | IoU |
 | :--- | :---: |
@@ -610,7 +610,7 @@ The full-resolution row is the model reported in Tables 2 and 3.
 **Table 4: Effect of training resolution on local test performance.** One run per resolution,
 with otherwise matched settings and full-resolution evaluation.
 
-| Training resolution | PSNR | SSIM | LPIPS | mIoU |
+| Training resolution | PSNR | SSIM | LPIPS | Structural mIoU |
 | :--- | :---: | :---: | :---: | :---: |
 | Half (660x494) | 22.03 | 0.838 | 0.330 | 89.71% |
 | **Full (1320x989)** | **22.43** | **0.854** | **0.321** | **92.08%** |
