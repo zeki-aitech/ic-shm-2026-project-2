@@ -47,7 +47,7 @@ def draw():
     arrow([(1.95,4.55),(1.95,3.7)])
     tensor(4.25,5.75,['#dc7974','#80b88b','#7a9dce'],'RGB','N × 3  •  sigmoid')
     tensor(4.25,3.8,[CLASS_COLORS[i] / 255.0 for i in range(5)],
-           'Semantic logits','N × 5  •  class IDs 0–4')
+           'Semantic logits','N × 5  •  unconstrained logits')
     arrow([(3.15,5.75),(3.75,5.75),(3.75,6.12),(4.25,6.12)])
     arrow([(3.15,5.2),(3.6,5.2),(3.6,4.18),(4.25,4.18)])
     ax.add_patch(Ellipse((7.35,5.15),.7,.7,facecolor=gold,edgecolor=ink,lw=1.5));text(7.35,5.15,'C',17,True)
