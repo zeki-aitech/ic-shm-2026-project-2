@@ -15,6 +15,7 @@ dependencies = [
     "pycolmap>=0.6.0",
     "ipykernel>=6.25.0",
     "scikit-image>=0.21.0",
+    "python-pptx>=1.0.2",
 ]
 
 [project.optional-dependencies]
