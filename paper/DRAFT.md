@@ -1,6 +1,10 @@
-# Semantic 3D Gaussian Splatting for Multi-View Reconstruction of Suspension Bridges
+# Multi-View Semantic 3D Gaussian Splatting for Component-Aware Bridge Reconstruction from UAV Imagery
 
-**[NEEDS] Author names, affiliations, IC-SHM 2026 Project 2 team identifier**
+**Quoc-Bao Ta\(^1\), Trung Ha Nguyen\(^2\), and Thai Ha Dang\(^3\)**<br>
+\(^1\) Department of Civil Engineering, University of Texas Rio Grande Valley, Edinburg, TX 78539-2999, USA<br>
+\(^2\) Jisan Construction Co., Ltd., Busan, South Korea<br>
+\(^3\) Department of Electrical Engineering, University of North Texas, Denton, TX 76201, USA<br>
+**[NEEDS] IC-SHM 2026 Project 2 team identifier**
 
 ---
 
@@ -551,8 +555,8 @@ translation, not directly to camera position. The intermediate views have no gro
 
 Figure 8 presents two interactive-viewer screenshots of the same trained representation.
 Panel (a) uses learned RGB; panel (b) replaces each Gaussian's color with its argmax class color
-before rasterization. Each panel is rendered from a viewer camera, and the screenshots are
-not a registered image pair. Major component regions are recognizable, while dispersed and
+before rasterization. Both panels use the same viewer camera pose and therefore form a registered
+image pair for direct spatial comparison. Major component regions are recognizable, while dispersed and
 partially transparent splats remain visible around the bridge. This visualization illustrates
 per-Gaussian label distribution without establishing geometric accuracy or the isolated effect
 of semantic initialization.
@@ -565,7 +569,7 @@ is the prediction assessed by the reported IoU metrics.
 
 **Figure 8.** Interactive-viewer screenshots of the trained Gaussian representation.
 (a) Learned RGB appearance. (b) Per-Gaussian argmax labels displayed as colors: deck red,
-cable cyan, tower green, foundation yellow, background gray. Viewpoints are not registered.
+cable cyan, tower green, foundation yellow, background gray. Both panels use the same viewpoint.
 The class-colored splat visualization is distinct from a rendered-logit argmax semantic map.
 
 ### 5.4 Training Convergence

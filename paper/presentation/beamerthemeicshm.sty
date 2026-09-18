@@ -1,0 +1,27 @@
+\ProvidesPackage{beamerthemeicshm}
+\mode<presentation>
+\definecolor{ICBlue}{HTML}{3D3AB8}
+\definecolor{ICNavy}{HTML}{182955}
+\definecolor{ICLight}{HTML}{F3F4FA}
+\definecolor{ICGray}{HTML}{555555}
+\setbeamercolor{normal text}{fg=black,bg=white}
+\setbeamercolor{structure}{fg=ICBlue}
+\setbeamercolor{frametitle}{fg=white,bg=ICBlue}
+\setbeamercolor{block title}{fg=white,bg=ICNavy}
+\setbeamercolor{block body}{fg=black,bg=ICLight}
+\setbeamercolor{alerted text}{fg=ICBlue}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{title}{size=\LARGE,series=\mdseries}
+\setbeamerfont{subtitle}{size=\large}
+\setbeamerfont{author}{size=\large}
+\setbeamerfont{institute}{size=\small}
+\setbeamerfont{footline}{size=\tiny}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize item}{\raise0.15ex\hbox{\color{ICBlue}\small$\bullet$}}
+\setbeamertemplate{itemize subitem}{\raise0.1ex\hbox{\color{ICBlue}\scriptsize$\blacktriangleright$}}
+\setbeamertemplate{frametitle}{\nointerlineskip\begin{beamercolorbox}[wd=\paperwidth,ht=0.72cm,dp=0.20cm,leftskip=0.45cm]{frametitle}\usebeamerfont{frametitle}\insertframetitle\end{beamercolorbox}}
+\setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.84\paperwidth,ht=.30cm,dp=.10cm,leftskip=.35cm]{author in head/foot}\color{ICGray}\insertsectionhead\end{beamercolorbox}\begin{beamercolorbox}[wd=.16\paperwidth,ht=.30cm,dp=.10cm,rightskip=.35cm plus1fil]{author in head/foot}\hfill\color{black}\insertframenumber\,/\,\inserttotalframenumber\end{beamercolorbox}}}
+\setbeamertemplate{caption}[numbered]
+\setbeamerfont{caption}{size=\scriptsize}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\mode<all>
