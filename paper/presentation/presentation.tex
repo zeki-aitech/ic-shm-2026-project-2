@@ -2,8 +2,14 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern,amsmath,amssymb,booktabs,array,graphicx}
+\usepackage{pgfpages}
 \usepackage{beamerthemeicshm}
 \input{macros.tex}
+\ifdefined\SHOWSPEAKERNOTES
+  \setbeameroption{show notes on second screen=right}
+\else
+  \setbeameroption{hide notes}
+\fi
 \graphicspath{{../figures/}}
 \title{Multi-View Semantic 3D Gaussian Splatting for\\Component-Aware Bridge Reconstruction from UAV Imagery}
 \subtitle{Rendering bridge appearance and structural components from arbitrary viewpoints}
@@ -16,6 +22,8 @@
 \vspace{0.15cm}\begin{beamercolorbox}[wd=\textwidth,sep=.32cm,center,rounded=true,shadow=true]{frametitle}{\usebeamerfont{title}\inserttitle\par}\vspace{.15cm}{\usebeamerfont{subtitle}\insertsubtitle}\end{beamercolorbox}
 \vspace{.42cm}\begin{center}{\usebeamerfont{author}\insertauthor}\par\vspace{.18cm}{\usebeamerfont{institute}\insertinstitute}\par\vspace{.25cm}{\normalsize\insertdate}\end{center}
 \vfill\hfill{\tiny 1\,/\,\inserttotalframenumber}
+\note{\textbf{Target: 0:15.}\par
+Good morning. I am Quoc-Bao Ta, presenting joint work with Trung Ha Nguyen and Thai Ha Dang. We develop a multi-view semantic Gaussian Splatting system that reconstructs bridge appearance and structural component labels from UAV images.}
 \end{frame}
 
 \section{Task and data}
@@ -28,6 +36,8 @@
 \end{itemize}
 \begin{block}{Objective}Learn one 3D representation that renders aligned appearance and component labels from supplied or constructed viewpoints.\end{block}
 \source{IC-SHM 2026 Project 2 brief; DRAFT.md Sections 1 and 3.1.}
+\note{\textbf{Target: 0:20.}\par
+Project 2 asks us to render both an RGB image and a five-class semantic map from a query camera. The official blind evaluation combines visual and semantic metrics. Our aim is therefore one scene representation that keeps appearance and component labels aligned. We do not claim damage detection or survey-grade geometry.}
 \end{frame}
 
 \begin{frame}{Released data and required output}
@@ -43,6 +53,8 @@
 \begin{block}{Local partition}240 labeled train + 30 labeled validation + 30 labeled test; 100 unlabeled views remain separate.\end{block}
 \end{columns}
 \source{DRAFT.md Sections 3.1, 3.6, and 4.1.}
+\note{\textbf{Target: 0:20.}\par
+The released data contain 400 posed UAV images at 1320 by 989 pixels. Three hundred images have component polygons, while one hundred contain RGB only. We divide the labeled set into 240 training, 30 validation, and 30 local test images. The renderer receives camera parameters and returns RGB plus a five-class map.}
 \end{frame}
 
 \begin{frame}{Related methods and our design choice}
@@ -56,6 +68,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \end{tabular}
 \vspace{.3em}The contribution is a task-specific integration for UAV bridge data, not a claim that semantic attribute rendering is new.
 \source{DRAFT.md Section 2; Kerbl et al. (2023); Xie et al. (2021).}
+\note{\textbf{Target: 0:15.}\par
+Our design combines established tools for this specific bridge task. COLMAP tracks provide sparse geometry, SegFormer supplies missing semantic supervision, and 3D Gaussian Splatting provides an explicit differentiable renderer. Our contribution is the integrated RGB and five-logit representation, rather than a claim that semantic feature rendering itself is new.}
 \end{frame}
 
 \section{Method}
@@ -72,6 +86,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \end{itemize}
 \end{columns}
 \source{DRAFT.md Figure 1 and Section 3.}
+\note{\textbf{Target: 0:25.}\par
+The pipeline has two tasks. Task A fine-tunes SegFormer on 240 labeled views, selects the checkpoint on 30 validation views, and predicts masks for the 100 unlabeled views. Task B combines 270 manual masks with those 100 pseudo-masks. It initializes a semantic Gaussian scene from sparse geometry, then jointly optimizes appearance and semantics.}
 \end{frame}
 
 \begin{frame}{Data split and test isolation}
@@ -87,6 +103,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \begin{alertblock}{Scope}Organizer-supplied calibration and poses are retained, so evaluation conditions on supplied camera geometry.\end{alertblock}
 \end{columns}
 \source{DRAFT.md Section 3.6.}
+\note{\textbf{Target: 0:20.}\par
+Test isolation is important. Every tenth labeled image forms the 30-view test split. The remaining labeled images provide Task A training and validation, and Task B uses all 270 non-test labeled views. Test observations do not enter losses, semantic voting, triangulation, or color initialization. From the test views, we retain the organizer-supplied camera geometry for evaluation.}
 \end{frame}
 
 \begin{frame}{Camera geometry and sparse initialization}
@@ -99,6 +117,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \end{itemize}
 \begin{block}{Coordinate rule}Original space: feature tracks, sampled colors, votes. Undistorted space: Task B rendering, losses, and evaluation.\end{block}
 \source{DRAFT.md Section 3.2.}
+\note{\textbf{Target: 0:25.}\par
+After removing test observations, 86,319 feature tracks remain. Robust triangulation produces 84,086 points with a mean reprojection error of 0.49 pixels. Outlier filtering leaves 82,518 initial Gaussians. Tracks, color samples, and semantic votes stay in original image coordinates. Rendering and loss computation use consistently undistorted images and masks.}
 \end{frame}
 
 \begin{frame}{Task A: SegFormer pseudo-labeling}
@@ -112,6 +132,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \item Resizing logits to the original image dimensions followed by argmax generates masks for the 100 unlabeled images.
 \end{itemize}
 \source{DRAFT.md Section 3.3 and Figure 2.}
+\note{\textbf{Target: 0:20.}\par
+Task A uses SegFormer with the MiT-B0 encoder. Its four feature scales are fused by the all-MLP decoder to produce five-class logits. We train on 240 images and select the best checkpoint on 30 validation images. After resizing logits back to the original dimensions, argmax produces pseudo-masks for the 100 RGB-only views.}
 \end{frame}
 
 \begin{frame}{Task A protocol and validation result}
@@ -121,6 +143,8 @@ COLMAP geometry & Posed multi-view tracks & Triangulate after excluding test obs
 \column{.55\textwidth}\includegraphics[width=\textwidth,height=.61\textheight,keepaspectratio]{fig9_task_a_training.png}\end{columns}
 \begin{alertblock}{Metric boundary}Task A uses its 30-image internal validation split. These values are not Task B test results.\end{alertblock}
 \source{DRAFT.md Table 1, Figure 9, and Section 4.2.}
+\note{\textbf{Target: 0:20.}\par
+On the internal validation split, Task A reaches 81.67 percent structural mIoU, averaging the four bridge classes and excluding background. Deck and cable perform best, while foundation is the hardest class. The best checkpoint occurs at epoch 69. These values measure checkpoint selection only and are separate from the Task B test results.}
 \end{frame}
 
 \begin{frame}{Semantic Gaussian representation}
@@ -138,6 +162,8 @@ g_k=\{\mu_k,s_k,q_k,o_k,c_k,\ell_k\},
 The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ for each Gaussian.
 \end{block}
 \source{DRAFT.md Section 3.4.}
+\note{\textbf{Target: 0:20.}\par
+Each Gaussian stores position, scale, rotation, opacity, three RGB values, and five semantic logits. All parameters remain trainable. Position and initial RGB come from one sparse point, while multi-view voting initializes the semantic logits. The renderer therefore processes eight trainable output channels for every Gaussian.}
 \end{frame}
 
 \begin{frame}{Semantic Gaussian architecture}
@@ -145,6 +171,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \includegraphics[width=1.02\textwidth,height=.84\textheight,keepaspectratio]{fig4_gaussian_architecture.png}
 \end{center}
 \source{DRAFT.md Section 3.4 and Figure 4.}
+\note{\textbf{Target: 0:20.}\par
+This diagram shows the complete architecture. We concatenate RGB and semantic logits before one differentiable rasterization pass. The shared projection, depth order, opacity, and alpha weights produce two aligned outputs. RGB supervision drives the photometric branch, semantic masks drive cross-entropy, and both losses update the common Gaussian representation.}
 \end{frame}
 
 \begin{frame}{Semantic warm-start}
@@ -158,6 +186,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item The broad cable polygon defines the semantic target; it does not resolve individual strands.
 \end{itemize}
 \source{DRAFT.md Section 3.4 and Figure 3.}
+\note{\textbf{Target: 0:20.}\par
+For semantic initialization, each labeled observation votes for the class of its 3D track. The plurality winner receives logit plus two, and the other classes receive minus two. A fixed priority resolves ties. Pseudo-labels supervise later optimization but do not participate in this initial vote, so initialization depends only on manual annotations.}
 \end{frame}
 
 \begin{frame}{Fused RGB and semantic rendering}
@@ -167,6 +197,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \[\hat M_p=\arg\max_cz_{pc},\qquad b_I=(.5,.5,.5),\quad b_\ell=(4,-4,-4,-4,-4).\]
 \begin{block}{Implementation consequence}Three RGB channels and five logits form one eight-channel gsplat pass \textup{[7]}. Both outputs share projection, visibility, depth order, and alpha-compositing weights.\end{block}
 \source{DRAFT.md Section 3.4; gsplat.}
+\note{\textbf{Target: 0:20.}\par
+The renderer applies the same transmittance and alpha weight to RGB and semantic logits. Three RGB channels and five logits are concatenated into one gsplat call. Background values complete both outputs. We take argmax only after compositing the logits, which preserves spatial alignment between appearance and the evaluated semantic map.}
 \end{frame}
 
 \begin{frame}{Joint optimization objective}
@@ -179,6 +211,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Photometric loss directly updates RGB, geometry, and opacity, with no direct gradient to logits.
 \end{itemize}
 \source{DRAFT.md Section 3.4.}
+\note{\textbf{Target: 0:25.}\par
+Training combines photometric and semantic objectives. The photometric term is 0.8 L1 plus 0.2 times one minus SSIM. Semantic cross-entropy has weight 0.5, and pseudo-label supervision receives an additional weight of 0.5. The semantic gradient updates logits directly and also affects shared geometry and opacity through the compositing weights.}
 \end{frame}
 
 \begin{frame}{Mask alignment and observed-color initialization}
@@ -199,6 +233,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Scales use three-neighbor distance; rotation starts at identity and opacity at 0.3.
 \end{itemize}\end{columns}
 \source{DRAFT.md Sections 3.2 and 3.4.}
+\note{\textbf{Target: 0:20.}\par
+Two implementation details prevent coordinate and appearance errors. First, images and masks receive the same undistortion map, with nearest-neighbor interpolation for discrete labels. Second, each Gaussian color is initialized by averaging RGB samples from retained non-test observations. Voting remains in original coordinates because the supplied COLMAP tracks refer to the original photographs.}
 \end{frame}
 
 \begin{frame}{Task B experimental setup}
@@ -212,6 +248,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \begin{block}{Representation growth}82,518 initial points\\600,583 final Gaussians\\stable after step 7,400\end{block}
 \begin{block}{Compute}NVIDIA RTX 3080 (10 GB)\\about 46 minutes at full resolution\end{block}\end{columns}
 \source{DRAFT.md Sections 4.1 and 4.2.}
+\note{\textbf{Target: 0:20.}\par
+Task B trains for 40,000 iterations at full image resolution with seed 42. Density control runs from step 500 to 15,000 with a soft cap near 600,000 Gaussians. The representation grows from 82,518 points to 600,583 Gaussians and stabilizes after step 7,400. Full-resolution training takes about 46 minutes on an RTX 3080.}
 \end{frame}
 
 \section{Results}
@@ -225,6 +263,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item The split evaluates interpolation near the released trajectory with supplied geometry.
 \end{itemize}\end{columns}
 \source{DRAFT.md Table 2 and Section 3.6.}
+\note{\textbf{Target: 0:25.}\par
+On the 30 held-out views, the final model reaches 22.43 decibels PSNR, 0.854 SSIM, 0.321 LPIPS, and 92.08 percent structural mIoU. Background is excluded from structural mIoU, while the five-class average is 93.5 percent. The displayed Accuracy Score is an internal interpretation because the brief does not fully specify how to combine the visual metrics.}
 \end{frame}
 
 \begin{frame}{Task B per-class semantic results}
@@ -238,6 +278,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \end{itemize}
 \end{columns}
 \source{DRAFT.md Table 3, Figure 5, and Section 5.2.}
+\note{\textbf{Target: 0:20.}\par
+Per-class results remain strong across the four structural components. Deck is highest at 95.72 percent. Tower and stay cable both exceed 91 percent, and foundation reaches 88.49 percent. Background reaches 99.20 percent but is reported separately and does not dominate the structural mean.}
 \end{frame}
 
 \begin{frame}{Qualitative held-out views}
@@ -247,6 +289,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Semantic regions remain recognizable despite appearance artifacts, but four examples do not replace full-holdout statistics.
 \end{itemize}
 \source{DRAFT.md Figure 6 and Section 5.3.}
+\note{\textbf{Target: 0:20.}\par
+These four held-out examples compare rendered RGB and semantics with ground truth. View 250 has the cleanest appearance. Views 010 and 300 show more blur and streaking, but their component regions remain recognizable. These examples illustrate behavior; the quantitative results still come from all 30 test views.}
 \end{frame}
 
 \begin{frame}{Rendering between observed viewpoints}
@@ -257,6 +301,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item RGB blur and semantic holes increase along parts of the path. Shared rasterization preserves alignment, not correctness.
 \end{itemize}
 \source{DRAFT.md Figure 7 and Section 5.3.}
+\note{\textbf{Target: 0:20.}\par
+We also render intermediate cameras between test poses 280 and 300. Rotation uses quaternion interpolation and translation is interpolated between the supplied poses. No ground-truth photographs exist for these intermediate views, so this is only a qualitative demonstration. Shared rendering maintains RGB-semantic alignment, although blur and semantic holes increase along the path.}
 \end{frame}
 
 \begin{frame}{Explicit RGB and semantic splats}
@@ -267,6 +313,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Per-Gaussian recoloring differs from evaluated semantic rendering, which composites logits before argmax.
 \end{itemize}
 \source{DRAFT.md Figure 8 and Section 5.3.}
+\note{\textbf{Target: 0:20.}\par
+These viewer screenshots show the same trained scene and exactly the same camera pose. The left panel uses learned RGB, while the right recolors each Gaussian by its predicted class. This helps inspect the 3D label distribution. It differs from the evaluated semantic image, where logits are composited first and argmax is applied afterward.}
 \end{frame}
 
 \begin{frame}{Training convergence}
@@ -277,6 +325,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Their loss scales are not comparable. Final Task B performance is measured on the test split.
 \end{itemize}
 \source{DRAFT.md Figures 9--10 and Section 5.4.}
+\note{\textbf{Target: 0:15.}\par
+Task A converges smoothly and selects epoch 69. Task B shows noisier sampled-view loss because each logged point comes from one training view, but its moving average decreases and stabilizes. The two loss curves use different definitions and scales, so we do not compare their magnitudes.}
 \end{frame}
 
 \begin{frame}{Resolution ablation}
@@ -290,6 +340,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item One run per resolution does not quantify random-seed uncertainty.
 \end{itemize}
 \source{DRAFT.md Table 4 and Section 5.5.}
+\note{\textbf{Target: 0:20.}\par
+The resolution ablation uses matched 40,000-step runs and evaluates both checkpoints at full resolution. Full-resolution training improves PSNR by 0.40 decibels and structural mIoU by 2.37 points. SSIM also increases and LPIPS decreases. The cost is training time, which rises from about 18 to 46 minutes.}
 \end{frame}
 
 \section{Discussion}
@@ -303,6 +355,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \end{itemize}
 \begin{alertblock}{Claim boundary}The results establish agreement with released images and masks near the flight trajectory, not unrestricted viewpoint generalization or metric 3D accuracy.\end{alertblock}
 \source{DRAFT.md Sections 3.6 and 5.}
+\note{\textbf{Target: 0:20.}\par
+The evaluation supports three conclusions. One explicit scene produces aligned RGB and component labels. The local test result reaches 22.43 decibels PSNR and 92.08 percent structural mIoU. Full resolution performs better than the matched half-resolution run. Because the split interleaves nearby viewpoints, these results mainly establish interpolation near the released flight trajectory.}
 \end{frame}
 
 \begin{frame}{Limitations}
@@ -314,6 +368,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item The system has not been evaluated for damage detection, deformation, cable force, or structural response.
 \end{itemize}
 \source{DRAFT.md Sections 5.3--6.}
+\note{\textbf{Target: 0:15.}\par
+The main limitations are clear. The holdout is not a spatially separate flight segment, and all evaluation uses supplied camera geometry. Coarse cable polygons cannot validate individual strands. Constructed views have no ground truth, and the system has not been tested for damage detection, deformation, cable force, or structural response.}
 \end{frame}
 
 \begin{frame}{Conclusion}
@@ -326,6 +382,8 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item Future tests should use spatially separated views, independent geometry, and finer cable annotations.
 \end{itemize}
 \begin{block}{Outcome}A renderable, component-labeled bridge representation with explicit limits on geometric and out-of-trajectory claims.\end{block}
+\note{\textbf{Target: 0:20.}\par
+In conclusion, SegFormer expands supervision from 270 manual masks to 370 views. Sparse geometry, observed colors, and semantic voting initialize one explicit Gaussian scene. A single differentiable rendering pass then produces aligned RGB and five-class semantics. The method performs strongly on the local holdout, while future work should test separated viewpoints, independent geometry, and finer cable labels.}
 \end{frame}
 
 \begin{frame}{Selected references}
@@ -338,5 +396,7 @@ The renderer concatenates three RGB values $c_k$ and five class logits $\ell_k$ 
 \item E. Xie et al., ``SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers,'' NeurIPS, 2021.
 \item V. Ye et al., ``gsplat: An Open-Source Library for Gaussian Splatting,'' Journal of Machine Learning Research, 26(34), 1--17, 2025.
 \end{enumerate}
+\note{\textbf{Target: 0:10.}\par
+These are the main references behind the reconstruction, segmentation, semantic scene representation, and rendering components. Thank you for your attention.}
 \end{frame}
 \end{document}

@@ -70,10 +70,6 @@ and a semantic Gaussian representation. The contributions of this study are:
 4. An evaluation of the resulting system on 30 held-out views, including a matched comparison
    of full- and half-resolution training and an analysis of annotation-related limitations.
 
-Implementation and reproduction instructions are available in the accompanying repository:
-[IC-SHM 2026 Project 2](https://github.com/zeki-aitech/ic-shm-2026-project-2).
-
-
 ---
 
 ## 2. Related Work

@@ -17,6 +17,7 @@ data/
 outputs/
 tmp/
 scratch/
+submission/
 
 # Local reference PDFs for paper citations (not committed - large binaries)
 paper/references/
@@ -27,3 +28,6 @@ paper/references/
 # IDE
 .vscode/
 .idea/
+
+# Machine-local dependencies for presentation build scripts
+.pptx-ref-build/node_modules
